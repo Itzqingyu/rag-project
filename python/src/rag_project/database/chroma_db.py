@@ -13,8 +13,8 @@ _vectorstore = None
 def get_embeddings():
     global _embeddings
     if _embeddings is None:
-        # Use fastembed with all-MiniLM-L6-v2
-        _embeddings = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        # 使用支援中文的 BGE 模型
+        _embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-zh-v1.5")
     return _embeddings
 
 def get_vectorstore() -> Chroma:
