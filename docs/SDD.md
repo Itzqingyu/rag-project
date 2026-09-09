@@ -11,15 +11,18 @@
 - **通訊**:
   - 前端與主進程: Electron IPC + JSON
   - 主進程與 Python 後端: HTTP API (RESTful)
+- **前端實用套件**: react-markdown (對話渲染), lucide-react (圖示庫)
 
 ### 後端
 - **語言**: Python 3.10+
 - **套件管理**: uv
-- **Web 框架**: FastAPI + uvicorn (提供本地 API 供 Electron 呼叫)
-- **打包工具**: PyInstaller (編譯為獨立執行檔，無須使用者安裝 Python)
-- **RAG 套件**: LangChain (流程编排)
-- **向量化**: fastembed (輕量級、無須 PyTorch 的 ONNX 推理引擎)
-- **LLM API**: litellm (統一接口，支援 OpenAI/Claude)
+- **套件清單**
+    - **Web 框架**: FastAPI + uvicorn (提供本地 API 供 Electron 呼叫)
+    - **打包工具**: PyInstaller (編譯為獨立執行檔，無須使用者安裝 Python)
+    - **環境變數管理**: python-dotenv (管理雲端模型 API Key 等機密資訊)
+    - **RAG 套件**: LangChain (流程编排)
+    - **向量化**: fastembed (輕量級、無須 PyTorch 的 ONNX 推理引擎)
+    - **LLM API**: litellm (統一接口，支援 OpenAI/Claude)
 
 ### 資料庫
 - **純文字**: Markdown 格式 (非 TXT)，app 管理
@@ -87,10 +90,13 @@ rag-project/
 ## 5. 開發步驟
 
 ```bash
-# 環境設置
-npm install                    # Node.js
-uv init                        # Python
-uv add langchain fastembed litellm chromadb fastapi uvicorn pyinstaller
+# 環境設置 (前端)
+npm install
+npm install react-markdown lucide-react
+
+# 環境設置 (後端)
+uv init
+uv add langchain fastembed litellm chromadb fastapi uvicorn pyinstaller python-dotenv
 
 # 開發
 # 需要同時啟動前端與後端 (可透過 npm script 如 concurrently 整合)
@@ -114,5 +120,5 @@ npm run dev                    # 啟動 Electron 前端
 ## 8. 總結
 - 初版：本地桌面應用，核心功能：上傳 Markdown→對話→文件管理
 - 關鍵設計：以 Markdown 為核心，Python 端以 FastAPI 提供微服務，並透過 PyInstaller 打包
-- 技術：React + Python + uv + FastAPI + LangChain + fastembed + litellm
+- 技術：React + Python + uv + FastAPI + LangChain + fastembed + litellm + python-dotenv
 - 資料庫：ChromaDB persistent mode + SQLite (追蹤 Markdown 文件)
