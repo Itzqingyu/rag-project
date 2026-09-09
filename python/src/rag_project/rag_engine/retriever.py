@@ -1,8 +1,8 @@
 import os
 from typing import List
 from langchain_core.documents import Document
-from backend.database.chroma_db import get_vectorstore
-from backend.rag_engine.chunker import split_markdown
+from rag_project.database.chroma_db import get_vectorstore
+from rag_project.rag_engine.chunker import split_markdown
 
 def add_document(file_path: str) -> int:
     """
