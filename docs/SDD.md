@@ -33,7 +33,7 @@
 - **檔案管理**: SQLite (追蹤已導入的 Markdown 文件)
 
 ### 模型
-- **Embedding**: fastembed (all-MiniLM-L6-v2，使用 ONNX Runtime 於 CPU 運行，輕量且快速)
+- **Embedding**: fastembed (`BAAI/bge-small-zh-v1.5`，使用 ONNX Runtime 於 CPU 運行，專為中文優化且極其輕量)
 - **LLM**: GPT-4o (OpenAI) 或 Claude 3.5 Sonnet (litellm)
 
 ## 3. 專案結構
@@ -54,19 +54,17 @@ rag-project/
 │       └── types/
 │
 ├── python/                       # Python 後端 (FastAPI)
-│   ├── main.py                   # FastAPI 伺服器入口
-│   ├── rag_engine/
-│   │   ├── parser.py             # Markdown 處理與解析
-│   │   ├── chunker.py
-│   │   ├── embedding.py
-│   │   └── llm_client.py
-│   └── database/
-│       ├── chromadb.py
-│       └── sqlite.py
-│
-├── config/
-│   └── settings.json
-└── requirements.txt
+│   ├── src/
+│   │   └── rag_project/
+│   │       ├── main.py           # FastAPI 伺服器入口
+│   │       ├── rag_engine/
+│   │       │   ├── chunker.py    # Markdown 處理與固定字數切片
+│   │       │   └── retriever.py  # 整合文件匯入與 ChromaDB 檢索
+│   │       └── database/
+│   │           └── chroma_db.py  # 初始化 Embedding 模型與 ChromaDB 持久化
+│   ├── tests/                    # 測試指令碼與資料
+│   ├── chroma_db/                # 本地生成的 Chroma 向量庫
+│   └── pyproject.toml            # 依賴套件配置
 ```
 
 ## 4. 核心流程
@@ -96,7 +94,7 @@ npm install react-markdown lucide-react
 
 # 環境設置 (後端)
 uv init
-uv add langchain fastembed litellm chromadb fastapi uvicorn pyinstaller python-dotenv
+uv add langchain langchain-chroma langchain-community fastembed litellm chromadb fastapi uvicorn pyinstaller python-dotenv
 
 # 開發
 # 需要同時啟動前端與後端 (可透過 npm script 如 concurrently 整合)
