@@ -1,21 +1,13 @@
 import os
 from langchain_chroma import Chroma
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from rag_project.rag_engine.embedding import get_embeddings
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DB_DIR = os.path.join(BASE_DIR, "chroma_db")
 
-# Singleton for embedding and db
-_embeddings = None
+# Singleton for db
 _vectorstore = None
-
-def get_embeddings():
-    global _embeddings
-    if _embeddings is None:
-        # 使用支援中文的 BGE 模型
-        _embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-zh-v1.5")
-    return _embeddings
 
 def get_vectorstore() -> Chroma:
     """Returns the Chroma vector store instance."""
