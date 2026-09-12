@@ -9,6 +9,7 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 from rag_project.rag_engine.retriever import add_document, search, list_documents, delete_document
+from rag_project.llm.llm_client import generate_answer
 
 def print_menu():
     print("\n" + "="*45)
@@ -18,7 +19,8 @@ def print_menu():
     print(" 2. 上傳 / 更新檔案")
     print(" 3. 刪除檔案")
     print(" 4. 搜尋測試 (不呼叫 LLM)")
-    print(" 5. 離開")
+    print(" 5. 生成回答測試 (呼叫 LLM)")
+    print(" 6. 離開")
     print("="*45)
 
 def handle_list():
@@ -85,10 +87,39 @@ def handle_search():
     except Exception as e:
         print(f"\n[!] 檢索失敗: {e}")
 
+def handle_generate():
+    query = input("\n[?] 請輸入測試查詢問題:\n> ").strip()
+    if not query:
+        return
+        
+    try:
+        print("\n[*] 正在檢索相關文獻...")
+        docs = search(query, top_k=3)
+        if not docs:
+            print("\n[INFO] 找不到相關結果，無法生成回答。")
+            return
+            
+        print(f"[+] 找到 {len(docs)} 筆相關文獻，正在呼叫 LLM 生成回答...")
+        
+        # 準備傳給 LLM 的片段
+        retrieved_chunks = [doc.page_content for doc in docs]
+        
+        # 呼叫 LLM (System Prompt 已經內建在模塊中)
+        answer = generate_answer(query, retrieved_chunks)
+        
+        print("\n" + "="*45)
+        print("🤖 AI 回答：")
+        print("="*45)
+        print(answer)
+        print("="*45)
+        
+    except Exception as e:
+        print(f"\n[!] 生成失敗: {e}")
+
 def main():
     while True:
         print_menu()
-        choice = input("[?] 請選擇操作 (1-5): ").strip()
+        choice = input("[?] 請選擇操作 (1-6): ").strip()
         
         if choice == '1':
             handle_list()
@@ -98,11 +129,13 @@ def main():
             handle_delete()
         elif choice == '4':
             handle_search()
-        elif choice == '5' or choice.lower() == 'q':
+        elif choice == '5':
+            handle_generate()
+        elif choice == '6' or choice.lower() == 'q':
             print("[INFO] 退出測試系統。")
             break
         else:
-            print("\n[!] 無效的選項，請輸入 1 到 5。")
+            print("\n[!] 無效的選項，請輸入 1 到 6。")
 
 if __name__ == "__main__":
     main()

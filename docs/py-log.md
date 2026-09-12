@@ -17,7 +17,7 @@
 - `database/sqlite_db.py`: 負責管理 SQLite 關聯式資料庫，用於追蹤檔案的 Metadata (檔名、路徑、上傳時間、切塊數量等)，作為檔案列表與防呆刪除機制的管理中樞。
 
 ### 語言模型 (LLM)
-- `llm/llm_client.py`: 負責與 LLM 互動。提供 `generate_answer` 函數，使用 `litellm` 將檢索到的文檔片段 (Context) 與使用者問題組合成 Prompt，並呼叫模型 (預設配置為 `ollama/qwen`) 生成最終回答。
+- `llm/llm_client.py`: 負責與 LLM 互動。提供 `generate_answer` 函數，使用 `litellm` 將檢索到的文檔片段 (Context) 與使用者問題組合成 Prompt。並透過讀取 `.env` 中的 `ACTIVE_MODEL` 變數，支援動態切換 OpenAI、Gemini、DeepSeek 等雲端模型，以及自動對接本地端的 llama.cpp。
 
 ## 2. 模塊關係與資料流向
 
@@ -53,4 +53,4 @@
 - **模型推理與向量化**:
   - **Embedding**: Jina AI (`jina-embeddings-v2-base-zh`) via `fastembed`，負責將文件與查詢轉化為語意向量。
   - **Reranker**: Jina AI (`jina-reranker-v2-base-multilingual`) via `fastembed`，負責對初步檢索結果進行高精度再排序。
-  - **LLM**: 統一透過 `litellm` 套件呼叫，支援多種後端模型，目前預設配置對接本地端 Ollama 的 Qwen 模型。
+  - **LLM**: 統一透過 `litellm` 套件呼叫，支援透過 `.env` 的 `ACTIVE_MODEL` 變數無縫切換多種雲端模型 (OpenAI, Gemini, DeepSeek) 以及本地 llama.cpp (OpenAI 相容格式)。
