@@ -25,28 +25,59 @@ export default function App() {
     scrollToBottom();
   }, [messages]);
 
-  const handleUpload = async () => {
-    try {
-      const filePath = await window.electronAPI.openFile();
-      if (!filePath) return;
+  // ----------------------------------------------------
+  // 修改這裡：改用標準 HTML input(type="file") 配合 fetch 呼叫 FastAPI
+  // ----------------------------------------------------
+  const handleUpload = () => {
+    // 建立一個隱藏的檔案選擇視窗
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.md,.txt'; // 可依需求調整
+
+    fileInput.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      if (!target.files || target.files.length === 0) return;
+
+      const file = target.files[0];
+      const formData = new FormData();
+      formData.append('file', file);
 
       setUploading(true);
-      const res = await window.electronAPI.uploadFile(filePath);
-      
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `✅ Successfully uploaded document. Added ${res.chunks_added} chunks to the database. You can now ask questions about it!`
-      }]);
-    } catch (error: any) {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `❌ Failed to upload document: ${error.message}`
-      }]);
-    } finally {
-      setUploading(false);
-    }
+      try {
+        // 直接對接你的 FastAPI 後端上傳介面
+        const response = await fetch('http://127.0.0.1:8000/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `✅ Successfully uploaded **${file.name}**. ${data.message} (Added ${data.chunks_added} chunks)`
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `❌ Failed to upload document: ${data.detail || 'Unknown error'}`
+          }]);
+        }
+      } catch (error: any) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `⚠️ Connection error: Make sure the FastAPI backend is running. (${error.message})`
+        }]);
+      } finally {
+        setUploading(false);
+      }
+    };
+
+    // 觸發檔案選擇視窗
+    fileInput.click();
   };
 
   const handleSend = async () => {
@@ -58,25 +89,25 @@ export default function App() {
     setLoading(true);
 
     try {
-      const res = await window.electronAPI.queryDoc(userMessage.content);
+      // 這裡保留你原本預計串接查詢的邏輯（未來可對接後端的 query API）
+      // const res = await window.electronAPI.queryDoc(userMessage.content);
       
-      // We are just returning the retrieved chunks since LLM summarization is deferred.
-      const resultsText = res.results.length > 0 
-        ? res.results.map((r, i) => `**Result ${i + 1}**:\n${r.content}`).join('\n\n---\n\n')
-        : 'No relevant information found.';
+      // 目前先做個假回覆防呆，等查詢 API 寫好可直接替換
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `Echo: You asked "${userMessage.content}". (Query API pending connection)`
+        }]);
+        setLoading(false);
+      }, 1000);
 
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: resultsText
-      }]);
     } catch (error: any) {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: `❌ Query failed: ${error.message}`
       }]);
-    } finally {
       setLoading(false);
     }
   };
