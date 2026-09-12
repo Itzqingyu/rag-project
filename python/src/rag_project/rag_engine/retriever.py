@@ -1,12 +1,13 @@
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional # [修改] 補上 Optional
 from langchain_core.documents import Document
 from rag_project.database.chroma_db import get_vectorstore
 from rag_project.rag_engine.chunker import split_markdown
 from rag_project.rag_engine.reranker import rerank_documents
 import rag_project.database.sqlite_db as sqlite_db
 
-def add_document(file_path: str, force: bool = False) -> int:
+# [修改] 加上 raw_file_path 參數
+def add_document(file_path: str, force: bool = False, raw_file_path: Optional[str] = None) -> int:
     """
     Parses a markdown file, chunks it, and adds it to the Chroma vector store.
     If the file exists and force=False, raises FileExistsError.
@@ -24,7 +25,11 @@ def add_document(file_path: str, force: bool = False) -> int:
         else:
             # 刪除舊有向量與紀錄
             delete_document(file_path)
-        
+    
+    # [新增] 讀取完整的 Markdown 內容，準備存入 SQLite 供前端展示
+    with open(file_path, "r", encoding="utf-8") as f:
+        markdown_content = f.read()
+
     docs = split_markdown(file_path)
     if not docs:
         return 0
@@ -32,8 +37,14 @@ def add_document(file_path: str, force: bool = False) -> int:
     vectorstore = get_vectorstore()
     vectorstore.add_documents(docs)
     
-    # 更新 SQLite 紀錄
-    sqlite_db.add_or_update_doc_record(file_path, len(docs))
+    # [修改] 更新 SQLite 紀錄，一併寫入原始檔案路徑與完整文章內容
+    actual_raw_path = raw_file_path if raw_file_path else file_path
+    sqlite_db.add_or_update_doc_record(
+        file_path=file_path, 
+        chunk_count=len(docs),
+        raw_file_path=actual_raw_path,
+        markdown_content=markdown_content
+    )
     
     return len(docs)
 

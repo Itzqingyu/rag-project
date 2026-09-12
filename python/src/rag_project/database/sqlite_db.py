@@ -25,6 +25,8 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT UNIQUE NOT NULL,
                 filename TEXT NOT NULL,
+                raw_file_path TEXT,      -- [新增] 1. 未經 markdown 的原始檔案實體路徑
+                markdown_content TEXT,   -- [新增] 2. 經 markdown 解析的完整文字內容
                 upload_date DATETIME NOT NULL,
                 chunk_count INTEGER NOT NULL
             )
@@ -58,7 +60,8 @@ def get_all_docs() -> List[Dict[str, Any]]:
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
-def add_or_update_doc_record(file_path: str, chunk_count: int) -> None:
+# [修改] 新增 raw_file_path 與 markdown_content 參數
+def add_or_update_doc_record(file_path: str, chunk_count: int, raw_file_path: str = None, markdown_content: str = None) -> None:
     """新增或更新檔案紀錄"""
     filename = os.path.basename(file_path)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -67,12 +70,14 @@ def add_or_update_doc_record(file_path: str, chunk_count: int) -> None:
         cursor = conn.cursor()
         # 使用 UPSERT 語法，若 file_path 存在則更新
         cursor.execute('''
-            INSERT INTO documents (file_path, filename, upload_date, chunk_count)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO documents (file_path, filename, raw_file_path, markdown_content, upload_date, chunk_count)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(file_path) DO UPDATE SET
+                raw_file_path = excluded.raw_file_path,
+                markdown_content = excluded.markdown_content,
                 upload_date = excluded.upload_date,
                 chunk_count = excluded.chunk_count
-        ''', (file_path, filename, now, chunk_count))
+        ''', (file_path, filename, raw_file_path, markdown_content, now, chunk_count))
         conn.commit()
 
 def delete_doc_record_by_path(file_path: str) -> None:
