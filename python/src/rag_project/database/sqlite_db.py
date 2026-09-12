@@ -1,7 +1,8 @@
 import sqlite3
 import os
+from contextlib import contextmanager
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -10,15 +11,23 @@ DB_PATH = os.path.join(BASE_DIR, "data", "rag_database.sqlite")
 # 確保 data 目錄存在
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
-def get_connection():
-    """建立並回傳 SQLite 資料庫連線"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row # 讓查詢結果可以用 dict 方式存取
-    return conn
+@contextmanager
+def get_connection(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
+    """提供會自動關閉的共用 SQLite 連線，並啟用外鍵約束。"""
+    resolved_path = db_path or DB_PATH
+    os.makedirs(os.path.dirname(os.path.abspath(resolved_path)), exist_ok=True)
 
-def init_db():
+    conn = sqlite3.connect(resolved_path)
+    conn.row_factory = sqlite3.Row  # 讓查詢結果可以用 dict 方式存取
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def init_db(db_path: Optional[str] = None) -> None:
     """初始化資料庫與資料表"""
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS documents (
@@ -27,6 +36,30 @@ def init_db():
                 filename TEXT NOT NULL,
                 upload_date DATETIME NOT NULL,
                 chunk_count INTEGER NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS activities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                year INTEGER NOT NULL CHECK (year > 0),
+                status TEXT NOT NULL,
+                start_date TEXT,
+                end_date TEXT,
+                venue TEXT,
+                activity_type TEXT,
+                coordinator TEXT,
+                expected_attendees INTEGER CHECK (
+                    expected_attendees IS NULL OR expected_attendees >= 0
+                ),
+                budget INTEGER CHECK (budget IS NULL OR budget >= 0),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK (
+                    start_date IS NULL
+                    OR end_date IS NULL
+                    OR end_date >= start_date
+                )
             )
         ''')
         conn.commit()
