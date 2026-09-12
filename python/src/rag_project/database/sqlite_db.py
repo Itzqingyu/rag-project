@@ -5,7 +5,10 @@ from typing import List, Dict, Any, Optional
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DB_PATH = os.path.join(BASE_DIR, "rag_database.sqlite")
+DB_PATH = os.path.join(BASE_DIR, "data", "rag_database.sqlite")
+
+# 確保 data 目錄存在
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 def get_connection():
     """建立並回傳 SQLite 資料庫連線"""

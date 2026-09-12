@@ -4,7 +4,7 @@ from rag_project.rag_engine.embedding import get_embeddings
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DB_DIR = os.path.join(BASE_DIR, "chroma_db")
+DB_DIR = os.path.join(BASE_DIR, "data", "chroma_db")
 
 # Singleton for db
 _vectorstore = None
