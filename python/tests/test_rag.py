@@ -7,8 +7,8 @@ SRC_DIR = os.path.join(BASE_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.rag_engine.retriever import add_document, search
-from rag_project.database.chroma_db import get_vectorstore
+from rag_project.rag_engine import add_document, search
+from rag_project.database import get_vectorstore
 
 def main():
     test_md_path = os.path.join(BASE_DIR, "tests", "test_data", "sample.md")

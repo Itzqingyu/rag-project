@@ -11,16 +11,16 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.activity.service import create_activity, delete_activity  # noqa: E402
-from rag_project.incident.service import (  # noqa: E402
+from rag_project.activity import create_activity, delete_activity  # noqa: E402
+from rag_project.incident import (  # noqa: E402
     create_incident,
     delete_incident,
     get_incident,
     list_incidents,
     update_incident,
 )
-from rag_project.schedule.service import create_schedule, delete_schedule  # noqa: E402
-from rag_project.database.sqlite_db import get_connection, init_db  # noqa: E402
+from rag_project.schedule import create_schedule, delete_schedule  # noqa: E402
+from rag_project.database import get_connection, init_db  # noqa: E402
 
 
 class IncidentServiceTest(unittest.TestCase):
