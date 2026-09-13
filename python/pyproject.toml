@@ -1,5 +1,5 @@
 [project]
-name = "backend"
+name = "rag_project"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -19,9 +19,6 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "uvicorn>=0.52.4",
 ]
-
-[project.scripts]
-backend = "backend:main"
 
 [build-system]
 requires = ["uv_build>=0.12.11,<0.13.0"]

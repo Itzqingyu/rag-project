@@ -31,7 +31,6 @@ ENV/
 env/
 *.egg-info/
 .mypy_cache/
-tests/
 
 # Secrets / Environment variables
 .env

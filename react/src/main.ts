@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -30,10 +30,61 @@ const createWindow = () => {
   mainWindow.webContents.openDevTools();
 };
 
+// IPC Setup
+function setupIPC() {
+  ipcMain.handle('dialog:openFile', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    });
+    if (!canceled) {
+      return filePaths[0];
+    }
+    return null;
+  });
+
+  ipcMain.handle('api:upload', async (event, filePath: string) => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath })
+      });
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Upload Error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('api:query', async (event, queryStr: string) => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: queryStr, top_k: 5 })
+      });
+      if (!response.ok) {
+        throw new Error(`Query failed: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Query Error:', error);
+      throw error;
+    }
+  });
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  setupIPC();
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
