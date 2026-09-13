@@ -48,12 +48,12 @@ def load_content_from_file_or_text(input_str: str) -> str:
     return input_str
 
 
-def init_meeting_task_tables() -> None:
+def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
     """初始化與移轉 meetings 與 tasks 資料表欄位"""
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         
-        # 建立會議 (meetings) 資料表 (包含新欄位)
+        # 建立會議 (meetings) 資料表 (包含新欄位與外鍵Constraint)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS meetings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +65,8 @@ def init_meeting_task_tables() -> None:
                 location TEXT DEFAULT '',
                 participants TEXT DEFAULT '',
                 content TEXT DEFAULT '',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE
             )
         ''')
         
@@ -82,7 +83,7 @@ def init_meeting_task_tables() -> None:
             if col_name not in existing_m_cols:
                 cursor.execute(f"ALTER TABLE meetings ADD COLUMN {col_name} {col_type}")
         
-        # 建立待辦事項 (tasks) 資料表 (包含優先級欄位)
+        # 建立待辦事項 (tasks) 資料表 (包含優先級與外鍵欄位)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,6 +95,7 @@ def init_meeting_task_tables() -> None:
                 priority TEXT DEFAULT '中',
                 status TEXT DEFAULT 'pending',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE,
                 FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
             )
         ''')
@@ -122,7 +124,9 @@ def add_meeting(
     location: str = "",
     participants: str = "",
     content: str = "",
-    date: str = ""
+    date: str = "",
+    *,
+    db_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """新增一筆會議資料
     
@@ -134,12 +138,14 @@ def add_meeting(
     :param participants: 參與人員 (如 '張三, 李四')
     :param content: 會議紀錄/內容 (可為文字或 PDF/MD 檔案路徑)
     :param date: 相容用日期欄位
+    :param db_path: 可選資料庫路徑 (測試用)
     """
+    init_meeting_task_tables(db_path)
     processed_content = load_content_from_file_or_text(content)
     if not date and start_time:
         date = start_time.split()[0]
         
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO meetings (activity_id, name, date, start_time, end_time, location, participants, content)
@@ -148,12 +154,13 @@ def add_meeting(
         conn.commit()
         meeting_id = cursor.lastrowid
         
-    return get_meeting_by_id(meeting_id)
+    return get_meeting_by_id(meeting_id, db_path=db_path)  # type: ignore[return-value]
 
 
-def get_meetings(activity_id: Optional[int] = None) -> List[Dict[str, Any]]:
+def get_meetings(activity_id: Optional[int] = None, *, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     """取得會議清單"""
-    with get_connection() as conn:
+    init_meeting_task_tables(db_path)
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         if activity_id is not None:
             cursor.execute('SELECT * FROM meetings WHERE activity_id = ? ORDER BY id DESC', (activity_id,))
@@ -163,9 +170,10 @@ def get_meetings(activity_id: Optional[int] = None) -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
-def get_meeting_by_id(meeting_id: int) -> Optional[Dict[str, Any]]:
+def get_meeting_by_id(meeting_id: int, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """根據 ID 取得單一會議資料"""
-    with get_connection() as conn:
+    init_meeting_task_tables(db_path)
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM meetings WHERE id = ?', (meeting_id,))
         row = cursor.fetchone()
@@ -181,9 +189,12 @@ def update_meeting(
     participants: Optional[str] = None,
     content: Optional[str] = None,
     activity_id: Optional[int] = None,
-    date: Optional[str] = None
+    date: Optional[str] = None,
+    *,
+    db_path: Optional[str] = None
 ) -> bool:
     """修改會議內容"""
+    init_meeting_task_tables(db_path)
     fields = []
     values = []
     
@@ -221,16 +232,17 @@ def update_meeting(
     values.append(meeting_id)
     sql = f"UPDATE meetings SET {', '.join(fields)} WHERE id = ?"
     
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(sql, tuple(values))
         conn.commit()
         return cursor.rowcount > 0
 
 
-def delete_meeting(meeting_id: int) -> bool:
+def delete_meeting(meeting_id: int, *, db_path: Optional[str] = None) -> bool:
     """刪除會議紀錄"""
-    with get_connection() as conn:
+    init_meeting_task_tables(db_path)
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT 1 FROM meetings WHERE id = ?', (meeting_id,))
         if not cursor.fetchone():
@@ -251,15 +263,19 @@ def add_task(
     due_date: str = "",
     priority: str = "中",
     status: str = "pending",
-    meeting_id: Optional[int] = None
+    meeting_id: Optional[int] = None,
+    *,
+    db_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """新增一筆待辦事項
     
     :param priority: 優先級 (高/中/低)
+    :param db_path: 可選資料庫路徑 (測試用)
     """
+    init_meeting_task_tables(db_path)
     processed_content = load_content_from_file_or_text(content)
     
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO tasks (activity_id, meeting_id, content, assignee, due_date, priority, status)
@@ -268,14 +284,17 @@ def add_task(
         conn.commit()
         task_id = cursor.lastrowid
         
-    return get_task_by_id(task_id)
+    return get_task_by_id(task_id, db_path=db_path)  # type: ignore[return-value]
 
 
 def get_tasks(
     activity_id: Optional[int] = None,
-    meeting_id: Optional[int] = None
+    meeting_id: Optional[int] = None,
+    *,
+    db_path: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """取得待辦事項清單"""
+    init_meeting_task_tables(db_path)
     conditions = []
     values = []
     
@@ -291,16 +310,17 @@ def get_tasks(
         sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY id DESC"
     
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(sql, tuple(values))
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
 
-def get_task_by_id(task_id: int) -> Optional[Dict[str, Any]]:
+def get_task_by_id(task_id: int, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """根據 ID 取得單一待辦紀錄"""
-    with get_connection() as conn:
+    init_meeting_task_tables(db_path)
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM tasks WHERE id = ?', (task_id,))
         row = cursor.fetchone()
@@ -315,9 +335,12 @@ def update_task(
     priority: Optional[str] = None,
     status: Optional[str] = None,
     activity_id: Optional[int] = None,
-    meeting_id: Optional[int] = None
+    meeting_id: Optional[int] = None,
+    *,
+    db_path: Optional[str] = None
 ) -> bool:
     """修改待辦事項內容"""
+    init_meeting_task_tables(db_path)
     fields = []
     values = []
     
@@ -349,16 +372,17 @@ def update_task(
     values.append(task_id)
     sql = f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?"
     
-    with get_connection() as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(sql, tuple(values))
         conn.commit()
         return cursor.rowcount > 0
 
 
-def delete_task(task_id: int) -> bool:
+def delete_task(task_id: int, *, db_path: Optional[str] = None) -> bool:
     """刪除待辦事項紀錄"""
-    with get_connection() as conn:
+    init_meeting_task_tables(db_path)
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT 1 FROM tasks WHERE id = ?', (task_id,))
         if not cursor.fetchone():

@@ -4,34 +4,62 @@ import sys
 # 將 src 目錄加入 Python 搜尋路徑
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from rag_project.activity.service import (
+    create_activity,
+    get_activity,
+    list_activities,
+    update_activity,
+    delete_activity,
+)
 from rag_project.meeting_task import (
-    add_meeting, get_meetings, get_meeting_by_id, update_meeting, delete_meeting,
-    add_task, get_tasks, get_task_by_id, update_task, delete_task
+    add_meeting,
+    get_meetings,
+    get_meeting_by_id,
+    update_meeting,
+    delete_meeting,
+    add_task,
+    get_tasks,
+    get_task_by_id,
+    update_task,
+    delete_task,
 )
 
-# 模擬/測試用活動 (Activity) 名稱對照表
-MOCK_ACTIVITIES = {
-    1: "2026 資管週",
-    2: "期初大會",
-    3: "秋季迎新晚會",
-    4: "學術研討會"
-}
-
 def get_activity_label(activity_id: int) -> str:
-    name = MOCK_ACTIVITIES.get(activity_id, f"自訂活動 #{activity_id}")
-    return f"{name} (ID: {activity_id})"
+    act = get_activity(activity_id)
+    if act:
+        return f"{act['name']} (ID: {act['id']}, 年份: {act['year']}, 狀態: {act['status']})"
+    return f"未知活動 (ID: {activity_id})"
 
-def print_activities_table():
-    print("\n" + "-" * 45)
-    print("      📍 可用活動 ID 對照表 (Activity Table)")
-    print("-" * 45)
-    for act_id, act_name in MOCK_ACTIVITIES.items():
-        print(f"  [ ID: {act_id} ] ➡️  {act_name}")
-    print("-" * 45)
+def print_activities_table() -> List[dict]:
+    activities = list_activities()
+    print("\n" + "-" * 55)
+    print("      📍 可用活動列表 (Activity Table)")
+    print("-" * 55)
+    if not activities:
+        print("  (目前資料庫無任何活動紀錄)")
+    else:
+        for act in activities:
+            print(f"  [ ID: {act['id']} ] ➡️  {act['name']} ({act['year']}) [{act['status']}] 地點: {act['venue'] or '未填'}")
+    print("-" * 55)
+    return activities
+
+def select_or_create_activity_id() -> int:
+    activities = print_activities_table()
+    if not activities:
+        print("\n[提示] 資料庫中尚無活動，請先建立一個活動：")
+        name = input("輸入活動名稱: ").strip()
+        year_str = input("輸入活動年份 (預設 2026): ").strip() or "2026"
+        status = input("輸入活動狀態 (預設 '準備中'): ").strip() or "準備中"
+        created = create_activity(name=name, year=int(year_str), status=status)
+        print(f"[成功] 自動建立活動: {created['name']} (ID: {created['id']})")
+        return created['id']
+    
+    act_str = input("輸入活動 ID (activity_id): ").strip()
+    return int(act_str)
 
 def print_menu():
     print("\n" + "=" * 60)
-    print("        Meeting & Task CLI 測試選單 (最新規格版)")
+    print("      Activity, Meeting & Task 整合 CLI 測試選單")
     print("=" * 60)
     print("[ 1 ] 新增會議 (Add Meeting)")
     print("      - 名稱, 開始/結束時間, 地點, 參與人員, 內容/檔案")
@@ -45,9 +73,75 @@ def print_menu():
     print("[ 7 ] 修改待辦 (Update Task)")
     print("[ 8 ] 刪除待辦 (Delete Task)")
     print("-" * 60)
-    print("[ 9 ] 查看活動 ID 對照表 (Activity Lookup)")
+    print("[ 9 ] 活動管理 (Activity CRUD: 查看/新增/修改/刪除)")
     print("[ 0 ] 離開 (Exit)")
     print("=" * 60)
+
+def handle_activity_menu():
+    while True:
+        print("\n--- 活動管理 (Activity CRUD) ---")
+        print("1. 查看所有活動")
+        print("2. 新增活動")
+        print("3. 修改活動")
+        print("4. 刪除活動")
+        print("0. 返回主選單")
+        choice = input("請選擇操作 (0-4): ").strip()
+
+        if choice == '1':
+            print_activities_table()
+        elif choice == '2':
+            try:
+                name = input("輸入活動名稱: ").strip()
+                year_str = input("輸入年份 (預設 2026): ").strip() or "2026"
+                status = input("輸入狀態 (預設 '準備中'): ").strip() or "準備中"
+                venue = input("輸入地點 (可跳過): ").strip() or None
+                act_type = input("輸入類型 (可跳過): ").strip() or None
+                coordinator = input("輸入負責人 (可跳過): ").strip() or None
+                act = create_activity(
+                    name=name,
+                    year=int(year_str),
+                    status=status,
+                    venue=venue,
+                    activity_type=act_type,
+                    coordinator=coordinator,
+                )
+                print(f"\n[成功] 已建立活動 ID {act['id']}: {act['name']}")
+            except Exception as e:
+                print(f"\n[錯誤] {e}")
+        elif choice == '3':
+            try:
+                act_id = int(input("輸入欲修改的活動 ID: ").strip())
+                existing = get_activity(act_id)
+                if not existing:
+                    print(f"\n[失敗] 找不到活動 ID {act_id}")
+                    continue
+                print(f"目前活動: {existing['name']} (狀態: {existing['status']})")
+                name = input("新名稱 (不修改按 Enter): ").strip() or None
+                status = input("新狀態 (不修改按 Enter): ").strip() or None
+                venue = input("新地點 (不修改按 Enter): ").strip() or None
+                changes = {}
+                if name: changes["name"] = name
+                if status: changes["status"] = status
+                if venue: changes["venue"] = venue
+                if changes:
+                    updated = update_activity(act_id, **changes)
+                    print(f"\n[成功] 活動更新成功: {updated}")
+                else:
+                    print("\n[失敗] 無修改項目")
+            except Exception as e:
+                print(f"\n[錯誤] {e}")
+        elif choice == '4':
+            try:
+                act_id = int(input("輸入欲刪除的活動 ID: ").strip())
+                deleted = delete_activity(act_id)
+                if deleted:
+                    print(f"\n[成功] 已刪除活動: {deleted['name']}")
+                else:
+                    print(f"\n[失敗] 找不到活動 ID {act_id}")
+            except Exception as e:
+                print(f"\n[錯誤] {e}")
+        elif choice == '0':
+            break
 
 def main():
     while True:
@@ -56,8 +150,7 @@ def main():
         
         if choice == '1':
             try:
-                print_activities_table()
-                act_id = int(input("輸入活動 ID (activity_id): ").strip())
+                act_id = select_or_create_activity_id()
                 name = input("輸入會議名稱: ").strip()
                 start_time = input("輸入開始時間 (如 '2026-09-15 14:00', 可跳過): ").strip()
                 end_time = input("輸入結束時間 (如 '2026-09-15 16:00', 可跳過): ").strip()
@@ -146,8 +239,7 @@ def main():
 
         elif choice == '5':
             try:
-                print_activities_table()
-                act_id = int(input("輸入活動 ID (activity_id): ").strip())
+                act_id = select_or_create_activity_id()
                 content = input("輸入待辦事項內容: ").strip()
                 assignee = input("輸入負責人 (可跳過): ").strip()
                 due_date = input("輸入完成期限 YYYY-MM-DD (可跳過): ").strip()
@@ -228,7 +320,7 @@ def main():
                 print(f"\n[錯誤] {e}")
 
         elif choice == '9':
-            print_activities_table()
+            handle_activity_menu()
 
         elif choice == '0':
             print("感謝使用，再見！")
