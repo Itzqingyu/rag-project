@@ -45,3 +45,6 @@ env/
 *.sqlite3
 *.db
 chroma_db/
+
+# settings
+.vscode/
