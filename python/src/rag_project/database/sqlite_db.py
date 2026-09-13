@@ -65,6 +65,39 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         ''')
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS meetings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activity_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                date TEXT DEFAULT '',
+                start_time TEXT DEFAULT '',
+                end_time TEXT DEFAULT '',
+                location TEXT DEFAULT '',
+                participants TEXT DEFAULT '',
+                content TEXT DEFAULT '',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(activity_id) REFERENCES activities(id)
+                    ON DELETE RESTRICT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activity_id INTEGER NOT NULL,
+                meeting_id INTEGER,
+                content TEXT NOT NULL,
+                assignee TEXT DEFAULT '',
+                due_date TEXT DEFAULT '',
+                priority TEXT DEFAULT '中',
+                status TEXT DEFAULT 'pending',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(activity_id) REFERENCES activities(id)
+                    ON DELETE RESTRICT,
+                FOREIGN KEY(meeting_id) REFERENCES meetings(id)
+                    ON DELETE SET NULL
+            )
+        ''')
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS decisions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 activity_id INTEGER NOT NULL,
@@ -79,7 +112,9 @@ def init_db(db_path: Optional[str] = None) -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY(activity_id) REFERENCES activities(id)
-                    ON DELETE RESTRICT
+                    ON DELETE RESTRICT,
+                FOREIGN KEY(meeting_id) REFERENCES meetings(id)
+                    ON DELETE SET NULL
             )
         ''')
         cursor.execute('''
@@ -97,7 +132,9 @@ def init_db(db_path: Optional[str] = None) -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY(activity_id) REFERENCES activities(id)
-                    ON DELETE RESTRICT
+                    ON DELETE RESTRICT,
+                FOREIGN KEY(meeting_id) REFERENCES meetings(id)
+                    ON DELETE SET NULL
             )
         ''')
         cursor.execute('''
@@ -119,12 +156,32 @@ def init_db(db_path: Optional[str] = None) -> None:
         ''')
         # SQLite 不會自動替外鍵建立索引；這些索引能避免整合後關聯查詢全表掃描。
         cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_meetings_activity_id "
+            "ON meetings(activity_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tasks_activity_id "
+            "ON tasks(activity_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tasks_meeting_id "
+            "ON tasks(meeting_id)"
+        )
+        cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_decisions_activity_id "
             "ON decisions(activity_id)"
         )
         cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_decisions_meeting_id "
+            "ON decisions(meeting_id)"
+        )
+        cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_schedules_activity_id "
             "ON schedules(activity_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_meeting_id "
+            "ON schedules(meeting_id)"
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_incidents_activity_id "

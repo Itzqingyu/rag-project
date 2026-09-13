@@ -31,6 +31,7 @@
 - **向量數據**: ChromaDB persistent mode
 - **對話歷史**: SQLite
 - **檔案管理**: SQLite (追蹤已導入的 Markdown 文件)
+- **活動管理**: SQLite（Activity、Meeting、Task、Decision、Schedule、Incident）
 
 ### 模型
 - **Embedding**: fastembed (`BAAI/bge-small-zh-v1.5`，使用 ONNX Runtime 於 CPU 運行，專為中文優化且極其輕量)
@@ -57,11 +58,19 @@ rag-project/
 │   ├── src/
 │   │   └── rag_project/
 │   │       ├── main.py           # FastAPI 伺服器入口
+│   │       ├── main_test.py      # Activity／Meeting／Task CLI 測試入口
+│   │       ├── activity/         # Activity CRUD
+│   │       ├── meeting_task.py   # Meeting／Task CRUD
+│   │       ├── decision/         # Decision CRUD
+│   │       ├── schedule/         # Schedule CRUD
+│   │       ├── incident/         # Incident CRUD
+│   │       ├── activity_common.py # 活動管理共用驗證與時間工具
 │   │       ├── rag_engine/
 │   │       │   ├── chunker.py    # Markdown 處理與固定字數切片
 │   │       │   └── retriever.py  # 整合文件匯入與 ChromaDB 檢索
 │   │       └── database/
-│   │           └── chroma_db.py  # 初始化 Embedding 模型與 ChromaDB 持久化
+│   │           ├── chroma_db.py  # 初始化 Embedding 模型與 ChromaDB 持久化
+│   │           └── sqlite_db.py  # 文件與活動管理的 SQLite schema／連線
 │   ├── tests/                    # 測試指令碼與資料
 │   ├── chroma_db/                # 本地生成的 Chroma 向量庫
 │   └── pyproject.toml            # 依賴套件配置
@@ -102,10 +111,18 @@ uv run python/main.py          # 啟動 FastAPI 後端
 npm run dev                    # 啟動 Electron 前端
 ```
 
+### 活動管理後端
+- Activity 是所有活動資料的根節點；其他模組均以 `activity_id` 關聯。
+- Activity 存在任何子資料時禁止刪除，避免連帶遺失歷史脈絡。
+- Meeting 刪除後，Task／Decision／Schedule 保留並將 `meeting_id` 設為 `NULL`。
+- Incident 可選擇關聯 Schedule；Schedule 刪除後 Incident 保留並解除關聯。
+- Activity Management service 只接收文字或結構化內容；檔案讀取與 Markdown 轉換沿用統一 upload／RAG 流程。
+
 ## 6. MVP 範圍
 - ✅ 文件上傳 (目前僅支援 Markdown 格式)
 - ✅ 對話互動 (基於已導入的 Markdown)
 - ✅ 文件管理 (查看、刪除已導入的 Markdown 文件)
+- ✅ 活動管理 Python／SQLite 核心 CRUD 與關聯驗證
 - ❌ PDF/Word 轉檔支援 (延遲至下一階段)
 - ❌ 版本控制、複雜設定 (後續)
 

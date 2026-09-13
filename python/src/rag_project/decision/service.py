@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from rag_project.activity_common import (
     ensure_activity_exists,
+    ensure_meeting_matches_activity,
     optional_positive_id,
     positive_id,
     required_text,
@@ -75,7 +76,7 @@ def create_decision(
     *,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """建立決策；meeting_id 目前只存值，待整合 Meeting 後再加外鍵。"""
+    """建立決策，並驗證可選 Meeting 與 Activity 的一致性。"""
     values = _normalize_fields(
         {
             "activity_id": activity_id,
@@ -93,6 +94,9 @@ def create_decision(
 
     with get_connection(db_path) as conn:
         ensure_activity_exists(conn, values["activity_id"])
+        ensure_meeting_matches_activity(
+            conn, values["meeting_id"], values["activity_id"]
+        )
         cursor = conn.execute(
             """
             INSERT INTO decisions (
@@ -172,8 +176,10 @@ def update_decision(
             return None
         current = dict(current_row)
 
-        if "activity_id" in normalized:
-            ensure_activity_exists(conn, normalized["activity_id"])
+        next_activity_id = normalized.get("activity_id", current["activity_id"])
+        next_meeting_id = normalized.get("meeting_id", current["meeting_id"])
+        ensure_activity_exists(conn, next_activity_id)
+        ensure_meeting_matches_activity(conn, next_meeting_id, next_activity_id)
 
         assignments = [f"{field_name} = ?" for field_name in normalized]
         values = list(normalized.values())

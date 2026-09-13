@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from rag_project.activity_common import (
     ensure_activity_exists,
+    ensure_meeting_matches_activity,
     iso_datetime,
     optional_positive_id,
     positive_id,
@@ -60,7 +61,7 @@ def create_schedule(
     *,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """建立活動流程；meeting_id 待整合 Meeting 後才建立外鍵。"""
+    """建立活動流程，並驗證可選 Meeting 與 Activity 的一致性。"""
     values = _normalize_fields(
         {
             "activity_id": activity_id,
@@ -80,6 +81,9 @@ def create_schedule(
 
     with get_connection(db_path) as conn:
         ensure_activity_exists(conn, values["activity_id"])
+        ensure_meeting_matches_activity(
+            conn, values["meeting_id"], values["activity_id"]
+        )
         cursor = conn.execute(
             """
             INSERT INTO schedules (
@@ -165,9 +169,11 @@ def update_schedule(
         current = dict(current_row)
 
         next_activity_id = normalized.get("activity_id", current["activity_id"])
+        next_meeting_id = normalized.get("meeting_id", current["meeting_id"])
         next_start_time = normalized.get("start_time", current["start_time"])
         next_end_time = normalized.get("end_time", current["end_time"])
         ensure_activity_exists(conn, next_activity_id)
+        ensure_meeting_matches_activity(conn, next_meeting_id, next_activity_id)
         validate_time_range(next_start_time, next_end_time)
 
         # Schedule 改掛其他 Activity 時，不能讓既有 Incident 形成跨活動關聯。

@@ -19,6 +19,7 @@ from rag_project.schedule.service import (  # noqa: E402
     list_schedules,
     update_schedule,
 )
+from rag_project.meeting_task import add_meeting  # noqa: E402
 
 
 class ScheduleServiceTest(unittest.TestCase):
@@ -31,6 +32,11 @@ class ScheduleServiceTest(unittest.TestCase):
             status="準備中",
             db_path=self.db_path,
         )
+        self.meeting = add_meeting(
+            activity_id=self.activity["id"],
+            name="流程來源會議",
+            db_path=self.db_path,
+        )
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -38,7 +44,7 @@ class ScheduleServiceTest(unittest.TestCase):
     def _create_schedule(self):
         return create_schedule(
             activity_id=self.activity["id"],
-            meeting_id=8,
+            meeting_id=self.meeting["id"],
             name="報到",
             start_time="2026-09-20T08:00:00+08:00",
             end_time="2026-09-20T09:00:00+08:00",
@@ -54,7 +60,7 @@ class ScheduleServiceTest(unittest.TestCase):
 
         self.assertIsInstance(created, dict)
         self.assertEqual(created["activity_id"], self.activity["id"])
-        self.assertEqual(created["meeting_id"], 8)
+        self.assertEqual(created["meeting_id"], self.meeting["id"])
         for field_name in ("created_at", "updated_at"):
             timestamp = created[field_name]
             self.assertEqual(
@@ -119,6 +125,46 @@ class ScheduleServiceTest(unittest.TestCase):
         self._create_schedule()
         with self.assertRaises(sqlite3.IntegrityError):
             delete_activity(self.activity["id"], db_path=self.db_path)
+
+    def test_rejects_cross_activity_meeting_on_create_and_update(self):
+        other_activity = create_activity(
+            name="另一場活動",
+            year=2026,
+            status="準備中",
+            db_path=self.db_path,
+        )
+        with self.assertRaises(ValueError):
+            create_schedule(
+                activity_id=self.activity["id"],
+                meeting_id=999,
+                name="不存在會議的流程",
+                start_time="2026-09-20T08:00:00+08:00",
+                location="活動中心",
+                owner="小明",
+                notes="無",
+                category="活動中",
+                db_path=self.db_path,
+            )
+        with self.assertRaises(ValueError):
+            create_schedule(
+                activity_id=other_activity["id"],
+                meeting_id=self.meeting["id"],
+                name="錯誤流程",
+                start_time="2026-09-20T08:00:00+08:00",
+                location="活動中心",
+                owner="小明",
+                notes="無",
+                category="活動中",
+                db_path=self.db_path,
+            )
+
+        schedule = self._create_schedule()
+        with self.assertRaises(ValueError):
+            update_schedule(
+                schedule["id"],
+                activity_id=other_activity["id"],
+                db_path=self.db_path,
+            )
 
     def test_missing_schedule_returns_none(self):
         self.assertIsNone(get_schedule(999, db_path=self.db_path))

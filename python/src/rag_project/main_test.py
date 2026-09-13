@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import List
 
 # 將 src 目錄加入 Python 搜尋路徑
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -62,7 +63,7 @@ def print_menu():
     print("      Activity, Meeting & Task 整合 CLI 測試選單")
     print("=" * 60)
     print("[ 1 ] 新增會議 (Add Meeting)")
-    print("      - 名稱, 開始/結束時間, 地點, 參與人員, 內容/檔案")
+    print("      - 名稱, 開始/結束時間, 地點, 參與人員, 內容文字")
     print("[ 2 ] 查看會議列表 (List Meetings)")
     print("[ 3 ] 修改會議 (Update Meeting)")
     print("[ 4 ] 刪除會議 (Delete Meeting)")
@@ -156,7 +157,7 @@ def main():
                 end_time = input("輸入結束時間 (如 '2026-09-15 16:00', 可跳過): ").strip()
                 location = input("輸入會議地點 (如 '管二 201 教室', 可跳過): ").strip()
                 participants = input("輸入參與人員 (如 '張三, 李四', 可跳過): ").strip()
-                content = input("輸入會議紀錄/內容 (可貼純文字，或貼檔案路徑如 C:\\doc.md / .pdf): ").strip()
+                content = input("輸入已取得的會議紀錄/內容文字: ").strip()
                 
                 res = add_meeting(
                     activity_id=act_id,
@@ -207,7 +208,7 @@ def main():
                 end_time = input("新結束時間 (不修改按 Enter): ").strip() or None
                 location = input("新地點 (不修改按 Enter): ").strip() or None
                 participants = input("新參與人員 (不修改按 Enter): ").strip() or None
-                content = input("新內容或新檔案路徑 (不修改按 Enter): ").strip() or None
+                content = input("新內容文字 (不修改按 Enter): ").strip() or None
                 
                 ok = update_meeting(
                     m_id,

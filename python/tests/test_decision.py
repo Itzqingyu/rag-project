@@ -20,6 +20,7 @@ from rag_project.decision.service import (  # noqa: E402
     list_decisions,
     update_decision,
 )
+from rag_project.meeting_task import add_meeting  # noqa: E402
 
 
 class DecisionServiceTest(unittest.TestCase):
@@ -32,6 +33,11 @@ class DecisionServiceTest(unittest.TestCase):
             status="準備中",
             db_path=self.db_path,
         )
+        self.meeting = add_meeting(
+            activity_id=self.activity["id"],
+            name="決策來源會議",
+            db_path=self.db_path,
+        )
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -39,7 +45,7 @@ class DecisionServiceTest(unittest.TestCase):
     def _create_decision(self):
         return create_decision(
             activity_id=self.activity["id"],
-            meeting_id=7,
+            meeting_id=self.meeting["id"],
             problem="雨天場地如何安排？",
             options='["延期", "改室內"]',
             final_decision="改室內",
@@ -53,7 +59,7 @@ class DecisionServiceTest(unittest.TestCase):
 
         self.assertIsInstance(created, dict)
         self.assertEqual(created["activity_id"], self.activity["id"])
-        self.assertEqual(created["meeting_id"], 7)
+        self.assertEqual(created["meeting_id"], self.meeting["id"])
         self.assertEqual(json.loads(created["options"]), ["延期", "改室內"])
         self.assertEqual(created["confirmation_status"], "pending")
         for field_name in ("created_at", "updated_at"):
@@ -130,6 +136,44 @@ class DecisionServiceTest(unittest.TestCase):
         self._create_decision()
         with self.assertRaises(sqlite3.IntegrityError):
             delete_activity(self.activity["id"], db_path=self.db_path)
+
+    def test_rejects_cross_activity_meeting_on_create_and_update(self):
+        other_activity = create_activity(
+            name="另一場活動",
+            year=2026,
+            status="準備中",
+            db_path=self.db_path,
+        )
+        with self.assertRaises(ValueError):
+            create_decision(
+                activity_id=self.activity["id"],
+                meeting_id=999,
+                problem="不存在會議",
+                options='["A"]',
+                final_decision="A",
+                reason="原因",
+                source="會議紀錄",
+                db_path=self.db_path,
+            )
+        with self.assertRaises(ValueError):
+            create_decision(
+                activity_id=other_activity["id"],
+                meeting_id=self.meeting["id"],
+                problem="跨活動問題",
+                options='["A"]',
+                final_decision="A",
+                reason="原因",
+                source="會議紀錄",
+                db_path=self.db_path,
+            )
+
+        decision = self._create_decision()
+        with self.assertRaises(ValueError):
+            update_decision(
+                decision["id"],
+                activity_id=other_activity["id"],
+                db_path=self.db_path,
+            )
 
     def test_missing_decision_returns_none(self):
         self.assertIsNone(get_decision(999, db_path=self.db_path))

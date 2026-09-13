@@ -85,3 +85,23 @@ def ensure_activity_exists(conn: sqlite3.Connection, activity_id: Any) -> int:
     if row is None:
         raise ValueError(f"activity_id {normalized_id} 不存在")
     return normalized_id
+
+
+def ensure_meeting_matches_activity(
+    conn: sqlite3.Connection,
+    meeting_id: Any,
+    activity_id: int,
+) -> Optional[int]:
+    """驗證可選 Meeting 存在，並且與子資料屬於同一個 Activity。"""
+    normalized_id = optional_positive_id(meeting_id, "meeting_id")
+    if normalized_id is None:
+        return None
+
+    row = conn.execute(
+        "SELECT activity_id FROM meetings WHERE id = ?", (normalized_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"meeting_id {normalized_id} 不存在")
+    if row["activity_id"] != activity_id:
+        raise ValueError("meeting_id 與資料必須屬於同一個 Activity")
+    return normalized_id

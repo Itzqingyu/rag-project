@@ -1,75 +1,20 @@
-import sqlite3
-import os
 from typing import List, Dict, Any, Optional
-from rag_project.database.sqlite_db import get_connection
+from rag_project.activity_common import (
+    ensure_activity_exists,
+    ensure_meeting_matches_activity,
+)
+from rag_project.database.sqlite_db import get_connection, init_db
 
-def load_content_from_file_or_text(input_str: str) -> str:
-    """如果 input_str 是本機檔案路徑 (PDF, Markdown, TXT等)，嘗試讀取內容；否則直接回傳原文字"""
-    if not input_str:
-        return ""
-        
-    cleaned_path = input_str.strip().strip('"').strip("'")
-    if os.path.isfile(cleaned_path):
-        file_path = os.path.abspath(cleaned_path)
-        filename = os.path.basename(file_path)
-        ext = os.path.splitext(file_path)[1].lower()
-        
-        # 純文字 / Markdown / 程式碼檔
-        if ext in ['.md', '.txt', '.json', '.csv', '.py', '.log', '.html', '.rst']:
-            for encoding in ['utf-8', 'utf-8-sig', 'cp950', 'gbk', 'latin-1']:
-                try:
-                    with open(file_path, 'r', encoding=encoding) as f:
-                        text = f.read()
-                    return f"[匯入檔案: {filename}]\n{text}"
-                except Exception:
-                    continue
-            return f"[匯入檔案: {filename} (無法解析文字編碼)]"
-            
-        # PDF 檔案解析
-        elif ext == '.pdf':
-            try:
-                import pypdf
-                reader = pypdf.PdfReader(file_path)
-                pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
-                pdf_text = "\n".join(pages_text)
-                return f"[匯入 PDF 檔案: {filename}]\n{pdf_text}"
-            except Exception:
-                try:
-                    import PyPDF2
-                    reader = PyPDF2.PdfReader(file_path)
-                    pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
-                    pdf_text = "\n".join(pages_text)
-                    return f"[匯入 PDF 檔案: {filename}]\n{pdf_text}"
-                except Exception:
-                    return f"[匯入 PDF 檔案: {filename} (路徑: {file_path})]"
-        else:
-            return f"[匯入檔案: {filename} (路徑: {file_path})]"
-            
-    return input_str
+
+_UNSET = object()
 
 
 def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
-    """初始化與移轉 meetings 與 tasks 資料表欄位"""
+    """初始化共用 schema，並補足舊版 Meeting/Task 可能缺少的欄位。"""
+    init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        
-        # 建立會議 (meetings) 資料表 (包含新欄位與外鍵Constraint)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS meetings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                activity_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                date TEXT DEFAULT '',
-                start_time TEXT DEFAULT '',
-                end_time TEXT DEFAULT '',
-                location TEXT DEFAULT '',
-                participants TEXT DEFAULT '',
-                content TEXT DEFAULT '',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE
-            )
-        ''')
-        
+
         # 動態補足舊版 meetings 可能缺少的新欄位
         cursor.execute("PRAGMA table_info(meetings)")
         existing_m_cols = [row[1] for row in cursor.fetchall()]
@@ -83,23 +28,6 @@ def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
             if col_name not in existing_m_cols:
                 cursor.execute(f"ALTER TABLE meetings ADD COLUMN {col_name} {col_type}")
         
-        # 建立待辦事項 (tasks) 資料表 (包含優先級與外鍵欄位)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                activity_id INTEGER NOT NULL,
-                meeting_id INTEGER,
-                content TEXT NOT NULL,
-                assignee TEXT DEFAULT '',
-                due_date TEXT DEFAULT '',
-                priority TEXT DEFAULT '中',
-                status TEXT DEFAULT 'pending',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE,
-                FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
-            )
-        ''')
-        
         # 動態補足舊版 tasks 可能缺少的 priority 欄位
         cursor.execute("PRAGMA table_info(tasks)")
         existing_t_cols = [row[1] for row in cursor.fetchall()]
@@ -107,9 +35,6 @@ def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
             cursor.execute("ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT '中'")
         
         conn.commit()
-
-# 模組載入時自動確認建表
-init_meeting_task_tables()
 
 
 # ==========================================
@@ -136,21 +61,21 @@ def add_meeting(
     :param end_time: 結束時間 (如 '2026-09-15 16:00')
     :param location: 地點 (如 '管二 201 教室')
     :param participants: 參與人員 (如 '張三, 李四')
-    :param content: 會議紀錄/內容 (可為文字或 PDF/MD 檔案路徑)
+    :param content: 已經由統一 upload/Markdown 流程取得的會議文字
     :param date: 相容用日期欄位
     :param db_path: 可選資料庫路徑 (測試用)
     """
     init_meeting_task_tables(db_path)
-    processed_content = load_content_from_file_or_text(content)
     if not date and start_time:
         date = start_time.split()[0]
         
     with get_connection(db_path) as conn:
+        ensure_activity_exists(conn, activity_id)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO meetings (activity_id, name, date, start_time, end_time, location, participants, content)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (activity_id, name, date, start_time, end_time, location, participants, processed_content))
+        ''', (activity_id, name, date, start_time, end_time, location, participants, content))
         conn.commit()
         meeting_id = cursor.lastrowid
         
@@ -206,7 +131,7 @@ def update_meeting(
         values.append(start_time)
         if date is None:
             fields.append("date = ?")
-            values.append(start_time.split()[0])
+            values.append(start_time.strip().split(maxsplit=1)[0] if start_time.strip() else "")
     if date is not None:
         fields.append("date = ?")
         values.append(date)
@@ -221,7 +146,7 @@ def update_meeting(
         values.append(participants)
     if content is not None:
         fields.append("content = ?")
-        values.append(load_content_from_file_or_text(content))
+        values.append(content)
     if activity_id is not None:
         fields.append("activity_id = ?")
         values.append(activity_id)
@@ -229,10 +154,32 @@ def update_meeting(
     if not fields:
         return False
         
-    values.append(meeting_id)
-    sql = f"UPDATE meetings SET {', '.join(fields)} WHERE id = ?"
-    
     with get_connection(db_path) as conn:
+        current = conn.execute(
+            "SELECT * FROM meetings WHERE id = ?", (meeting_id,)
+        ).fetchone()
+        if current is None:
+            return False
+
+        if activity_id is not None:
+            ensure_activity_exists(conn, activity_id)
+            # 改掛 Activity 時，保守地阻止所有既有關聯資料形成跨活動狀態。
+            for table_name in ("tasks", "decisions", "schedules"):
+                conflict = conn.execute(
+                    f"""
+                    SELECT 1 FROM {table_name}
+                    WHERE meeting_id = ? AND activity_id != ?
+                    LIMIT 1
+                    """,
+                    (meeting_id, activity_id),
+                ).fetchone()
+                if conflict is not None:
+                    raise ValueError(
+                        "Meeting 已被其他 Activity 的關聯資料使用，無法變更 activity_id"
+                    )
+
+        values.append(meeting_id)
+        sql = f"UPDATE meetings SET {', '.join(fields)} WHERE id = ?"
         cursor = conn.cursor()
         cursor.execute(sql, tuple(values))
         conn.commit()
@@ -273,14 +220,24 @@ def add_task(
     :param db_path: 可選資料庫路徑 (測試用)
     """
     init_meeting_task_tables(db_path)
-    processed_content = load_content_from_file_or_text(content)
-    
     with get_connection(db_path) as conn:
+        normalized_activity_id = ensure_activity_exists(conn, activity_id)
+        normalized_meeting_id = ensure_meeting_matches_activity(
+            conn, meeting_id, normalized_activity_id
+        )
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO tasks (activity_id, meeting_id, content, assignee, due_date, priority, status)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (activity_id, meeting_id, processed_content, assignee, due_date, priority, status))
+        ''', (
+            normalized_activity_id,
+            normalized_meeting_id,
+            content,
+            assignee,
+            due_date,
+            priority,
+            status,
+        ))
         conn.commit()
         task_id = cursor.lastrowid
         
@@ -335,7 +292,7 @@ def update_task(
     priority: Optional[str] = None,
     status: Optional[str] = None,
     activity_id: Optional[int] = None,
-    meeting_id: Optional[int] = None,
+    meeting_id: Any = _UNSET,
     *,
     db_path: Optional[str] = None
 ) -> bool:
@@ -346,7 +303,7 @@ def update_task(
     
     if content is not None:
         fields.append("content = ?")
-        values.append(load_content_from_file_or_text(content))
+        values.append(content)
     if assignee is not None:
         fields.append("assignee = ?")
         values.append(assignee)
@@ -362,17 +319,33 @@ def update_task(
     if activity_id is not None:
         fields.append("activity_id = ?")
         values.append(activity_id)
-    if meeting_id is not None:
+    if meeting_id is not _UNSET:
         fields.append("meeting_id = ?")
         values.append(meeting_id)
         
     if not fields:
         return False
         
-    values.append(task_id)
-    sql = f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?"
-    
     with get_connection(db_path) as conn:
+        current = conn.execute(
+            "SELECT * FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        if current is None:
+            return False
+
+        next_activity_id = (
+            activity_id if activity_id is not None else current["activity_id"]
+        )
+        next_meeting_id = (
+            meeting_id if meeting_id is not _UNSET else current["meeting_id"]
+        )
+        normalized_activity_id = ensure_activity_exists(conn, next_activity_id)
+        ensure_meeting_matches_activity(
+            conn, next_meeting_id, normalized_activity_id
+        )
+
+        values.append(task_id)
+        sql = f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?"
         cursor = conn.cursor()
         cursor.execute(sql, tuple(values))
         conn.commit()

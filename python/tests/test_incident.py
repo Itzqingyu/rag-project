@@ -140,6 +140,14 @@ class IncidentServiceTest(unittest.TestCase):
     def test_schema_uses_required_foreign_key_actions(self):
         init_db(self.db_path)
         with get_connection(self.db_path) as conn:
+            meeting_fks = {
+                (row["from"], row["table"], row["to"], row["on_delete"])
+                for row in conn.execute("PRAGMA foreign_key_list(meetings)")
+            }
+            task_fks = {
+                (row["from"], row["table"], row["to"], row["on_delete"])
+                for row in conn.execute("PRAGMA foreign_key_list(tasks)")
+            }
             decision_fks = {
                 (row["from"], row["table"], row["to"], row["on_delete"])
                 for row in conn.execute("PRAGMA foreign_key_list(decisions)")
@@ -154,12 +162,29 @@ class IncidentServiceTest(unittest.TestCase):
             }
 
         self.assertEqual(
-            decision_fks,
+            meeting_fks,
             {("activity_id", "activities", "id", "RESTRICT")},
         )
         self.assertEqual(
+            task_fks,
+            {
+                ("activity_id", "activities", "id", "RESTRICT"),
+                ("meeting_id", "meetings", "id", "SET NULL"),
+            },
+        )
+        self.assertEqual(
+            decision_fks,
+            {
+                ("activity_id", "activities", "id", "RESTRICT"),
+                ("meeting_id", "meetings", "id", "SET NULL"),
+            },
+        )
+        self.assertEqual(
             schedule_fks,
-            {("activity_id", "activities", "id", "RESTRICT")},
+            {
+                ("activity_id", "activities", "id", "RESTRICT"),
+                ("meeting_id", "meetings", "id", "SET NULL"),
+            },
         )
         self.assertEqual(
             incident_fks,
