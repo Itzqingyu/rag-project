@@ -4,6 +4,9 @@
 
 ### 進入點與 API
 - `main.py`: FastAPI 應用程式的主程式。定義了 API 端點 `/ping` (健康檢查)、`/upload` (上傳並處理文檔) 以及 `/query` (查詢相關文檔)。
+- `main_test.py`: 活動 (Activity)、會議 (Meeting) 與待辦事項 (Task) 的互動式 CLI 測試選單，支援完整的增刪改查 (CRUD) 測試。
+- `activity/service.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
+- `meeting_task.py`: 負責會議 (Meeting) 與待辦事項 (Task) 的後端業務邏輯與 SQLite CRUD 操作。自動建立 `meetings` 與 `tasks` 資料表，並透過 `activity_id` / `meeting_id` 建立資料關聯。
 - `test_main.py`: 後端 RAG 模塊的互動式 CLI 測試選單，支援檔案管理 (CRUD) 與搜尋檢索的本地測試。
 
 ### 核心引擎 (RAG Engine)
@@ -14,7 +17,7 @@
 
 ### 資料庫 (Database)
 - `database/chroma_db.py`: 負責管理 Chroma 向量資料庫。使用單例模式 (Singleton) 建立連線，設定儲存路徑為專案根目錄下的 `chroma_db`，並依賴 `embedding.py` 提供向量化功能。
-- `database/sqlite_db.py`: 負責管理 SQLite 關聯式資料庫，用於追蹤檔案的 Metadata (檔名、路徑、上傳時間、切塊數量等)，作為檔案列表與防呆刪除機制的管理中樞。
+- `database/sqlite_db.py`: 負責管理 SQLite 關聯式資料庫，用於追蹤檔案的 Metadata (檔名、路徑、上傳時間、切塊數量等) 以及 Activity Schema，作為檔案列表與防呆刪除機制的管理中樞。
 
 ### 語言模型 (LLM)
 - `llm/llm_client.py`: 負責與 LLM 互動。提供 `generate_answer` 函數，使用 `litellm` 將檢索到的文檔片段 (Context) 與使用者問題組合成 Prompt。並透過讀取 `.env` 中的 `ACTIVE_MODEL` 變數，支援動態切換 OpenAI、Gemini、DeepSeek 等雲端模型，以及自動對接本地端的 llama.cpp。
@@ -48,7 +51,7 @@
 - **Web 框架**: FastAPI, Pydantic (用於請求與回應資料驗證)
 - **資料庫架構**:
   - **向量儲存**: ChromaDB (透過 `langchain_chroma` 整合)，用於語意檢索。
-  - **檔案狀態追蹤**: SQLite (Python 內建 `sqlite3`)，用於 Metadata 與列表管理。
+  - **檔案狀態追蹤與業務資料**: SQLite (Python 內建 `sqlite3`)，用於 Metadata、Activity、Meeting 與 Task 管理。
 - **文本處理與 RAG 框架**: LangChain (`langchain_text_splitters`, `langchain_core`)
 - **模型推理與向量化**:
   - **Embedding**: Jina AI (`jina-embeddings-v2-base-zh`) via `fastembed`，負責將文件與查詢轉化為語意向量。
