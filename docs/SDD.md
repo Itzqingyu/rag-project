@@ -57,22 +57,19 @@ rag-project/
 ├── python/                       # Python 後端 (FastAPI)
 │   ├── src/
 │   │   └── rag_project/
-│   │       ├── main.py           # FastAPI 伺服器入口
-│   │       ├── main_test.py      # Activity／Meeting／Task CLI 測試入口
-│   │       ├── activity/         # Activity CRUD
-│   │       ├── meeting_task.py   # Meeting／Task CRUD
-│   │       ├── decision/         # Decision CRUD
-│   │       ├── schedule/         # Schedule CRUD
-│   │       ├── incident/         # Incident CRUD
-│   │       ├── activity_common.py # 活動管理共用驗證與時間工具
-│   │       ├── rag_engine/
-│   │       │   ├── chunker.py    # Markdown 處理與固定字數切片
-│   │       │   └── retriever.py  # 整合文件匯入與 ChromaDB 檢索
-│   │       └── database/
-│   │           ├── chroma_db.py  # 初始化 Embedding 模型與 ChromaDB 持久化
-│   │           └── sqlite_db.py  # 文件與活動管理的 SQLite schema／連線
-│   ├── tests/                    # 測試指令碼與資料
-│   ├── chroma_db/                # 本地生成的 Chroma 向量庫
+│   │       ├── main.py           # FastAPI 伺服器入口 (REST API)
+│   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema 與 ChromaDB 向量庫)
+│   │       ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
+│   │       ├── llm_client.py     # LLM 統一呼叫介面 (litellm)
+│   │       ├── activity.py       # Activity 活動管理 CRUD
+│   │       ├── meeting_task.py   # Meeting 會議與 Task 待辦事項 CRUD
+│   │       ├── decision.py       # Decision 決策紀錄 CRUD
+│   │       ├── schedule.py       # Schedule 流程日程 CRUD
+│   │       ├── incident.py       # Incident 突發事件 CRUD
+│   │       └── activity_common.py # 活動管理共用驗證與時間工具
+│   ├── tests/                    # 測試指令碼與單元測試
+│   │   └── test_main.py          # 整合 CLI 互動測試工具 (包含 RAG, LLM 與業務功能)
+│   ├── data/                     # 本地 SQLite 與 Chroma 向量庫
 │   └── pyproject.toml            # 依賴套件配置
 ```
 

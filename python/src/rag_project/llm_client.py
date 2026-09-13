@@ -26,11 +26,9 @@ def generate_answer(user_query: str, retrieved_chunks: list[str], system_prompt:
     api_key = None
 
     # 針對本地端 (llama.cpp) 的特殊處理
-    # 如果 ACTIVE_MODEL 以 local/ 開頭，轉換為 openai/ 並帶入本地端 api_base
     if model_name.startswith("local/"):
         model_name = "openai/" + model_name[6:]
         api_base = os.getenv("LLAMACPP_API_BASE", "http://localhost:8080/v1")
-        # 本地伺服器雖然不驗證金鑰，但底層 OpenAI Client 強制要求此欄位不能為空
         api_key = "sk-no-key-required"
 
     try:
@@ -47,5 +45,4 @@ def generate_answer(user_query: str, retrieved_chunks: list[str], system_prompt:
         )
         return response.choices[0].message.content
     except Exception as e:
-        # 回傳明顯的錯誤訊息，方便 CLI 測試時追蹤
         return f"❌ LLM 呼叫失敗: {str(e)}"

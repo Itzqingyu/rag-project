@@ -1,11 +1,15 @@
-"""Activity 的 SQLite CRUD 邏輯。"""
+"""Activity (活動管理) 的 SQLite CRUD 業務邏輯模組。
+
+本模組提供 Activity 的建立、查詢、列表、修改與刪除功能，
+包含欄位驗證、日期範圍檢核與防呆處理。
+"""
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from rag_project.database.sqlite_db import get_connection, init_db
+from rag_project.database import get_connection, init_db
 
-
+# 允許輸入與更新的合法 Activity 欄位集合
 ACTIVITY_FIELDS = {
     "name",
     "year",
@@ -20,8 +24,12 @@ ACTIVITY_FIELDS = {
 }
 
 
+# ==========================================
+# 內部驗證與時間輔助函式 (Internal Helpers)
+# ==========================================
+
 def _utc_now(after: Optional[str] = None) -> str:
-    """回傳固定微秒精度的 UTC ISO 8601 時間，並可保證晚於指定時間。"""
+    """回傳固定微秒精度的 UTC ISO 8601 時間，並可保證晚於指定舊時間 (避免快轉產生同秒覆蓋)。"""
     now = datetime.now(timezone.utc)
     if after is not None:
         previous = datetime.fromisoformat(after.replace("Z", "+00:00"))
@@ -33,17 +41,20 @@ def _utc_now(after: Optional[str] = None) -> str:
 
 
 def _validate_activity_id(activity_id: int) -> None:
+    """驗證 activity_id 必須為正整數且排除布林值。"""
     if isinstance(activity_id, bool) or not isinstance(activity_id, int) or activity_id <= 0:
         raise ValueError("activity_id 必須是正整數")
 
 
 def _required_text(value: Any, field_name: str) -> str:
+    """驗證必填字串欄位（不可為空或純空白）。"""
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} 不可為空")
     return value.strip()
 
 
 def _optional_text(value: Any, field_name: str) -> Optional[str]:
+    """處理可選字串欄位，若為空字串或 None 則正規化為 None。"""
     if value is None:
         return None
     if not isinstance(value, str):
@@ -53,12 +64,14 @@ def _optional_text(value: Any, field_name: str) -> Optional[str]:
 
 
 def _positive_year(value: Any) -> int:
+    """驗證年份必須為正整數。"""
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError("year 必須是正整數")
     return value
 
 
 def _optional_non_negative_int(value: Any, field_name: str) -> Optional[int]:
+    """驗證可選非負整數（如預期人數、預算）。"""
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -67,7 +80,7 @@ def _optional_non_negative_int(value: Any, field_name: str) -> Optional[int]:
 
 
 def _optional_date(value: Any, field_name: str) -> Optional[str]:
-    """驗證並標準化 YYYY-MM-DD 日期；尚未確定時可傳入 None。"""
+    """驗證並標準化 YYYY-MM-DD 日期格式。"""
     normalized = _optional_text(value, field_name)
     if normalized is None:
         return None
@@ -78,7 +91,7 @@ def _optional_date(value: Any, field_name: str) -> Optional[str]:
 
 
 def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
-    """集中驗證欄位，讓 create 與 update 使用相同資料規格。"""
+    """集中驗證所有輸入欄位，確保 create 與 update 採用相同資料規格。"""
     normalized: Dict[str, Any] = {}
 
     for field_name, value in values.items():
@@ -100,9 +113,14 @@ def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> None:
+    """檢查日期合理性：結束日期不可早於開始日期。"""
     if start_date is not None and end_date is not None and end_date < start_date:
         raise ValueError("end_date 不可早於 start_date")
 
+
+# ==========================================
+# 外部公開 CRUD 業務 API (Public CRUD Operations)
+# ==========================================
 
 def create_activity(
     name: str,
@@ -118,7 +136,7 @@ def create_activity(
     *,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """建立活動並回傳完整資料；回傳的 id 即為其他模組使用的 activity_id。"""
+    """建立新活動紀錄並回傳完整資料；回傳字典中的 'id' 即為其他業務模組引用的 activity_id。"""
     values = _normalize_fields(
         {
             "name": name,
@@ -165,7 +183,6 @@ def create_activity(
         activity_id = cursor.lastrowid
         conn.commit()
 
-        # 在同一連線讀回完整紀錄，確保呼叫端立即拿到 activity_id。
         row = conn.execute(
             "SELECT * FROM activities WHERE id = ?", (activity_id,)
         ).fetchone()
@@ -174,7 +191,7 @@ def create_activity(
 
 
 def get_activity(activity_id: int, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """依 activity_id 取得單一活動；不存在時回傳 None。"""
+    """根據 activity_id 查詢單一活動詳情；找不到時回傳 None。"""
     _validate_activity_id(activity_id)
     init_db(db_path)
 
@@ -186,7 +203,7 @@ def get_activity(activity_id: int, *, db_path: Optional[str] = None) -> Optional
 
 
 def list_activities(*, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """列出所有活動，依年份與流水號由新到舊排序。"""
+    """列出系統中所有活動，預設依據年份與建立時間由新到舊排序。"""
     init_db(db_path)
 
     with get_connection(db_path) as conn:
@@ -202,7 +219,7 @@ def update_activity(
     db_path: Optional[str] = None,
     **changes: Any,
 ) -> Optional[Dict[str, Any]]:
-    """局部更新活動並回傳更新後資料；不存在時回傳 None。"""
+    """局部更新指定活動的屬性，並自動更新 updated_at 時間戳記；若活動不存在回傳 None。"""
     _validate_activity_id(activity_id)
     if not changes:
         raise ValueError("至少需要提供一個要更新的欄位")
@@ -243,7 +260,7 @@ def update_activity(
 def delete_activity(
     activity_id: int, *, db_path: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
-    """刪除活動並回傳被刪除的資料；不存在時回傳 None。"""
+    """刪除指定活動；若該活動旗下存有子紀錄（會議、待辦、決策等），SQLite 外鍵會拋出限制保護。"""
     _validate_activity_id(activity_id)
     init_db(db_path)
 
@@ -255,7 +272,6 @@ def delete_activity(
             return None
 
         deleted = dict(row)
-        # 未來子表使用 ON DELETE RESTRICT 時，SQLite 會在這裡阻止誤刪。
         conn.execute("DELETE FROM activities WHERE id = ?", (activity_id,))
         conn.commit()
 
