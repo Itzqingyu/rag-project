@@ -62,13 +62,81 @@ def init_db(db_path: Optional[str] = None) -> None:
                 )
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activity_id INTEGER NOT NULL,
+                meeting_id INTEGER CHECK (meeting_id IS NULL OR meeting_id > 0),
+                problem TEXT NOT NULL,
+                options TEXT NOT NULL,
+                final_decision TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                source TEXT NOT NULL,
+                confirmation_status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (confirmation_status IN ('pending', 'confirmed')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(activity_id) REFERENCES activities(id)
+                    ON DELETE RESTRICT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activity_id INTEGER NOT NULL,
+                meeting_id INTEGER CHECK (meeting_id IS NULL OR meeting_id > 0),
+                name TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT,
+                location TEXT NOT NULL,
+                owner TEXT NOT NULL,
+                notes TEXT NOT NULL,
+                category TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(activity_id) REFERENCES activities(id)
+                    ON DELETE RESTRICT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activity_id INTEGER NOT NULL,
+                schedule_id INTEGER,
+                content TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                cause TEXT,
+                suggestion TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(activity_id) REFERENCES activities(id)
+                    ON DELETE RESTRICT,
+                FOREIGN KEY(schedule_id) REFERENCES schedules(id)
+                    ON DELETE SET NULL
+            )
+        ''')
+        # SQLite 不會自動替外鍵建立索引；這些索引能避免整合後關聯查詢全表掃描。
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_decisions_activity_id "
+            "ON decisions(activity_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_activity_id "
+            "ON schedules(activity_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_incidents_activity_id "
+            "ON incidents(activity_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_incidents_schedule_id "
+            "ON incidents(schedule_id)"
+        )
         conn.commit()
-
-# 在模塊載入時自動初始化資料表
-init_db()
 
 def get_doc_by_path(file_path: str) -> Optional[Dict[str, Any]]:
     """根據路徑查詢檔案紀錄"""
+    init_db()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM documents WHERE file_path = ?', (file_path,))
@@ -77,6 +145,7 @@ def get_doc_by_path(file_path: str) -> Optional[Dict[str, Any]]:
 
 def get_doc_by_id(doc_id: int) -> Optional[Dict[str, Any]]:
     """根據 ID 查詢檔案紀錄"""
+    init_db()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM documents WHERE id = ?', (doc_id,))
@@ -85,6 +154,7 @@ def get_doc_by_id(doc_id: int) -> Optional[Dict[str, Any]]:
 
 def get_all_docs() -> List[Dict[str, Any]]:
     """取得所有已上傳的檔案清單"""
+    init_db()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM documents ORDER BY upload_date DESC')
@@ -93,6 +163,7 @@ def get_all_docs() -> List[Dict[str, Any]]:
 
 def add_or_update_doc_record(file_path: str, chunk_count: int) -> None:
     """新增或更新檔案紀錄"""
+    init_db()
     filename = os.path.basename(file_path)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
@@ -110,6 +181,7 @@ def add_or_update_doc_record(file_path: str, chunk_count: int) -> None:
 
 def delete_doc_record_by_path(file_path: str) -> None:
     """根據路徑刪除檔案紀錄"""
+    init_db()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('DELETE FROM documents WHERE file_path = ?', (file_path,))
@@ -117,6 +189,7 @@ def delete_doc_record_by_path(file_path: str) -> None:
 
 def delete_doc_record_by_id(doc_id: int) -> None:
     """根據 ID 刪除檔案紀錄"""
+    init_db()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('DELETE FROM documents WHERE id = ?', (doc_id,))

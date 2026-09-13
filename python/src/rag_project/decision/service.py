@@ -1,0 +1,207 @@
+"""Decision 的 SQLite CRUD 邏輯。"""
+
+import json
+from typing import Any, Dict, List, Optional
+
+from rag_project.activity_common import (
+    ensure_activity_exists,
+    optional_positive_id,
+    positive_id,
+    required_text,
+    utc_now,
+)
+from rag_project.database.sqlite_db import get_connection, init_db
+
+
+DECISION_FIELDS = {
+    "activity_id",
+    "meeting_id",
+    "problem",
+    "options",
+    "final_decision",
+    "reason",
+    "source",
+    "confirmation_status",
+}
+CONFIRMATION_STATUSES = {"pending", "confirmed"}
+
+
+def _options_json(value: Any) -> str:
+    """Decision options 第一版使用 JSON array 字串儲存。"""
+    normalized = required_text(value, "options")
+    try:
+        parsed = json.loads(normalized)
+    except json.JSONDecodeError as exc:
+        raise ValueError("options 必須是合法的 JSON array 字串") from exc
+    if not isinstance(parsed, list):
+        raise ValueError("options 必須是合法的 JSON array 字串")
+    return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+
+
+def _confirmation_status(value: Any) -> str:
+    normalized = required_text(value, "confirmation_status")
+    if normalized not in CONFIRMATION_STATUSES:
+        raise ValueError("confirmation_status 只接受 pending 或 confirmed")
+    return normalized
+
+
+def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+    for field_name, value in values.items():
+        if field_name not in DECISION_FIELDS:
+            raise ValueError(f"不支援的 Decision 欄位: {field_name}")
+        if field_name == "activity_id":
+            normalized[field_name] = positive_id(value, field_name)
+        elif field_name == "meeting_id":
+            normalized[field_name] = optional_positive_id(value, field_name)
+        elif field_name == "options":
+            normalized[field_name] = _options_json(value)
+        elif field_name == "confirmation_status":
+            normalized[field_name] = _confirmation_status(value)
+        else:
+            normalized[field_name] = required_text(value, field_name)
+    return normalized
+
+
+def create_decision(
+    activity_id: int,
+    problem: str,
+    options: str,
+    final_decision: str,
+    reason: str,
+    source: str,
+    confirmation_status: str = "pending",
+    meeting_id: Optional[int] = None,
+    *,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """建立決策；meeting_id 目前只存值，待整合 Meeting 後再加外鍵。"""
+    values = _normalize_fields(
+        {
+            "activity_id": activity_id,
+            "meeting_id": meeting_id,
+            "problem": problem,
+            "options": options,
+            "final_decision": final_decision,
+            "reason": reason,
+            "source": source,
+            "confirmation_status": confirmation_status,
+        }
+    )
+    init_db(db_path)
+    now = utc_now()
+
+    with get_connection(db_path) as conn:
+        ensure_activity_exists(conn, values["activity_id"])
+        cursor = conn.execute(
+            """
+            INSERT INTO decisions (
+                activity_id, meeting_id, problem, options, final_decision,
+                reason, source, confirmation_status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                values["activity_id"],
+                values["meeting_id"],
+                values["problem"],
+                values["options"],
+                values["final_decision"],
+                values["reason"],
+                values["source"],
+                values["confirmation_status"],
+                now,
+                now,
+            ),
+        )
+        decision_id = cursor.lastrowid
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+    return dict(row)
+
+
+def get_decision(
+    decision_id: int, *, db_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    positive_id(decision_id, "decision_id")
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_decisions(
+    activity_id: Optional[int] = None, *, db_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        if activity_id is None:
+            rows = conn.execute(
+                "SELECT * FROM decisions ORDER BY id DESC"
+            ).fetchall()
+        else:
+            normalized_id = ensure_activity_exists(conn, activity_id)
+            rows = conn.execute(
+                "SELECT * FROM decisions WHERE activity_id = ? ORDER BY id DESC",
+                (normalized_id,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_decision(
+    decision_id: int,
+    *,
+    db_path: Optional[str] = None,
+    **changes: Any,
+) -> Optional[Dict[str, Any]]:
+    positive_id(decision_id, "decision_id")
+    if not changes:
+        raise ValueError("至少需要提供一個要更新的欄位")
+    normalized = _normalize_fields(changes)
+    init_db(db_path)
+
+    with get_connection(db_path) as conn:
+        current_row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+        if current_row is None:
+            return None
+        current = dict(current_row)
+
+        if "activity_id" in normalized:
+            ensure_activity_exists(conn, normalized["activity_id"])
+
+        assignments = [f"{field_name} = ?" for field_name in normalized]
+        values = list(normalized.values())
+        assignments.append("updated_at = ?")
+        values.append(utc_now(after=current["updated_at"]))
+        values.append(decision_id)
+        conn.execute(
+            f"UPDATE decisions SET {', '.join(assignments)} WHERE id = ?", values
+        )
+        conn.commit()
+        updated_row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+    return dict(updated_row)
+
+
+def delete_decision(
+    decision_id: int, *, db_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    positive_id(decision_id, "decision_id")
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        deleted = dict(row)
+        conn.execute("DELETE FROM decisions WHERE id = ?", (decision_id,))
+        conn.commit()
+    return deleted
