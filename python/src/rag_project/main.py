@@ -1,37 +1,87 @@
 import os
 import shutil
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from typing import Any, Dict, List, Optional
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Dict, Any
+from pydantic import BaseModel, Field
 
-from rag_project.rag_engine.retriever import add_document, search
+from rag_project.rag_engine import add_document, search, list_documents, delete_document
+from rag_project.llm_client import generate_answer
+from rag_project.activity import (
+    create_activity,
+    get_activity,
+    list_activities,
+    update_activity,
+    delete_activity,
+)
+from rag_project.meeting_task import (
+    add_meeting,
+    get_meetings,
+    get_meeting_by_id,
+    update_meeting,
+    delete_meeting,
+    add_task,
+    get_tasks,
+    get_task_by_id,
+    update_task,
+    delete_task,
+)
+from rag_project.decision import (
+    create_decision,
+    get_decision,
+    list_decisions,
+    update_decision,
+    delete_decision,
+)
+from rag_project.schedule import (
+    create_schedule,
+    get_schedule,
+    list_schedules,
+    update_schedule,
+    delete_schedule,
+)
+from rag_project.incident import (
+    create_incident,
+    get_incident,
+    list_incidents,
+    update_incident,
+    delete_incident,
+)
 
-app = FastAPI(title="RAG Project Backend")
+app = FastAPI(
+    title="RAG Project Backend API",
+    description="智能客製化意見助手 - RAG 檢索與輕量化業務功能 REST API",
+    version="1.0.0"
+)
 
-# [新增] 1. CORS 設定：這是 React 能夠呼叫 FastAPI 的關鍵，沒有它會被瀏覽器阻擋
+# CORS 設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 測試階段允許所有來源
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# [新增] 2. 設定原始檔案的儲存路徑
+# 上傳檔案存放目錄
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 UPLOAD_RAW_DIR = os.path.join(BASE_DIR, "uploads", "raw")
 os.makedirs(UPLOAD_RAW_DIR, exist_ok=True)
+
+
+# ==========================================
+# Pydantic Schemas (資料模型的請求與回應)
+# ==========================================
 
 class PingResponse(BaseModel):
     status: str
     message: str
 
-# (原本的 UploadRequest 已經刪除，因為我們改收實體檔案了)
-
+# RAG & LLM
 class QueryRequest(BaseModel):
     query: str
     top_k: int = 5
+    generate_answer: bool = False
 
 class DocumentChunk(BaseModel):
     content: str
@@ -39,28 +89,162 @@ class DocumentChunk(BaseModel):
 
 class QueryResponse(BaseModel):
     results: List[DocumentChunk]
+    answer: Optional[str] = None
 
-@app.get("/ping", response_model=PingResponse)
+# Activity
+class ActivityCreate(BaseModel):
+    name: str
+    year: int
+    status: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    venue: Optional[str] = None
+    activity_type: Optional[str] = None
+    coordinator: Optional[str] = None
+    expected_attendees: Optional[int] = None
+    budget: Optional[int] = None
+
+class ActivityUpdate(BaseModel):
+    name: Optional[str] = None
+    year: Optional[int] = None
+    status: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    venue: Optional[str] = None
+    activity_type: Optional[str] = None
+    coordinator: Optional[str] = None
+    expected_attendees: Optional[int] = None
+    budget: Optional[int] = None
+
+# Meeting
+class MeetingCreate(BaseModel):
+    activity_id: int
+    name: str
+    start_time: str = ""
+    end_time: str = ""
+    location: str = ""
+    participants: str = ""
+    content: str = ""
+    date: str = ""
+
+class MeetingUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    location: Optional[str] = None
+    participants: Optional[str] = None
+    content: Optional[str] = None
+    activity_id: Optional[int] = None
+    date: Optional[str] = None
+
+# Task
+class TaskCreate(BaseModel):
+    activity_id: int
+    content: str
+    assignee: str = ""
+    due_date: str = ""
+    priority: str = "中"
+    status: str = "pending"
+    meeting_id: Optional[int] = None
+
+class TaskUpdate(BaseModel):
+    content: Optional[str] = None
+    assignee: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    activity_id: Optional[int] = None
+    meeting_id: Optional[int] = None
+
+# Decision
+class DecisionCreate(BaseModel):
+    activity_id: int
+    problem: str
+    options: str  # JSON array string
+    final_decision: str
+    reason: str
+    source: str
+    confirmation_status: str = "pending"
+    meeting_id: Optional[int] = None
+
+class DecisionUpdate(BaseModel):
+    activity_id: Optional[int] = None
+    meeting_id: Optional[int] = None
+    problem: Optional[str] = None
+    options: Optional[str] = None
+    final_decision: Optional[str] = None
+    reason: Optional[str] = None
+    source: Optional[str] = None
+    confirmation_status: Optional[str] = None
+
+# Schedule
+class ScheduleCreate(BaseModel):
+    activity_id: int
+    name: str
+    start_time: str
+    location: str
+    owner: str
+    notes: str
+    category: str
+    end_time: Optional[str] = None
+    meeting_id: Optional[int] = None
+
+class ScheduleUpdate(BaseModel):
+    activity_id: Optional[int] = None
+    meeting_id: Optional[int] = None
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    location: Optional[str] = None
+    owner: Optional[str] = None
+    notes: Optional[str] = None
+    category: Optional[str] = None
+
+# Incident
+class IncidentCreate(BaseModel):
+    activity_id: int
+    content: str
+    occurred_at: str
+    schedule_id: Optional[int] = None
+    cause: Optional[str] = None
+    suggestion: Optional[str] = None
+
+class IncidentUpdate(BaseModel):
+    activity_id: Optional[int] = None
+    schedule_id: Optional[int] = None
+    content: Optional[str] = None
+    occurred_at: Optional[str] = None
+    cause: Optional[str] = None
+    suggestion: Optional[str] = None
+
+
+# ==========================================
+# 系統與 RAG/LLM 端點
+# ==========================================
+
+@app.get("/ping", response_model=PingResponse, tags=["System"])
 def ping():
     return {"status": "ok", "message": "Backend is running!"}
 
-# [大改] 3. 改成接收前端傳來的實體檔案 (UploadFile)
-@app.post("/upload")
-def upload(file: UploadFile = File(...)):
+
+@app.get("/documents", tags=["RAG Document"])
+def get_documents():
+    return list_documents()
+
+
+@app.post("/upload", tags=["RAG Document"])
+def upload_document(file: UploadFile = File(...)):
     try:
-        # 將前端傳來的檔案，存入 uploads/raw/ 資料夾
         raw_file_path = os.path.join(UPLOAD_RAW_DIR, file.filename)
         with open(raw_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 目前先限定處理 Markdown
         if not file.filename.lower().endswith(".md"):
             raise HTTPException(status_code=400, detail="目前僅支援 .md 檔案")
             
-        # 呼叫你更新後的 RAG 引擎，將實體路徑傳遞給底層資料庫
         chunks_added = add_document(
             file_path=raw_file_path, 
-            force=True, # 允許覆蓋
+            force=True,
             raw_file_path=raw_file_path
         )
         
@@ -72,8 +256,16 @@ def upload(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# (原封不動保留你的搜尋邏輯)
-@app.post("/query", response_model=QueryResponse)
+
+@app.delete("/documents/{identifier:path}", tags=["RAG Document"])
+def remove_document(identifier: str):
+    success = delete_document(identifier)
+    if not success:
+        raise HTTPException(status_code=444 if False else 404, detail="找不到該檔案紀錄")
+    return {"status": "success", "message": f"已成功刪除 {identifier}"}
+
+
+@app.post("/query", response_model=QueryResponse, tags=["RAG Document"])
 def query_docs(req: QueryRequest):
     try:
         docs = search(req.query, top_k=req.top_k)
@@ -83,9 +275,265 @@ def query_docs(req: QueryRequest):
                 metadata=doc.metadata
             ) for doc in docs
         ]
-        return QueryResponse(results=results)
+        
+        answer = None
+        if req.generate_answer and docs:
+            chunks = [doc.page_content for doc in docs]
+            answer = generate_answer(req.query, chunks)
+
+        return QueryResponse(results=results, answer=answer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# 活動管理 (Activity Endpoints)
+# ==========================================
+
+@app.get("/activities", tags=["Activity"])
+def api_list_activities():
+    return list_activities()
+
+@app.get("/activities/{activity_id}", tags=["Activity"])
+def api_get_activity(activity_id: int):
+    act = get_activity(activity_id)
+    if not act:
+        raise HTTPException(status_code=404, detail="找不到活動")
+    return act
+
+@app.post("/activities", tags=["Activity"])
+def api_create_activity(payload: ActivityCreate):
+    try:
+        return create_activity(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.put("/activities/{activity_id}", tags=["Activity"])
+def api_update_activity(activity_id: int, payload: ActivityUpdate):
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        updated = update_activity(activity_id, **changes)
+        if not updated:
+            raise HTTPException(status_code=404, detail="找不到活動")
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.delete("/activities/{activity_id}", tags=["Activity"])
+def api_delete_activity(activity_id: int):
+    try:
+        deleted = delete_activity(activity_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="找不到活動")
+        return {"status": "success", "deleted": deleted}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ==========================================
+# 會議管理 (Meeting Endpoints)
+# ==========================================
+
+@app.get("/meetings", tags=["Meeting"])
+def api_get_meetings(activity_id: Optional[int] = Query(None)):
+    return get_meetings(activity_id=activity_id)
+
+@app.get("/meetings/{meeting_id}", tags=["Meeting"])
+def api_get_meeting(meeting_id: int):
+    m = get_meeting_by_id(meeting_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="找不到會議紀錄")
+    return m
+
+@app.post("/meetings", tags=["Meeting"])
+def api_create_meeting(payload: MeetingCreate):
+    try:
+        return add_meeting(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.put("/meetings/{meeting_id}", tags=["Meeting"])
+def api_update_meeting(meeting_id: int, payload: MeetingUpdate):
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        ok = update_meeting(meeting_id, **changes)
+        if not ok:
+            raise HTTPException(status_code=404, detail="找不到會議或無更新")
+        return get_meeting_by_id(meeting_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.delete("/meetings/{meeting_id}", tags=["Meeting"])
+def api_delete_meeting(meeting_id: int):
+    ok = delete_meeting(meeting_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="找不到會議紀錄")
+    return {"status": "success", "deleted_id": meeting_id}
+
+
+# ==========================================
+# 待辦事項 (Task Endpoints)
+# ==========================================
+
+@app.get("/tasks", tags=["Task"])
+def api_get_tasks(activity_id: Optional[int] = Query(None), meeting_id: Optional[int] = Query(None)):
+    return get_tasks(activity_id=activity_id, meeting_id=meeting_id)
+
+@app.get("/tasks/{task_id}", tags=["Task"])
+def api_get_task(task_id: int):
+    t = get_task_by_id(task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="找不到待辦事項")
+    return t
+
+@app.post("/tasks", tags=["Task"])
+def api_create_task(payload: TaskCreate):
+    try:
+        return add_task(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.put("/tasks/{task_id}", tags=["Task"])
+def api_update_task(task_id: int, payload: TaskUpdate):
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        ok = update_task(task_id, **changes)
+        if not ok:
+            raise HTTPException(status_code=404, detail="找不到待辦事項或無更新")
+        return get_task_by_id(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.delete("/tasks/{task_id}", tags=["Task"])
+def api_delete_task(task_id: int):
+    ok = delete_task(task_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="找不到待辦事項")
+    return {"status": "success", "deleted_id": task_id}
+
+
+# ==========================================
+# 決策紀錄 (Decision Endpoints)
+# ==========================================
+
+@app.get("/decisions", tags=["Decision"])
+def api_list_decisions(activity_id: Optional[int] = Query(None)):
+    return list_decisions(activity_id=activity_id)
+
+@app.get("/decisions/{decision_id}", tags=["Decision"])
+def api_get_decision(decision_id: int):
+    d = get_decision(decision_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="找不到決策紀錄")
+    return d
+
+@app.post("/decisions", tags=["Decision"])
+def api_create_decision(payload: DecisionCreate):
+    try:
+        return create_decision(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.put("/decisions/{decision_id}", tags=["Decision"])
+def api_update_decision(decision_id: int, payload: DecisionUpdate):
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        updated = update_decision(decision_id, **changes)
+        if not updated:
+            raise HTTPException(status_code=404, detail="找不到決策紀錄")
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.delete("/decisions/{decision_id}", tags=["Decision"])
+def api_delete_decision(decision_id: int):
+    deleted = delete_decision(decision_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="找不到決策紀錄")
+    return {"status": "success", "deleted": deleted}
+
+
+# ==========================================
+# 流程日程 (Schedule Endpoints)
+# ==========================================
+
+@app.get("/schedules", tags=["Schedule"])
+def api_list_schedules(activity_id: Optional[int] = Query(None)):
+    return list_schedules(activity_id=activity_id)
+
+@app.get("/schedules/{schedule_id}", tags=["Schedule"])
+def api_get_schedule(schedule_id: int):
+    s = get_schedule(schedule_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="找不到流程日程")
+    return s
+
+@app.post("/schedules", tags=["Schedule"])
+def api_create_schedule(payload: ScheduleCreate):
+    try:
+        return create_schedule(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.put("/schedules/{schedule_id}", tags=["Schedule"])
+def api_update_schedule(schedule_id: int, payload: ScheduleUpdate):
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        updated = update_schedule(schedule_id, **changes)
+        if not updated:
+            raise HTTPException(status_code=404, detail="找不到流程日程")
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.delete("/schedules/{schedule_id}", tags=["Schedule"])
+def api_delete_schedule(schedule_id: int):
+    deleted = delete_schedule(schedule_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="找不到流程日程")
+    return {"status": "success", "deleted": deleted}
+
+
+# ==========================================
+# 突發事件 (Incident Endpoints)
+# ==========================================
+
+@app.get("/incidents", tags=["Incident"])
+def api_list_incidents(activity_id: Optional[int] = Query(None)):
+    return list_incidents(activity_id=activity_id)
+
+@app.get("/incidents/{incident_id}", tags=["Incident"])
+def api_get_incident(incident_id: int):
+    inc = get_incident(incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail="找不到突發事件紀錄")
+    return inc
+
+@app.post("/incidents", tags=["Incident"])
+def api_create_incident(payload: IncidentCreate):
+    try:
+        return create_incident(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.put("/incidents/{incident_id}", tags=["Incident"])
+def api_update_incident(incident_id: int, payload: IncidentUpdate):
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        updated = update_incident(incident_id, **changes)
+        if not updated:
+            raise HTTPException(status_code=404, detail="找不到突發事件紀錄")
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.delete("/incidents/{incident_id}", tags=["Incident"])
+def api_delete_incident(incident_id: int):
+    deleted = delete_incident(incident_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="找不到突發事件紀錄")
+    return {"status": "success", "deleted": deleted}
+
 
 if __name__ == "__main__":
     import uvicorn
