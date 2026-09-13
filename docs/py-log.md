@@ -14,7 +14,7 @@
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
 
-- `tests/test_main.py`: 整合了原 `main_test.py` 與 `test_main.py` 的互動式 CLI 測試選單，支援 RAG 文件管理、LLM 回答測試以及 Activity／Meeting／Task 等業務功能的本地 CLI 測試。
+- `tests/test_main.py`: 整合了原 `main_test.py` 與 `test_main.py` 的互動式 CLI 測試選單，支援 RAG 文件管理、LLM 回答測試，以及 Activity／Meeting／Task／Decision／Schedule／Incident 的本地 CRUD 操作；Decision／Schedule／Incident 會依 Activity 篩選，並在修改時支援保留或清除可選關聯欄位。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 
 ### 業務與服務模組 (Domain Services)

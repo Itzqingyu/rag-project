@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from typing import List
@@ -33,9 +34,9 @@ from rag_project.meeting_task import (
     update_task,
     delete_task,
 )
-from rag_project.decision import create_decision, list_decisions
-from rag_project.schedule import create_schedule, list_schedules
-from rag_project.incident import create_incident, list_incidents
+import rag_project.decision as decision_service
+import rag_project.schedule as schedule_service
+import rag_project.incident as incident_service
 
 
 def print_main_menu():
@@ -148,7 +149,7 @@ def handle_generate_answer():
         answer = generate_answer(query, retrieved_chunks)
         
         print("\n" + "="*45)
-        print("🤖 AI 回答：")
+        print("AI 回答：")
         print("="*45)
         print(answer)
         print("="*45)
@@ -171,13 +172,13 @@ def get_activity_label(activity_id: int) -> str:
 def print_activities_table() -> List[dict]:
     activities = list_activities()
     print("\n" + "-" * 55)
-    print("      📍 可用活動列表 (Activity Table)")
+    print("      可用活動列表 (Activity Table)")
     print("-" * 55)
     if not activities:
         print("  (目前資料庫無任何活動紀錄)")
     else:
         for act in activities:
-            print(f"  [ ID: {act['id']} ] ➡️  {act['name']} ({act['year']}) [{act['status']}] 地點: {act['venue'] or '未填'}")
+            print(f"  [ ID: {act['id']} ] -> {act['name']} ({act['year']}) [{act['status']}] 地點: {act['venue'] or '未填'}")
     print("-" * 55)
     return activities
 
@@ -324,28 +325,177 @@ def handle_activity_menu():
             print(f"\n[錯誤] {e}")
 
 
-def handle_extra_menu():
-    print("\n--- 決策 / 日程 / 突發事件清單 ---")
-    print("1. 查看所有決策 (Decisions)")
-    print("2. 查看所有流程 (Schedules)")
-    print("3. 查看所有突發事件 (Incidents)")
-    choice = input("選擇操作 (1-3): ").strip()
+MANAGEMENT_MODULES = {
+    "1": ("Decision", decision_service, "decision", [
+        ("problem", "問題"),
+        ("options", "候選方案"),
+        ("final_decision", "最終決策"),
+        ("reason", "原因"),
+        ("source", "來源"),
+        ("confirmation_status", "確認狀態 (pending/confirmed，預設 pending)"),
+        ("meeting_id", "關聯會議 ID"),
+    ]),
+    "2": ("Schedule", schedule_service, "schedule", [
+        ("name", "流程名稱"),
+        ("start_time", "開始時間 (YYYY-MM-DD HH:MM)"),
+        ("end_time", "結束時間 (YYYY-MM-DD HH:MM)"),
+        ("location", "地點"),
+        ("owner", "負責人"),
+        ("notes", "備註"),
+        ("category", "分類"),
+        ("meeting_id", "關聯會議 ID"),
+    ]),
+    "3": ("Incident", incident_service, "incident", [
+        ("content", "事件內容"),
+        ("occurred_at", "發生時間 (YYYY-MM-DD HH:MM)"),
+        ("schedule_id", "關聯流程 ID"),
+        ("cause", "原因"),
+        ("suggestion", "建議"),
+    ]),
+}
 
-    if choice == '1':
-        decisions = list_decisions()
-        print(f"\n--- 決策列表 (共 {len(decisions)} 筆) ---")
-        for d in decisions:
-            print(f"[ID: {d['id']}] 活動ID: {d['activity_id']} | 問題: {d['problem']} | 決議: {d['final_decision']}")
-    elif choice == '2':
-        schedules = list_schedules()
-        print(f"\n--- 流程列表 (共 {len(schedules)} 筆) ---")
-        for s in schedules:
-            print(f"[ID: {s['id']}] 活動ID: {s['activity_id']} | 名稱: {s['name']} | 時間: {s['start_time']}")
-    elif choice == '3':
-        incidents = list_incidents()
-        print(f"\n--- 突發事件列表 (共 {len(incidents)} 筆) ---")
-        for inc in incidents:
-            print(f"[ID: {inc['id']}] 活動ID: {inc['activity_id']} | 時間: {inc['occurred_at']} | 內容: {inc['content']}")
+
+def input_management_fields(fields, editing=False):
+    """收集管理欄位；修改時 Enter 保留原值，/clear 清除可選欄位。"""
+    optional_fields = {
+        "meeting_id",
+        "schedule_id",
+        "end_time",
+        "cause",
+        "suggestion",
+    }
+    values = {}
+
+    for field, label in fields:
+        optional = field in optional_fields
+        if editing:
+            hint = "不修改按 Enter" + ("，/clear 清空" if optional else "")
+        else:
+            hint = "可跳過" if optional else "必填"
+            if field in {"options", "confirmation_status"}:
+                hint = "可按 Enter 使用預設"
+
+        if field == "options":
+            # 逐項輸入後統一 JSON 編碼，避免方案中的引號破壞 JSON 格式。
+            print(
+                "逐項輸入候選方案；輸入新方案會替換整份原方案列表。"
+                if editing
+                else "逐項輸入候選方案；直接按 Enter 結束，無方案時儲存 []。"
+            )
+            options = []
+            while True:
+                option = input("輸入方案 (Enter 結束): ").strip()
+                if not option:
+                    break
+                if option == "/clear":
+                    print("[提示] 候選方案不支援 /clear。")
+                    continue
+                options.append(option)
+            if options or not editing:
+                values[field] = json.dumps(options, ensure_ascii=False)
+            continue
+
+        while True:
+            value = input(f"{label} ({hint}): ").strip()
+            if value == "/clear" and not (editing and optional):
+                print("[提示] /clear 僅用於修改可選欄位。")
+                continue
+            break
+
+        if editing and not value:
+            continue
+        if value == "/clear" or (optional and not value):
+            values[field] = None
+        elif field in {"meeting_id", "schedule_id"}:
+            values[field] = int(value)
+        else:
+            values[field] = value or (
+                "pending" if field == "confirmation_status" else ""
+            )
+
+    return values
+
+
+def handle_management_menu(choice):
+    """在指定 Activity 範圍內提供單一管理模組的完整 CRUD。"""
+    title, service, entity, fields = MANAGEMENT_MODULES[choice]
+    list_records = getattr(service, f"list_{entity}s")
+    activity_id = None
+
+    while True:
+        try:
+            if activity_id is None:
+                print_activities_table()
+                selected = input("輸入活動 ID (Enter 返回上一層): ").strip()
+                if not selected:
+                    return
+                candidate = int(selected)
+                if not get_activity(candidate):
+                    print("[失敗] 找不到該活動，請重新選擇。")
+                    continue
+                activity_id = candidate
+
+            print(f"\n--- {title} 管理 | {get_activity_label(activity_id)} ---")
+            records = list_records(activity_id=activity_id)
+            print(f"目前資料 (共 {len(records)} 筆):")
+            for record in records:
+                print(
+                    f"  [ID: {record['id']}]",
+                    json.dumps(record, ensure_ascii=False),
+                )
+            print("1. 新增\n2. 查看單筆\n3. 修改\n4. 刪除\n5. 切換活動\n0. 返回上一層")
+            action = input("請選擇操作 (0-5): ").strip()
+
+            if action == "0":
+                return
+            if action == "5":
+                activity_id = None
+                continue
+            if action == "1":
+                values = input_management_fields(fields)
+                created = getattr(service, f"create_{entity}")(
+                    activity_id=activity_id,
+                    **values,
+                )
+                print("[成功] 已新增:", json.dumps(created, ensure_ascii=False))
+            elif action in {"2", "3", "4"}:
+                record_id = int(input(f"輸入 {title} ID: ").strip())
+                record = getattr(service, f"get_{entity}")(record_id)
+                # 單筆查詢不限制 Activity，操作前必須額外阻止跨活動 ID。
+                if not record or record["activity_id"] != activity_id:
+                    print("[失敗] 該活動底下找不到此筆資料。")
+                    continue
+                print("目前資料:", json.dumps(record, ensure_ascii=False))
+
+                if action == "3":
+                    changes = input_management_fields(fields, editing=True)
+                    if not changes:
+                        print("[提示] 無修改項目。")
+                        continue
+                    updated = getattr(service, f"update_{entity}")(
+                        record_id,
+                        **changes,
+                    )
+                    print("[成功] 已更新:", json.dumps(updated, ensure_ascii=False))
+                elif action == "4":
+                    deleted = getattr(service, f"delete_{entity}")(record_id)
+                    print("[成功] 已刪除:", json.dumps(deleted, ensure_ascii=False))
+            else:
+                print("無效的選擇，請重新輸入！")
+        except Exception as exc:
+            print(f"\n[錯誤] {exc}")
+
+
+def handle_extra_menu():
+    """選擇 Decision、Schedule 或 Incident 的管理子選單。"""
+    print("\n--- 決策 / 日程 / 突發事件管理 ---")
+    print("1. Decision 管理")
+    print("2. Schedule 管理")
+    print("3. Incident 管理")
+    print("0. 返回主選單")
+    choice = input("選擇操作 (0-3): ").strip()
+    if choice in MANAGEMENT_MODULES:
+        handle_management_menu(choice)
 
 
 def main():
