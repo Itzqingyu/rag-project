@@ -1,45 +1,67 @@
+"""資料庫存取層 (Data Access Layer) 統一模組。
+
+包含：
+1. SQLite 資料庫連線池與自動 Schema 建置（含外鍵約束與索引）。
+2. RAG 上傳 Markdown 文件 Metadata 之 CRUD 管理。
+3. ChromaDB 向量資料庫單例模式 (Singleton) 之獲取與持久化設定。
+"""
+
 import sqlite3
 import os
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional
+from langchain_chroma import Chroma
 
-# Define paths
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DB_PATH = os.path.join(BASE_DIR, "data", "rag_database.sqlite")
+# 路徑定義：資料庫統一存放於專案根目錄的 data/ 底下
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+DB_PATH = os.path.join(DATA_DIR, "rag_database.sqlite")
+CHROMA_DB_DIR = os.path.join(DATA_DIR, "chroma_db")
 
 # 確保 data 目錄存在
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# 全域單例：ChromaDB Vectorstore
+_vectorstore = None
+
+
+# ==========================================
+# 1. SQLite 連線與 Schema 初始化
+# ==========================================
 
 @contextmanager
 def get_connection(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
-    """提供會自動關閉的共用 SQLite 連線，並啟用外鍵約束。"""
+    """提供會自動關閉的共用 SQLite 連線 ContextManager，並強制啟用 PRAGMA foreign_keys = ON。"""
     resolved_path = db_path or DB_PATH
     os.makedirs(os.path.dirname(os.path.abspath(resolved_path)), exist_ok=True)
 
     conn = sqlite3.connect(resolved_path)
-    conn.row_factory = sqlite3.Row  # 讓查詢結果可以用 dict 方式存取
+    conn.row_factory = sqlite3.Row  # 讓查詢結果可以用字典 (dict) 方式存取欄位
     conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
     finally:
         conn.close()
 
+
 def init_db(db_path: Optional[str] = None) -> None:
-    """初始化資料庫與資料表"""
+    """初始化 SQLite 所有核心資料表 (documents, activities, meetings, tasks, decisions, schedules, incidents) 與索引。"""
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
+        # 1.1 文件紀錄表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT UNIQUE NOT NULL,
                 filename TEXT NOT NULL,
-                raw_file_path TEXT,      -- [新增] 1. 未經 markdown 的原始檔案實體路徑
-                markdown_content TEXT,   -- [新增] 2. 經 markdown 解析的完整文字內容
+                raw_file_path TEXT,      -- 未經 markdown 解析的原始實體檔案路徑
+                markdown_content TEXT,   -- 解析後的完整 Markdown 文字內容
                 upload_date DATETIME NOT NULL,
                 chunk_count INTEGER NOT NULL
             )
         ''')
+        # 1.2 活動主表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS activities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,6 +86,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 )
             )
         ''')
+        # 1.3 會議紀錄表 (RESTRICT activity_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS meetings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +103,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE RESTRICT
             )
         ''')
+        # 1.4 待辦事項表 (SET NULL meeting_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +121,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
+        # 1.5 決策紀錄表 (SET NULL meeting_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS decisions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,6 +142,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
+        # 1.6 流程日程表 (SET NULL meeting_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS schedules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,6 +163,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
+        # 1.7 突發事件表 (SET NULL schedule_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS incidents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,47 +181,35 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
-        # SQLite 不會自動替外鍵建立索引；這些索引能避免整合後關聯查詢全表掃描。
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_meetings_activity_id "
-            "ON meetings(activity_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_tasks_activity_id "
-            "ON tasks(activity_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_tasks_meeting_id "
-            "ON tasks(meeting_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_decisions_activity_id "
-            "ON decisions(activity_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_decisions_meeting_id "
-            "ON decisions(meeting_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_schedules_activity_id "
-            "ON schedules(activity_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_schedules_meeting_id "
-            "ON schedules(meeting_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_incidents_activity_id "
-            "ON incidents(activity_id)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_incidents_schedule_id "
-            "ON incidents(schedule_id)"
-        )
+        
+        # 1.8 為外鍵欄位自動建立索引以最佳化查詢效能
+        indices = [
+            ("idx_meetings_activity_id", "meetings(activity_id)"),
+            ("idx_tasks_activity_id", "tasks(activity_id)"),
+            ("idx_tasks_meeting_id", "tasks(meeting_id)"),
+            ("idx_decisions_activity_id", "decisions(activity_id)"),
+            ("idx_decisions_meeting_id", "decisions(meeting_id)"),
+            ("idx_schedules_activity_id", "schedules(activity_id)"),
+            ("idx_schedules_meeting_id", "schedules(meeting_id)"),
+            ("idx_incidents_activity_id", "incidents(activity_id)"),
+            ("idx_incidents_schedule_id", "incidents(schedule_id)"),
+        ]
+        for index_name, index_def in indices:
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {index_def}")
+
         conn.commit()
 
+
+# 在模組載入時自動初始化資料表
+init_db()
+
+
+# ==========================================
+# 2. Documents (文件) CRUD
+# ==========================================
+
 def get_doc_by_path(file_path: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """根據路徑查詢檔案紀錄"""
+    """根據檔案路徑查詢文件上傳與切塊紀錄。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -202,8 +217,9 @@ def get_doc_by_path(file_path: str, db_path: Optional[str] = None) -> Optional[D
         row = cursor.fetchone()
         return dict(row) if row else None
 
+
 def get_doc_by_id(doc_id: int, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """根據 ID 查詢檔案紀錄"""
+    """根據文件流水號 ID 查詢文件紀錄。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -211,8 +227,9 @@ def get_doc_by_id(doc_id: int, db_path: Optional[str] = None) -> Optional[Dict[s
         row = cursor.fetchone()
         return dict(row) if row else None
 
+
 def get_all_docs(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """取得所有已上傳的檔案清單"""
+    """取得所有已匯入 RAG 系統的文件紀錄清單。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -220,7 +237,7 @@ def get_all_docs(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
-# [修改] 新增 raw_file_path 與 markdown_content 參數
+
 def add_or_update_doc_record(
     file_path: str,
     chunk_count: int,
@@ -229,14 +246,13 @@ def add_or_update_doc_record(
     *,
     db_path: Optional[str] = None,
 ) -> None:
-    """新增或更新檔案紀錄"""
+    """新增或覆蓋更新文件的 Metadata 紀錄。"""
     init_db(db_path)
     filename = os.path.basename(file_path)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        # 使用 UPSERT 語法，若 file_path 存在則更新
         cursor.execute('''
             INSERT INTO documents (file_path, filename, raw_file_path, markdown_content, upload_date, chunk_count)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -248,18 +264,43 @@ def add_or_update_doc_record(
         ''', (file_path, filename, raw_file_path, markdown_content, now, chunk_count))
         conn.commit()
 
+
 def delete_doc_record_by_path(file_path: str, db_path: Optional[str] = None) -> None:
-    """根據路徑刪除檔案紀錄"""
+    """根據檔案路徑從 SQLite 移除文件紀錄。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('DELETE FROM documents WHERE file_path = ?', (file_path,))
         conn.commit()
 
+
 def delete_doc_record_by_id(doc_id: int, db_path: Optional[str] = None) -> None:
-    """根據 ID 刪除檔案紀錄"""
+    """根據文件流水號 ID 從 SQLite 移除文件紀錄。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
         conn.commit()
+
+
+# ==========================================
+# 3. ChromaDB 向量資料庫單例
+# ==========================================
+
+def get_vectorstore(db_dir: Optional[str] = None) -> Chroma:
+    """獲取 Chroma 向量資料庫單例模式 (Singleton) 實例。"""
+    global _vectorstore
+    from rag_project.rag_engine import get_embeddings
+
+    target_dir = db_dir or CHROMA_DB_DIR
+    if _vectorstore is None or db_dir is not None:
+        os.makedirs(target_dir, exist_ok=True)
+        store = Chroma(
+            collection_name="rag_collection",
+            embedding_function=get_embeddings(),
+            persist_directory=target_dir
+        )
+        if db_dir is None:
+            _vectorstore = store
+        return store
+    return _vectorstore

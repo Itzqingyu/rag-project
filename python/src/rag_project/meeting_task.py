@@ -1,21 +1,26 @@
+"""Meeting (會議管理) 與 Task (待辦事項) 的 SQLite CRUD 業務邏輯模組。
+
+提供會議與待辦事項的新增、查詢、過濾、修改與刪除功能，
+並確保 Task 綁定 Meeting 時二者必須屬於同一個 Activity 的防禦規則。
+"""
+
 from typing import List, Dict, Any, Optional
 from rag_project.activity_common import (
     ensure_activity_exists,
     ensure_meeting_matches_activity,
 )
-from rag_project.database.sqlite_db import get_connection, init_db
+from rag_project.database import get_connection, init_db
 
 
 _UNSET = object()
 
 
 def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
-    """初始化共用 schema，並補足舊版 Meeting/Task 可能缺少的欄位。"""
+    """初始化共用 schema，並防禦性檢查動態補足舊版欄位。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
-        # 動態補足舊版 meetings 可能缺少的新欄位
         cursor.execute("PRAGMA table_info(meetings)")
         existing_m_cols = [row[1] for row in cursor.fetchall()]
         for col_name, col_type in [
@@ -28,7 +33,6 @@ def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
             if col_name not in existing_m_cols:
                 cursor.execute(f"ALTER TABLE meetings ADD COLUMN {col_name} {col_type}")
         
-        # 動態補足舊版 tasks 可能缺少的 priority 欄位
         cursor.execute("PRAGMA table_info(tasks)")
         existing_t_cols = [row[1] for row in cursor.fetchall()]
         if "priority" not in existing_t_cols:
@@ -38,7 +42,7 @@ def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
 
 
 # ==========================================
-# Meeting (會議) CRUD 函式
+# 1. Meeting (會議紀錄) CRUD 函式
 # ==========================================
 
 def add_meeting(
@@ -53,17 +57,17 @@ def add_meeting(
     *,
     db_path: Optional[str] = None
 ) -> Dict[str, Any]:
-    """新增一筆會議資料
+    """新增一筆會議紀錄。
     
-    :param activity_id: 所屬活動 ID
+    :param activity_id: 所屬活動 ID (必須存在)
     :param name: 會議名稱
     :param start_time: 開始時間 (如 '2026-09-15 14:00')
     :param end_time: 結束時間 (如 '2026-09-15 16:00')
-    :param location: 地點 (如 '管二 201 教室')
-    :param participants: 參與人員 (如 '張三, 李四')
-    :param content: 已經由統一 upload/Markdown 流程取得的會議文字
+    :param location: 會議地點
+    :param participants: 參與人員
+    :param content: 會議記錄內容文字
     :param date: 相容用日期欄位
-    :param db_path: 可選資料庫路徑 (測試用)
+    :return: 新增成功的完整會議紀錄字典
     """
     init_meeting_task_tables(db_path)
     if not date and start_time:
@@ -83,7 +87,7 @@ def add_meeting(
 
 
 def get_meetings(activity_id: Optional[int] = None, *, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """取得會議清單"""
+    """取得會議清單；傳入 activity_id 時僅過濾該活動下的會議。"""
     init_meeting_task_tables(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -96,7 +100,7 @@ def get_meetings(activity_id: Optional[int] = None, *, db_path: Optional[str] = 
 
 
 def get_meeting_by_id(meeting_id: int, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """根據 ID 取得單一會議資料"""
+    """根據 meeting_id 取得單一會議詳情。"""
     init_meeting_task_tables(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -118,7 +122,7 @@ def update_meeting(
     *,
     db_path: Optional[str] = None
 ) -> bool:
-    """修改會議內容"""
+    """修改會議屬性；若該會議已被子表引用且試圖變更至其他 activity_id 會拋出防呆阻擋。"""
     init_meeting_task_tables(db_path)
     fields = []
     values = []
@@ -163,7 +167,6 @@ def update_meeting(
 
         if activity_id is not None:
             ensure_activity_exists(conn, activity_id)
-            # 改掛 Activity 時，保守地阻止所有既有關聯資料形成跨活動狀態。
             for table_name in ("tasks", "decisions", "schedules"):
                 conflict = conn.execute(
                     f"""
@@ -187,7 +190,7 @@ def update_meeting(
 
 
 def delete_meeting(meeting_id: int, *, db_path: Optional[str] = None) -> bool:
-    """刪除會議紀錄"""
+    """刪除指定會議紀錄；關聯的 Task, Decision, Schedule 會自動觸發 SET NULL 解除綁定。"""
     init_meeting_task_tables(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -200,7 +203,7 @@ def delete_meeting(meeting_id: int, *, db_path: Optional[str] = None) -> bool:
 
 
 # ==========================================
-# Task (待辦事項) CRUD 函式
+# 2. Task (待辦事項) CRUD 函式
 # ==========================================
 
 def add_task(
@@ -214,11 +217,7 @@ def add_task(
     *,
     db_path: Optional[str] = None
 ) -> Dict[str, Any]:
-    """新增一筆待辦事項
-    
-    :param priority: 優先級 (高/中/低)
-    :param db_path: 可選資料庫路徑 (測試用)
-    """
+    """新增一筆待辦事項。"""
     init_meeting_task_tables(db_path)
     with get_connection(db_path) as conn:
         normalized_activity_id = ensure_activity_exists(conn, activity_id)
@@ -250,7 +249,7 @@ def get_tasks(
     *,
     db_path: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    """取得待辦事項清單"""
+    """取得待辦事項清單；可依 activity_id 或 meeting_id 進行組合過濾。"""
     init_meeting_task_tables(db_path)
     conditions = []
     values = []
@@ -275,7 +274,7 @@ def get_tasks(
 
 
 def get_task_by_id(task_id: int, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """根據 ID 取得單一待辦紀錄"""
+    """根據 task_id 取得單一待辦事項。"""
     init_meeting_task_tables(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -296,7 +295,7 @@ def update_task(
     *,
     db_path: Optional[str] = None
 ) -> bool:
-    """修改待辦事項內容"""
+    """修改待辦事項內容、狀態、負責人或關聯會議。"""
     init_meeting_task_tables(db_path)
     fields = []
     values = []
@@ -353,7 +352,7 @@ def update_task(
 
 
 def delete_task(task_id: int, *, db_path: Optional[str] = None) -> bool:
-    """刪除待辦事項紀錄"""
+    """刪除指定待辦事項紀錄。"""
     init_meeting_task_tables(db_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()

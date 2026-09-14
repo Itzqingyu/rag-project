@@ -12,7 +12,7 @@ from rag_project.activity_common import (
     required_text,
     utc_now,
 )
-from rag_project.database.sqlite_db import get_connection, init_db
+from rag_project.database import get_connection, init_db
 
 
 INCIDENT_FIELDS = {

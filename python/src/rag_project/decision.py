@@ -1,4 +1,8 @@
-"""Decision 的 SQLite CRUD 邏輯。"""
+"""Decision (決策紀錄) 的 SQLite CRUD 業務邏輯模組。
+
+記錄活動與會議中做出的關鍵決策 (Problem, Options, Final Decision, Reason)，
+並進行跨 Activity／Meeting 的屬性一致性與 JSON array 格式驗證。
+"""
 
 import json
 from typing import Any, Dict, List, Optional
@@ -11,9 +15,9 @@ from rag_project.activity_common import (
     required_text,
     utc_now,
 )
-from rag_project.database.sqlite_db import get_connection, init_db
+from rag_project.database import get_connection, init_db
 
-
+# 允許更新的欄位集合
 DECISION_FIELDS = {
     "activity_id",
     "meeting_id",
@@ -27,8 +31,12 @@ DECISION_FIELDS = {
 CONFIRMATION_STATUSES = {"pending", "confirmed"}
 
 
+# ==========================================
+# 內部驗證輔助函式
+# ==========================================
+
 def _options_json(value: Any) -> str:
-    """Decision options 第一版使用 JSON array 字串儲存。"""
+    """驗證 options 必須為合法的 JSON array 字串 (如 '["選項A", "選項B"]')。"""
     normalized = required_text(value, "options")
     try:
         parsed = json.loads(normalized)
@@ -40,6 +48,7 @@ def _options_json(value: Any) -> str:
 
 
 def _confirmation_status(value: Any) -> str:
+    """驗證確認狀態只接受 'pending' 或 'confirmed'。"""
     normalized = required_text(value, "confirmation_status")
     if normalized not in CONFIRMATION_STATUSES:
         raise ValueError("confirmation_status 只接受 pending 或 confirmed")
@@ -47,6 +56,7 @@ def _confirmation_status(value: Any) -> str:
 
 
 def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
+    """集中驗證決策的所有欄位規格。"""
     normalized: Dict[str, Any] = {}
     for field_name, value in values.items():
         if field_name not in DECISION_FIELDS:
@@ -64,6 +74,10 @@ def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+# ==========================================
+# 外部公開 CRUD 業務 API
+# ==========================================
+
 def create_decision(
     activity_id: int,
     problem: str,
@@ -76,7 +90,7 @@ def create_decision(
     *,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """建立決策，並驗證可選 Meeting 與 Activity 的一致性。"""
+    """建立一筆決策紀錄，並防範跨 Activity 錯綁 Meeting。"""
     values = _normalize_fields(
         {
             "activity_id": activity_id,
@@ -129,6 +143,7 @@ def create_decision(
 def get_decision(
     decision_id: int, *, db_path: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
+    """根據 decision_id 取得單一決策詳情。"""
     positive_id(decision_id, "decision_id")
     init_db(db_path)
     with get_connection(db_path) as conn:
@@ -141,6 +156,7 @@ def get_decision(
 def list_decisions(
     activity_id: Optional[int] = None, *, db_path: Optional[str] = None
 ) -> List[Dict[str, Any]]:
+    """取得決策紀錄列表；可依據 activity_id 進行過濾。"""
     init_db(db_path)
     with get_connection(db_path) as conn:
         if activity_id is None:
@@ -162,6 +178,7 @@ def update_decision(
     db_path: Optional[str] = None,
     **changes: Any,
 ) -> Optional[Dict[str, Any]]:
+    """更新指定決策紀錄。"""
     positive_id(decision_id, "decision_id")
     if not changes:
         raise ValueError("至少需要提供一個要更新的欄位")
@@ -199,6 +216,7 @@ def update_decision(
 def delete_decision(
     decision_id: int, *, db_path: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
+    """刪除指定決策紀錄。"""
     positive_id(decision_id, "decision_id")
     init_db(db_path)
     with get_connection(db_path) as conn:

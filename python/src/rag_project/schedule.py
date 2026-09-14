@@ -12,7 +12,7 @@ from rag_project.activity_common import (
     utc_now,
     validate_time_range,
 )
-from rag_project.database.sqlite_db import get_connection, init_db
+from rag_project.database import get_connection, init_db
 
 
 SCHEDULE_FIELDS = {
@@ -176,7 +176,6 @@ def update_schedule(
         ensure_meeting_matches_activity(conn, next_meeting_id, next_activity_id)
         validate_time_range(next_start_time, next_end_time)
 
-        # Schedule 改掛其他 Activity 時，不能讓既有 Incident 形成跨活動關聯。
         conflicting_incident = conn.execute(
             """
             SELECT 1 FROM incidents
@@ -206,7 +205,6 @@ def update_schedule(
 def delete_schedule(
     schedule_id: int, *, db_path: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
-    """刪除流程；SQLite 會把相關 Incident.schedule_id 設成 NULL。"""
     positive_id(schedule_id, "schedule_id")
     init_db(db_path)
     with get_connection(db_path) as conn:
