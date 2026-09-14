@@ -13,7 +13,8 @@ if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
 from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.document_processing.llm_service import generate_answer
+from rag_project.document_processing.llm_service import generate_answer, extract_structured_meeting_data
+from rag_project.database import get_doc_by_id, get_doc_by_path
 from rag_project.activity_services.activity import (
     create_activity,
     get_activity,
@@ -65,13 +66,14 @@ def print_main_menu():
     print("  2. 上傳 / 覆蓋 Markdown 文件 (Upload Document)")
     print("  3. 刪除文件 (Delete Document)")
     print("  4. 搜尋測試 (Search VectorStore)")
-    print("  5. AI 生成回答測試 (LLM Generate Answer)")
+    print("  5. AI 生成回答測試 (LLM RAG QA)")
+    print("  6. AI 結構化會議解析與寫入 (AI Extract & Commit)")
     print("-" * 60)
     print(" [ 輕量化業務功能管理 ]")
-    print("  6. 會議管理 (Meetings)")
-    print("  7. 待辦事項 (Tasks)")
-    print("  8. 活動管理 (Activities)")
-    print("  9. 決策/流程/突發事件 (Decisions, Schedules, Incidents)")
+    print("  7. 會議管理 (Meetings)")
+    print("  8. 待辦事項 (Tasks)")
+    print("  9. 活動管理 (Activities)")
+    print("  10. 決策/流程/突發事件 (Decisions, Schedules, Incidents)")
     print("-" * 60)
     print("  0. 離開 (Exit)")
     print("=" * 60)
@@ -173,6 +175,97 @@ def handle_generate_answer():
         
     except Exception as e:
         print(f"\n[!] 生成失敗: {e}")
+
+
+def handle_ai_extract_and_commit():
+    print("\n--- AI 結構化會議解析與寫入 (Preview & Commit) ---")
+    docs = list_documents()
+    if not docs:
+        print("\n[!] 目前資料庫中無任何上傳文件，請先執行選項 2 上傳會議紀錄檔案。")
+        return
+        
+    handle_list_docs()
+    identifier = input("\n[?] 請輸入要進行 AI 結構化解析的檔案 ID 或檔案路徑:\n> ").strip().strip('\"\'')
+    if not identifier:
+        return
+        
+    record = None
+    if identifier.isdigit():
+        record = get_doc_by_id(int(identifier))
+    else:
+        record = get_doc_by_path(identifier)
+        
+    if not record:
+        print(f"\n[!] 找不到該檔案紀錄: {identifier}")
+        return
+        
+    markdown_content = record.get("markdown_content", "")
+    if not markdown_content or not markdown_content.strip():
+        print("\n[!] 該檔案無內文或尚未解析內文，無法進行 AI 結構化萃取。")
+        return
+        
+    print(f"\n[*] 正在呼叫 LLM 進行全文本 1-shot 結構化萃取 ({record['filename']})...")
+    try:
+        extracted = extract_structured_meeting_data(markdown_content)
+        import json
+        print("\n" + "=" * 55)
+        print("📋 【階段 1：預覽 JSON 數據 (Preview Data)】")
+        print("=" * 55)
+        print(json.dumps(extracted, ensure_ascii=False, indent=2))
+        print("=" * 55)
+        
+        ans = input("\n[?] 是否將以上預覽資料原子化寫入 SQLite 資料庫 (meetings, decisions, tasks)？(y/n): ").strip().lower()
+        if ans == 'y':
+            act_id = select_or_create_activity_id()
+            meeting_data = extracted.get("meeting", {})
+            m_res = add_meeting(
+                activity_id=act_id,
+                name=meeting_data.get("name", "未命名會議"),
+                start_time=meeting_data.get("start_time", ""),
+                end_time=meeting_data.get("end_time", ""),
+                location=meeting_data.get("location", ""),
+                participants=meeting_data.get("participants", ""),
+                content=meeting_data.get("content", ""),
+                date=meeting_data.get("date", "")
+            )
+            m_id = m_res["id"]
+            
+            d_count = 0
+            for d in extracted.get("decisions", []):
+                opts = d.get("options", "[]")
+                if isinstance(opts, list):
+                    opts = json.dumps(opts, ensure_ascii=False)
+                create_decision(
+                    activity_id=act_id,
+                    problem=d.get("problem", ""),
+                    options=opts,
+                    final_decision=d.get("final_decision", ""),
+                    reason=d.get("reason", ""),
+                    source=d.get("source", record["filename"]),
+                    meeting_id=m_id
+                )
+                d_count += 1
+                
+            t_count = 0
+            for t in extracted.get("tasks", []):
+                add_task(
+                    activity_id=act_id,
+                    content=t.get("content", ""),
+                    assignee=t.get("assignee", ""),
+                    due_date=t.get("due_date", ""),
+                    priority=t.get("priority", "中"),
+                    meeting_id=m_id
+                )
+                t_count += 1
+                
+            print(f"\n[+] 【階段 2：寫入成功 (Commit Success)】！")
+            print(f"    新增會議 ID: {m_id}")
+            print(f"    新增決策數: {d_count} 筆")
+            print(f"    新增待辦數: {t_count} 筆")
+        else:
+            print("\n[INFO] 已取消寫入。")
+    except Exception as e:
+        print(f"\n[!] 萃取與寫入失敗: {e}")
 
 
 # ==========================================
@@ -547,7 +640,7 @@ def handle_extra_menu():
 def main():
     while True:
         print_main_menu()
-        choice = input("[?] 請選擇操作 (0-9): ").strip()
+        choice = input("[?] 請選擇操作 (0-10): ").strip()
         
         if choice == '1':
             handle_list_docs()
@@ -560,12 +653,14 @@ def main():
         elif choice == '5':
             handle_generate_answer()
         elif choice == '6':
-            handle_meeting_menu()
+            handle_ai_extract_and_commit()
         elif choice == '7':
-            handle_task_menu()
+            handle_meeting_menu()
         elif choice == '8':
-            handle_activity_menu()
+            handle_task_menu()
         elif choice == '9':
+            handle_activity_menu()
+        elif choice == '10':
             handle_extra_menu()
         elif choice == '0' or choice.lower() == 'q':
             print("\n[INFO] 退出測試系統。")
