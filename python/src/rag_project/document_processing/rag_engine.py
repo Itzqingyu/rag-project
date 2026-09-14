@@ -12,6 +12,7 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 import rag_project.database as db
+from rag_project.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
 
 # ==========================================
 # 1. Embedding 與 Reranker 模型載入 (Lazy Singletons)
@@ -94,6 +95,13 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"找不到檔案: {file_path}")
+
+    # 若傳入的檔案不在系統託管目錄 (python/data/markdown/)，自動轉換與複製託管
+    abs_file = os.path.abspath(file_path)
+    abs_default_dir = os.path.abspath(DEFAULT_MARKDOWN_DIR)
+    if not abs_file.startswith(abs_default_dir):
+        raw_file_path = raw_file_path or file_path
+        file_path = convert_to_markdown(file_path)
 
     existing_record = db.get_doc_by_path(file_path, db_path=db_path)
     if existing_record:
