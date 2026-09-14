@@ -89,7 +89,7 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
     
     :param file_path: Markdown 實體路徑
     :param force: 若檔案已存在是否覆蓋舊資料
-    :param raw_file_path: 原始檔案實體路徑 (未轉檔前的原始路徑)
+    :param raw_file_path: 原始檔案實體路徑
     :return: 成功寫入的切塊數量
     """
     if not os.path.exists(file_path):
@@ -125,7 +125,7 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
 
 
 def delete_document(identifier: str, *, db_path: Optional[str] = None) -> bool:
-    """根據檔案路徑或 ID 從 ChromaDB 與 SQLite 中同步刪除文件與其向量紀錄。"""
+    """根據檔案路徑或 ID 從 ChromaDB、SQLite 以及實體硬碟中同步刪除文件與向量紀錄。"""
     record = None
     if str(identifier).isdigit():
         record = db.get_doc_by_id(int(identifier), db_path=db_path)
@@ -144,6 +144,14 @@ def delete_document(identifier: str, *, db_path: Optional[str] = None) -> bool:
         print(f"[Warning] 從 ChromaDB 刪除向量失敗: {e}")
         
     db.delete_doc_record_by_path(file_path, db_path=db_path)
+    
+    # 連帶清理託管於硬碟的實體 .md 檔案
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"[Warning] 刪除硬碟實體檔案失敗: {e}")
+            
     return True
 
 

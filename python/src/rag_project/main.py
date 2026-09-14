@@ -1,12 +1,15 @@
 import os
 import shutil
+import tempfile
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from rag_project.converter import convert_to_markdown
+from rag_project.database import get_doc_by_id, get_doc_by_path, get_all_docs
 from rag_project.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.llm_client import generate_answer
+from rag_project.llm_client import generate_answer, extract_structured_meeting_data
 from rag_project.activity import (
     create_activity,
     get_activity,
@@ -50,8 +53,8 @@ from rag_project.incident import (
 
 app = FastAPI(
     title="RAG Project Backend API",
-    description="智能客製化意見助手 - RAG 檢索與輕量化業務功能 REST API",
-    version="1.0.0"
+    description="智能客製化意見助手 - RAG 檢索、轉檔與 AI 結構化會議解析 REST API",
+    version="1.1.0"
 )
 
 # CORS 設定
@@ -62,11 +65,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 上傳檔案存放目錄
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-UPLOAD_RAW_DIR = os.path.join(BASE_DIR, "uploads", "raw")
-os.makedirs(UPLOAD_RAW_DIR, exist_ok=True)
 
 
 # ==========================================
@@ -90,6 +88,46 @@ class DocumentChunk(BaseModel):
 class QueryResponse(BaseModel):
     results: List[DocumentChunk]
     answer: Optional[str] = None
+
+# AI 結構化萃取與 Preview-Commit 流程模型
+class ExtractSummaryRequest(BaseModel):
+    doc_id: Optional[int] = None
+    file_path: Optional[str] = None
+
+class MeetingCreate(BaseModel):
+    activity_id: int
+    name: str
+    start_time: str = ""
+    end_time: str = ""
+    location: str = ""
+    participants: str = ""
+    content: str = ""
+    date: str = ""
+
+class TaskCreate(BaseModel):
+    activity_id: int
+    content: str
+    assignee: str = ""
+    due_date: str = ""
+    priority: str = "中"
+    status: str = "pending"
+    meeting_id: Optional[int] = None
+
+class DecisionCreate(BaseModel):
+    activity_id: int
+    problem: str
+    options: str  # JSON array string如 '["解方A", "解方B"]'
+    final_decision: str
+    reason: str
+    source: str
+    confirmation_status: str = "pending"
+    meeting_id: Optional[int] = None
+
+class CommitSummaryRequest(BaseModel):
+    activity_id: int
+    meeting: MeetingCreate
+    decisions: List[DecisionCreate] = []
+    tasks: List[TaskCreate] = []
 
 # Activity
 class ActivityCreate(BaseModel):
@@ -116,17 +154,6 @@ class ActivityUpdate(BaseModel):
     expected_attendees: Optional[int] = None
     budget: Optional[int] = None
 
-# Meeting
-class MeetingCreate(BaseModel):
-    activity_id: int
-    name: str
-    start_time: str = ""
-    end_time: str = ""
-    location: str = ""
-    participants: str = ""
-    content: str = ""
-    date: str = ""
-
 class MeetingUpdate(BaseModel):
     name: Optional[str] = None
     start_time: Optional[str] = None
@@ -137,16 +164,6 @@ class MeetingUpdate(BaseModel):
     activity_id: Optional[int] = None
     date: Optional[str] = None
 
-# Task
-class TaskCreate(BaseModel):
-    activity_id: int
-    content: str
-    assignee: str = ""
-    due_date: str = ""
-    priority: str = "中"
-    status: str = "pending"
-    meeting_id: Optional[int] = None
-
 class TaskUpdate(BaseModel):
     content: Optional[str] = None
     assignee: Optional[str] = None
@@ -154,17 +171,6 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = None
     status: Optional[str] = None
     activity_id: Optional[int] = None
-    meeting_id: Optional[int] = None
-
-# Decision
-class DecisionCreate(BaseModel):
-    activity_id: int
-    problem: str
-    options: str  # JSON array string
-    final_decision: str
-    reason: str
-    source: str
-    confirmation_status: str = "pending"
     meeting_id: Optional[int] = None
 
 class DecisionUpdate(BaseModel):
@@ -219,7 +225,7 @@ class IncidentUpdate(BaseModel):
 
 
 # ==========================================
-# 系統與 RAG/LLM 端點
+# 系統與 RAG/轉檔 端點
 # ==========================================
 
 @app.get("/ping", response_model=PingResponse, tags=["System"])
@@ -234,34 +240,45 @@ def get_documents():
 
 @app.post("/upload", tags=["RAG Document"])
 def upload_document(file: UploadFile = File(...)):
+    """接受 MD, TXT, PDF, DOCX 上傳，由 converter 統一轉成 Markdown 並託管於 python/data/markdown/。"""
+    temp_dir = tempfile.mkdtemp()
     try:
-        raw_file_path = os.path.join(UPLOAD_RAW_DIR, file.filename)
+        raw_file_path = os.path.join(temp_dir, file.filename)
         with open(raw_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        if not file.filename.lower().endswith(".md"):
-            raise HTTPException(status_code=400, detail="目前僅支援 .md 檔案")
-            
+        # 呼叫多格式轉檔器將檔案轉換為標準 Markdown
+        target_md_path = convert_to_markdown(raw_file_path)
+        
+        # 將轉換後的 Markdown 送入 RAG 引擎
         chunks_added = add_document(
-            file_path=raw_file_path, 
+            file_path=target_md_path, 
             force=True,
-            raw_file_path=raw_file_path
+            raw_file_path=file.filename
         )
+        
+        doc_record = get_doc_by_path(target_md_path)
         
         return {
             "status": "success", 
-            "message": f"成功上傳並向量化 {file.filename}！",
+            "message": f"成功轉檔並向量化 {file.filename}！",
+            "doc_id": doc_record["id"] if doc_record else None,
+            "file_path": target_md_path,
             "chunks_added": chunks_added
         }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.delete("/documents/{identifier:path}", tags=["RAG Document"])
 def remove_document(identifier: str):
     success = delete_document(identifier)
     if not success:
-        raise HTTPException(status_code=444 if False else 404, detail="找不到該檔案紀錄")
+        raise HTTPException(status_code=404, detail="找不到該檔案紀錄")
     return {"status": "success", "message": f"已成功刪除 {identifier}"}
 
 
@@ -284,6 +301,79 @@ def query_docs(req: QueryRequest):
         return QueryResponse(results=results, answer=answer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# AI 結構化會議解析與 Preview-Commit 端點
+# ==========================================
+
+@app.post("/extract_summary", tags=["AI Structured Extraction"])
+def extract_summary(req: ExtractSummaryRequest):
+    """階段 1：傳入 doc_id 或 file_path，LLM 從全文萃取會議日期/解方/決策/待辦，回傳預覽 JSON。"""
+    record = None
+    if req.doc_id is not None:
+        record = get_doc_by_id(req.doc_id)
+    elif req.file_path is not None:
+        record = get_doc_by_path(req.file_path)
+        
+    if not record:
+        raise HTTPException(status_code=404, detail="找不到指定的文件紀錄")
+        
+    markdown_content = record.get("markdown_content", "")
+    if not markdown_content.strip():
+        raise HTTPException(status_code=400, detail="文件內文為空，無法進行 AI 萃取")
+        
+    try:
+        # 直接帶入整份 Markdown 內文進行 1-shot 結構化萃取
+        extracted_data = extract_structured_meeting_data(markdown_content)
+        return {
+            "status": "success",
+            "doc_id": record["id"],
+            "preview_data": extracted_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 結構化萃取失敗: {e}")
+
+
+@app.post("/commit_summary", tags=["AI Structured Extraction"])
+def commit_summary(req: CommitSummaryRequest):
+    """階段 2：接收使用者確認/編修後的結構化資料，一次性事務寫入 SQLite 業務表。"""
+    try:
+        # 1. 寫入 Meeting
+        meeting_dict = req.meeting.model_dump()
+        meeting_dict["activity_id"] = req.activity_id
+        created_meeting = add_meeting(**meeting_dict)
+        meeting_id = created_meeting["id"]
+
+        # 2. 寫入 Decisions
+        created_decisions = []
+        for d in req.decisions:
+            d_dict = d.model_dump()
+            d_dict["activity_id"] = req.activity_id
+            d_dict["meeting_id"] = meeting_id
+            created_d = create_decision(**d_dict)
+            created_decisions.append(created_d)
+
+        # 3. 寫入 Tasks
+        created_tasks = []
+        for t in req.tasks:
+            t_dict = t.model_dump()
+            t_dict["activity_id"] = req.activity_id
+            t_dict["meeting_id"] = meeting_id
+            created_t = add_task(**t_dict)
+            created_tasks.append(created_t)
+
+        return {
+            "status": "success",
+            "message": "成功將 AI 結構化會議紀錄寫入資料庫！",
+            "meeting": created_meeting,
+            "decisions": created_decisions,
+            "tasks": created_tasks
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"寫入資料庫失敗: {e}")
 
 
 # ==========================================
