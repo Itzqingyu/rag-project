@@ -39,13 +39,13 @@ def get_activity_label(activity_id: int) -> str:
 def print_activities_table() -> List[dict]:
     activities = list_activities()
     print("\n" + "-" * 55)
-    print("      📍 可用活動列表 (Activity Table)")
+    print("      可用活動列表 (Activity Table)")
     print("-" * 55)
     if not activities:
         print("  (目前資料庫無任何活動紀錄)")
     else:
         for act in activities:
-            print(f"  [ ID: {act['id']} ] ➡️  {act['name']} ({act['year']}) [{act['status']}] 地點: {act['venue'] or '未填'}")
+            print(f"  [ ID: {act['id']} ] -> {act['name']} ({act['year']}) [{act['status']}] 地點: {act['venue'] or '未填'}")
     print("-" * 55)
     return activities
 
