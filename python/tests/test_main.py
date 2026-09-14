@@ -33,9 +33,27 @@ from rag_project.activity_services.meeting_task import (
     update_task,
     delete_task,
 )
-from rag_project.activity_services.decision import create_decision, list_decisions
-from rag_project.activity_services.schedule import create_schedule, list_schedules
-from rag_project.activity_services.incident import create_incident, list_incidents
+from rag_project.activity_services.decision import (
+    create_decision,
+    get_decision,
+    list_decisions,
+    update_decision,
+    delete_decision,
+)
+from rag_project.activity_services.schedule import (
+    create_schedule,
+    get_schedule,
+    list_schedules,
+    update_schedule,
+    delete_schedule,
+)
+from rag_project.activity_services.incident import (
+    create_incident,
+    get_incident,
+    list_incidents,
+    update_incident,
+    delete_incident,
+)
 
 
 def print_main_menu():
@@ -324,28 +342,206 @@ def handle_activity_menu():
             print(f"\n[錯誤] {e}")
 
 
-def handle_extra_menu():
-    print("\n--- 決策 / 日程 / 突發事件清單 ---")
-    print("1. 查看所有決策 (Decisions)")
-    print("2. 查看所有流程 (Schedules)")
-    print("3. 查看所有突發事件 (Incidents)")
-    choice = input("選擇操作 (1-3): ").strip()
+def handle_decision_menu():
+    print("\n--- 決策紀錄管理 (Decisions) ---")
+    print("1. 查看所有決策")
+    print("2. 新增決策")
+    print("3. 修改決策")
+    print("4. 刪除決策")
+    choice = input("選擇操作 (1-4): ").strip()
 
     if choice == '1':
         decisions = list_decisions()
         print(f"\n--- 決策列表 (共 {len(decisions)} 筆) ---")
         for d in decisions:
-            print(f"[ID: {d['id']}] 活動ID: {d['activity_id']} | 問題: {d['problem']} | 決議: {d['final_decision']}")
+            print(f"[ID: {d['id']}] 活動ID: {d['activity_id']} | 問題: {d['problem']} | 決策: {d['final_decision']} | 原因: {d['reason']}")
     elif choice == '2':
+        try:
+            act_id = select_or_create_activity_id()
+            problem = input("討論問題: ").strip()
+            options = input("候選方案 (JSON 陣列字串或逗點分隔): ").strip()
+            if not options.startswith("["):
+                import json
+                opts_list = [o.strip() for o in options.split(",") if o.strip()]
+                options = json.dumps(opts_list, ensure_ascii=False)
+            final_decision = input("最終決策: ").strip()
+            reason = input("決策原因: ").strip()
+            source = input("來源 (例如 '第一次籌備會議'): ").strip() or "CLI 手動新增"
+            created = create_decision(
+                activity_id=act_id,
+                problem=problem,
+                options=options,
+                final_decision=final_decision,
+                reason=reason,
+                source=source
+            )
+            print(f"\n[成功] 新增決策成功 ID {created['id']}")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+    elif choice == '3':
+        try:
+            d_id = int(input("修改決策 ID: ").strip())
+            problem = input("新討論問題 (按 Enter 跳過): ").strip() or None
+            final_decision = input("新最終決策 (按 Enter 跳過): ").strip() or None
+            reason = input("新決策原因 (按 Enter 跳過): ").strip() or None
+            changes = {}
+            if problem: changes["problem"] = problem
+            if final_decision: changes["final_decision"] = final_decision
+            if reason: changes["reason"] = reason
+            updated = update_decision(d_id, **changes)
+            if updated:
+                print("\n[成功] 決策紀錄已成功更新！")
+            else:
+                print("\n[!] 找不到該決策紀錄或無更新。")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+    elif choice == '4':
+        try:
+            d_id = int(input("刪除決策 ID: ").strip())
+            deleted = delete_decision(d_id)
+            if deleted:
+                print(f"\n[成功] 已成功刪除決策 ID {d_id}")
+            else:
+                print("\n[!] 刪除失敗，找不到該決策紀錄。")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+
+
+def handle_schedule_menu():
+    print("\n--- 流程日程管理 (Schedules) ---")
+    print("1. 查看所有流程")
+    print("2. 新增流程")
+    print("3. 修改流程")
+    print("4. 刪除流程")
+    choice = input("選擇操作 (1-4): ").strip()
+
+    if choice == '1':
         schedules = list_schedules()
         print(f"\n--- 流程列表 (共 {len(schedules)} 筆) ---")
         for s in schedules:
-            print(f"[ID: {s['id']}] 活動ID: {s['activity_id']} | 名稱: {s['name']} | 時間: {s['start_time']}")
+            print(f"[ID: {s['id']}] 活動ID: {s['activity_id']} | 名稱: {s['name']} | 開始時間: {s['start_time']} | 負責人: {s['owner']}")
+    elif choice == '2':
+        try:
+            act_id = select_or_create_activity_id()
+            name = input("流程名稱: ").strip()
+            start_time = input("開始時間 (ISO 8601 或 '2026-09-15 09:00:00'): ").strip()
+            location = input("地點 (預設 '主會場'): ").strip() or "主會場"
+            owner = input("負責人 (預設 '總幹事'): ").strip() or "總幹事"
+            notes = input("備註 (可跳過): ").strip() or ""
+            category = input("分類 (預設 '開幕'): ").strip() or "開幕"
+            created = create_schedule(
+                activity_id=act_id,
+                name=name,
+                start_time=start_time,
+                location=location,
+                owner=owner,
+                notes=notes,
+                category=category
+            )
+            print(f"\n[成功] 新增流程日程成功 ID {created['id']}")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
     elif choice == '3':
+        try:
+            s_id = int(input("修改流程 ID: ").strip())
+            name = input("新名稱 (按 Enter 跳過): ").strip() or None
+            location = input("新地點 (按 Enter 跳過): ").strip() or None
+            owner = input("新負責人 (按 Enter 跳過): ").strip() or None
+            changes = {}
+            if name: changes["name"] = name
+            if location: changes["location"] = location
+            if owner: changes["owner"] = owner
+            updated = update_schedule(s_id, **changes)
+            if updated:
+                print("\n[成功] 流程日程已成功更新！")
+            else:
+                print("\n[!] 找不到該流程日程或無更新。")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+    elif choice == '4':
+        try:
+            s_id = int(input("刪除流程 ID: ").strip())
+            deleted = delete_schedule(s_id)
+            if deleted:
+                print(f"\n[成功] 已成功刪除流程日程 ID {s_id}")
+            else:
+                print("\n[!] 刪除失敗，找不到該流程日程。")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+
+
+def handle_incident_menu():
+    print("\n--- 突發事件管理 (Incidents) ---")
+    print("1. 查看所有突發事件")
+    print("2. 新增突發事件")
+    print("3. 修改突發事件")
+    print("4. 刪除突發事件")
+    choice = input("選擇操作 (1-4): ").strip()
+
+    if choice == '1':
         incidents = list_incidents()
         print(f"\n--- 突發事件列表 (共 {len(incidents)} 筆) ---")
         for inc in incidents:
-            print(f"[ID: {inc['id']}] 活動ID: {inc['activity_id']} | 時間: {inc['occurred_at']} | 內容: {inc['content']}")
+            print(f"[ID: {inc['id']}] 活動ID: {inc['activity_id']} | 發生時間: {inc['occurred_at']} | 內容: {inc['content']}")
+    elif choice == '2':
+        try:
+            act_id = select_or_create_activity_id()
+            content = input("事件內容: ").strip()
+            occurred_at = input("發生時間 (ISO 8601 或 '2026-09-15 10:30:00'): ").strip()
+            cause = input("原因說明 (可跳過): ").strip() or None
+            suggestion = input("處置建議 (可跳過): ").strip() or None
+            created = create_incident(
+                activity_id=act_id,
+                content=content,
+                occurred_at=occurred_at,
+                cause=cause,
+                suggestion=suggestion
+            )
+            print(f"\n[成功] 新增突發事件成功 ID {created['id']}")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+    elif choice == '3':
+        try:
+            inc_id = int(input("修改突發事件 ID: ").strip())
+            content = input("新事件內容 (按 Enter 跳過): ").strip() or None
+            cause = input("新原因說明 (按 Enter 跳過): ").strip() or None
+            suggestion = input("新處置建議 (按 Enter 跳過): ").strip() or None
+            changes = {}
+            if content: changes["content"] = content
+            if cause: changes["cause"] = cause
+            if suggestion: changes["suggestion"] = suggestion
+            updated = update_incident(inc_id, **changes)
+            if updated:
+                print("\n[成功] 突發事件紀錄已成功更新！")
+            else:
+                print("\n[!] 找不到該突發事件紀錄或無更新。")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+    elif choice == '4':
+        try:
+            inc_id = int(input("刪除突發事件 ID: ").strip())
+            deleted = delete_incident(inc_id)
+            if deleted:
+                print(f"\n[成功] 已成功刪除突發事件紀錄 ID {inc_id}")
+            else:
+                print("\n[!] 刪除失敗，找不到該突發事件紀錄。")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+
+
+def handle_extra_menu():
+    print("\n--- 決策 / 流程 / 突發事件管理選單 ---")
+    print("1. 決策紀錄管理 (Decisions)")
+    print("2. 流程日程管理 (Schedules)")
+    print("3. 突發事件管理 (Incidents)")
+    choice = input("選擇模組 (1-3): ").strip()
+
+    if choice == '1':
+        handle_decision_menu()
+    elif choice == '2':
+        handle_schedule_menu()
+    elif choice == '3':
+        handle_incident_menu()
 
 
 def main():
