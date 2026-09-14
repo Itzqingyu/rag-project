@@ -24,18 +24,17 @@
     - **向量化**: fastembed (輕量級、無須 PyTorch 的 ONNX 推理引擎)
     - **LLM API**: litellm (統一接口，支援 OpenAI/Claude)
 
-### 資料庫
-- **純文字**: Markdown 格式 (非 TXT)，app 管理
-- **原始文件**: 與 Markdown 斷開關聯 (使用者刪除原 PDF 不影響 Markdown)
-- **切片文字**: Markdown 切片，app 管理
-- **向量數據**: ChromaDB persistent mode
-- **對話歷史**: SQLite
-- **檔案管理**: SQLite (追蹤已導入的 Markdown 文件)
-- **活動管理**: SQLite（Activity、Meeting、Task、Decision、Schedule、Incident）
+### 資料庫與檔案儲存
+- **純文字 / 託管文件**: 系統統一轉碼為 `.md` (Markdown 格式) 並儲存於 `python/data/markdown/` 目錄
+- **原始文件**: 上傳轉換完成後與系統獨立 (使用者刪除或修改原始 PDF/Word 不影響系統內 Markdown)
+- **切片文字**: Markdown 切片由 `rag_engine.py` 處理
+- **向量數據**: ChromaDB persistent mode 儲存於 `python/data/chroma_db/`
+- **對話歷史與元資料**: SQLite 儲存於 `python/data/rag_database.sqlite`
+- **檔案與活動管理**: SQLite (追蹤已導入的 Markdown 文件，以及 Activity、Meeting、Task、Decision、Schedule、Incident 等業務資料)
 
 ### 模型
 - **Embedding**: fastembed (`BAAI/bge-small-zh-v1.5`，使用 ONNX Runtime 於 CPU 運行，專為中文優化且極其輕量)
-- **LLM**: GPT-4o (OpenAI) 或 Claude 3.5 Sonnet (litellm)
+- **LLM**: GPT-4o (OpenAI) 或 Claude 3.5 Sonnet / DeepSeek / 本地模型 (透過 `litellm`)
 
 ## 3. 專案結構
 ```
@@ -50,46 +49,59 @@ rag-project/
 │       ├── App.tsx
 │       ├── components/
 │       │   ├── Chat.tsx
-│       │   ├── FileUploader.tsx
-│       │   └── FileManager.tsx  # 管理已導入的 Markdown 文件
+│   │   ├── FileUploader.tsx
+│   │   └── FileManager.tsx  # 管理已導入的 Markdown 文件
 │       └── types/
 │
 ├── python/                       # Python 後端 (FastAPI)
 │   ├── src/
 │   │   └── rag_project/
-│   │       ├── main.py           # FastAPI 伺服器入口 (REST API)
+│   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
 │   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema 與 ChromaDB 向量庫)
 │   │       ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
-│   │       ├── llm_client.py     # LLM 統一呼叫介面 (litellm)
+│   │       ├── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
+│   │       ├── llm_client.py     # LLM 統一呼叫與 Prompt 載入介面 (litellm 1-shot 結構化抽取)
 │   │       ├── activity.py       # Activity 活動管理 CRUD
 │   │       ├── meeting_task.py   # Meeting 會議與 Task 待辦事項 CRUD
 │   │       ├── decision.py       # Decision 決策紀錄 CRUD
 │   │       ├── schedule.py       # Schedule 流程日程 CRUD
 │   │       ├── incident.py       # Incident 突發事件 CRUD
-│   │       └── activity_common.py # 活動管理共用驗證與時間工具
+│   │       ├── activity_common.py # 活動管理共用驗證與時間工具
+│   │       └── prompts/          # System Prompt Markdown 檔案目錄
+│   │           ├── meeting_extraction.md # 會議紀錄 1-shot 結構化抽取 Prompt
+│   │           └── rag_qa.md             # RAG 通用問答 Prompt
 │   ├── tests/                    # 測試指令碼與單元測試
-│   │   └── test_main.py          # 整合 CLI 互動測試工具 (包含 RAG, LLM 與業務功能)
-│   ├── data/                     # 本地 SQLite 與 Chroma 向量庫
+│   │   ├── test_main.py          # 整合 CLI 互動測試工具 (包含 RAG, LLM 與業務功能)
+│   │   └── test_converter.py     # 多格式文件轉換與複製單元測試
+│   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
+│   │   ├── rag_database.sqlite   # SQLite 資料庫
+│   │   ├── chroma_db/            # ChromaDB 向量資料庫
+│   │   └── markdown/             # 託管之 Markdown 格式文本庫
 │   └── pyproject.toml            # 依賴套件配置
 ```
 
 ## 4. 核心流程
 
-### 文件上傳
-1. 使用者上傳 Markdown 檔案
-2. Electron IPC 傳遞路徑給主進程
-3. 主進程透過 HTTP POST 呼叫 Python FastAPI 進行處理
-4. Python: 讀取 Markdown → 切片 → 向量化 → ChromaDB 儲存
-5. 將 Markdown 複製/儲存到 app 管理目錄
-6. 記錄到 SQLite (文件名、大小、處理時間、狀態)
+### 文件上傳與轉碼
+1. 使用者上傳原始檔案 (MD, TXT, PDF, DOCX)
+2. Electron IPC 傳遞路徑給主進程，呼叫 Python REST API (`/upload`)
+3. Python `converter.py`: 讀取原始檔案 → 轉換/複製為標準 Markdown 格式並儲存於 `python/data/markdown/`
+4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存
+5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (檔名、託管路徑、處理時間、狀態)
 
-### 對話互動
+### AI 結構化提取與預覽寫入 (Preview-Commit 流程)
+1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
+2. `llm_client.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
+3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
+4. 前端展示預覽結果供使用者校對修改
+5. 使用者確認後發起 `/commit_summary` 請求，原子化寫入 SQLite `meetings`, `decisions`, `tasks` 表
+
+### 對話互動 (RAG)
 1. 使用者輸入問題
-2. ChromaDB 檢索相關 Markdown 切片
-3. 構建提示詞
-4. litellm 呼叫 LLM API
-5. 顯示回應
-6. 儲存對話歷史到 SQLite
+2. ChromaDB 檢索相關 Markdown 切片並透過 Jina Reranker 重排序
+3. `llm_client.py` 載入 `prompts/rag_qa.md` 構建 Prompt
+4. `litellm` 呼叫 LLM API 生成回答
+5. 顯示回應並儲存對話歷史到 SQLite
 
 ## 5. 開發步驟
 
@@ -100,12 +112,12 @@ npm install react-markdown lucide-react
 
 # 環境設置 (後端)
 uv init
-uv add langchain langchain-chroma langchain-community fastembed litellm chromadb fastapi uvicorn pyinstaller python-dotenv
+uv add langchain langchain-chroma langchain-community fastembed litellm chromadb fastapi uvicorn pyinstaller python-dotenv pypdf python-docx
 
 # 開發
 # 需要同時啟動前端與後端 (可透過 npm script 如 concurrently 整合)
-uv run python/main.py          # 啟動 FastAPI 後端
-npm run dev                    # 啟動 Electron 前端
+uv run python/src/rag_project/main.py          # 啟動 FastAPI 後端
+npm run dev                                      # 啟動 Electron 前端
 ```
 
 ### 活動管理後端
@@ -113,15 +125,16 @@ npm run dev                    # 啟動 Electron 前端
 - Activity 存在任何子資料時禁止刪除，避免連帶遺失歷史脈絡。
 - Meeting 刪除後，Task／Decision／Schedule 保留並將 `meeting_id` 設為 `NULL`。
 - Incident 可選擇關聯 Schedule；Schedule 刪除後 Incident 保留並解除關聯。
-- Activity Management service 只接收文字或結構化內容；檔案讀取與 Markdown 轉換沿用統一 upload／RAG 流程。
+- Activity Management service 只接收文字或結構化內容；檔案讀取與 Markdown 轉換由 `converter.py` 處理。
 
 ## 6. MVP 範圍
-- ✅ 文件上傳 (目前僅支援 Markdown 格式)
-- ✅ 對話互動 (基於已導入的 Markdown)
-- ✅ 文件管理 (查看、刪除已導入的 Markdown 文件)
+- ✅ 文件上傳與轉換 (支援 MD, TXT, PDF, DOCX 格式)
+- ✅ 對話互動 (基於已導入之 Markdown 檔案並由 RAG + Reranker 檢索)
+- ✅ 文件管理 (查看、刪除已導入之 Markdown 文件，同步物理刪除託管 `.md` 與向量庫)
+- ✅ AI 結構化會議分析 (1-shot 摘要抽取與 Preview-Commit 寫入流程)
 - ✅ 活動管理 Python／SQLite 核心 CRUD 與關聯驗證
-- ❌ PDF/Word 轉檔支援 (延遲至下一階段)
-- ❌ 版本控制、複雜設定 (後續)
+- ❌ 高級權限與團隊協作 (後續)
+- ❌ 版本控制與複雜自訂設定 (後續)
 
 ## 7. 備選方案：Web 服務
 - 前端：React
@@ -130,7 +143,8 @@ npm run dev                    # 啟動 Electron 前端
 - 適用：多用戶、團隊協作、跨設備
 
 ## 8. 總結
-- 初版：本地桌面應用，核心功能：上傳 Markdown→對話→文件管理
+- 初版：本地桌面應用，核心功能：文件轉碼導入→AI 結構化提取與寫入→RAG 對話→活動紀錄管理
 - 關鍵設計：以 Markdown 為核心，Python 端以 FastAPI 提供微服務，並透過 PyInstaller 打包
-- 技術：React + Python + uv + FastAPI + LangChain + fastembed + litellm + python-dotenv
-- 資料庫：ChromaDB persistent mode + SQLite (追蹤 Markdown 文件)
+- 技術：React + Python + uv + FastAPI + LangChain + fastembed + litellm + python-dotenv + pypdf + python-docx
+- 資料庫：ChromaDB persistent mode + SQLite + 託管 Markdown 檔案庫 (均儲存於 `python/data/`)
+
