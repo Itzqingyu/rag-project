@@ -58,20 +58,22 @@ rag-project/
 │   │   └── rag_project/
 │   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
 │   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema 與 ChromaDB 向量庫)
-│   │       ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
-│   │       ├── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
-│   │       ├── llm_client.py     # LLM 統一呼叫與 Prompt 載入介面 (litellm 1-shot 結構化抽取)
-│   │       ├── activity.py       # Activity 活動管理 CRUD
-│   │       ├── meeting_task.py   # Meeting 會議與 Task 待辦事項 CRUD
-│   │       ├── decision.py       # Decision 決策紀錄 CRUD
-│   │       ├── schedule.py       # Schedule 流程日程 CRUD
-│   │       ├── incident.py       # Incident 突發事件 CRUD
-│   │       ├── activity_common.py # 活動管理共用驗證與時間工具
-│   │       └── prompts/          # System Prompt Markdown 檔案目錄
-│   │           ├── meeting_extraction.md # 會議紀錄 1-shot 結構化抽取 Prompt
-│   │           └── rag_qa.md             # RAG 通用問答 Prompt
+│   │       ├── prompts/          # System Prompt Markdown 檔案目錄
+│   │       │   ├── meeting_extraction.md # 會議紀錄 1-shot 結構化抽取 Prompt
+│   │       │   └── rag_qa.md             # RAG 通用問答 Prompt
+│   │       ├── activity_services/# 活動與事項管理微服務套件
+│   │       │   ├── activity_common.py # 共用驗證與時間工具
+│   │       │   ├── activity.py       # Activity 活動管理 CRUD
+│   │       │   ├── meeting_task.py   # Meeting 會議與 Task 待辦事項 CRUD
+│   │       │   ├── decision.py       # Decision 決策紀錄 CRUD
+│   │       │   ├── schedule.py       # Schedule 流程日程 CRUD
+│   │       │   └── incident.py       # Incident 突發事件 CRUD
+│   │       └── document_processing/# 文件轉碼、RAG 檢索與 AI 服務套件
+│   │           ├── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
+│   │           ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
+│   │           └── llm_service.py    # LLM 統一呼叫與 Prompt 載入介面 (litellm 1-shot 結構化抽取)
 │   ├── tests/                    # 測試指令碼與單元測試
-│   │   ├── test_main.py          # 整合 CLI 互動測試工具 (包含 RAG, LLM 與業務功能)
+│   │   ├── test_main.py          # 整合 CLI 互動測試工具
 │   │   └── test_converter.py     # 多格式文件轉換與複製單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
 │   │   ├── rag_database.sqlite   # SQLite 資料庫

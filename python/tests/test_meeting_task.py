@@ -9,9 +9,9 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.activity import create_activity, delete_activity, get_activity
-from rag_project.decision import create_decision, get_decision
-from rag_project.meeting_task import (
+from rag_project.activity_services.activity import create_activity, delete_activity, get_activity
+from rag_project.activity_services.decision import create_decision, get_decision
+from rag_project.activity_services.meeting_task import (
     add_meeting,
     get_meetings,
     get_meeting_by_id,
@@ -23,7 +23,7 @@ from rag_project.meeting_task import (
     update_task,
     delete_task,
 )
-from rag_project.schedule import create_schedule, get_schedule
+from rag_project.activity_services.schedule import create_schedule, get_schedule
 
 class MeetingTaskServiceTest(unittest.TestCase):
     def setUp(self):

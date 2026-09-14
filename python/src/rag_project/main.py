@@ -6,18 +6,18 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from rag_project.converter import convert_to_markdown
+from rag_project.document_processing.converter import convert_to_markdown
 from rag_project.database import get_doc_by_id, get_doc_by_path, get_all_docs
-from rag_project.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.llm_client import generate_answer, extract_structured_meeting_data
-from rag_project.activity import (
+from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
+from rag_project.document_processing.llm_service import generate_answer, extract_structured_meeting_data
+from rag_project.activity_services.activity import (
     create_activity,
     get_activity,
     list_activities,
     update_activity,
     delete_activity,
 )
-from rag_project.meeting_task import (
+from rag_project.activity_services.meeting_task import (
     add_meeting,
     get_meetings,
     get_meeting_by_id,
@@ -29,21 +29,21 @@ from rag_project.meeting_task import (
     update_task,
     delete_task,
 )
-from rag_project.decision import (
+from rag_project.activity_services.decision import (
     create_decision,
     get_decision,
     list_decisions,
     update_decision,
     delete_decision,
 )
-from rag_project.schedule import (
+from rag_project.activity_services.schedule import (
     create_schedule,
     get_schedule,
     list_schedules,
     update_schedule,
     delete_schedule,
 )
-from rag_project.incident import (
+from rag_project.activity_services.incident import (
     create_incident,
     get_incident,
     list_incidents,
@@ -95,7 +95,7 @@ class ExtractSummaryRequest(BaseModel):
     file_path: Optional[str] = None
 
 class MeetingCreate(BaseModel):
-    activity_id: int
+    activity_id: Optional[int] = None
     name: str
     start_time: str = ""
     end_time: str = ""
@@ -105,7 +105,7 @@ class MeetingCreate(BaseModel):
     date: str = ""
 
 class TaskCreate(BaseModel):
-    activity_id: int
+    activity_id: Optional[int] = None
     content: str
     assignee: str = ""
     due_date: str = ""
@@ -114,7 +114,7 @@ class TaskCreate(BaseModel):
     meeting_id: Optional[int] = None
 
 class DecisionCreate(BaseModel):
-    activity_id: int
+    activity_id: Optional[int] = None
     problem: str
     options: str  # JSON array string如 '["解方A", "解方B"]'
     final_decision: str

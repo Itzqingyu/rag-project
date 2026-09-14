@@ -1,6 +1,6 @@
 # 後端 (Python) 模塊分析與架構變更紀錄
 
-## 1. 模塊清單與功能簡述 (扁平化架構)
+## 1. 模塊清單與功能簡述 (Package 結構化架構)
 
 ### 進入點與 API
 - `main.py`: FastAPI 應用程式的主程式。提供完整的 REST API 端點，包含：
@@ -14,27 +14,31 @@
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
 
-- `tests/test_main.py`: 整合了原 `main_test.py` 與 `test_main.py` 的互動式 CLI 測試選單，支援 RAG 文件管理、LLM 回答測試以及 Activity／Meeting／Task 等業務功能的本地 CLI 測試。
+- `tests/test_main.py`: 整合了互動式 CLI 測試選單，支援 RAG 文件管理、LLM 回答測試以及 Activity／Meeting／Task 等業務功能的本地 CLI 測試。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 
-### 業務與服務模組 (Domain Services)
-- `converter.py`: 負責文件格式轉碼。支援 `.md`, `.txt`, `.pdf`, `.docx` 格式，自動建立並輸出至 `python/data/markdown/` 目錄。若為 MD 檔案則直接複製，其餘格式提取內文後包裝為標準 Markdown。
-- `activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
-- `meeting_task.py`: 負責會議 (Meeting) 與待辦事項 (Task) 的 SQLite CRUD 與 Activity／Meeting 關聯驗證。
-- `decision.py`: 負責決策 (Decision) CRUD、確認狀態、選項 JSON 與 Activity／Meeting 關聯驗證。
-- `schedule.py`: 負責活動流程 (Schedule) CRUD、時間範圍與 Activity／Meeting 關聯驗證。
-- `incident.py`: 負責臨時紀錄 (Incident) CRUD，並驗證可選 Schedule 與 Activity 的一致性。
-- `activity_common.py`: 提供活動管理模組共用的正整數 ID、必填文字、ISO 8601 時間及跨模組關聯驗證工具。
+### 業務與事項管理微服務套件 (`activity_services/`)
+- `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
+- `activity_services/meeting_task.py`: 負責會議 (Meeting) 與待辦事項 (Task) 的 SQLite CRUD 與 Activity／Meeting 關聯驗證。
+- `activity_services/decision.py`: 負責決策 (Decision) CRUD、確認狀態、選項 JSON 與 Activity／Meeting 關聯驗證。
+- `activity_services/schedule.py`: 負責活動流程 (Schedule) CRUD、時間範圍與 Activity／Meeting 關聯驗證。
+- `activity_services/incident.py`: 負責臨時紀錄 (Incident) CRUD，並驗證可選 Schedule 與 Activity 的一致性。
+- `activity_services/activity_common.py`: 提供活動管理模組共用的正整數 ID、必填文字、ISO 8601 時間及跨模組關聯驗證工具。
 
-### Prompt 範本庫 (Prompt Templates)
-- `prompts/meeting_extraction.md`: 定義 AI 會議紀錄 1-shot 結構化抽取的 System Prompt 範本（規範會議日期、討論問題、解決方案、最終決策與待辦事項 JSON 格式）。
-- `prompts/rag_qa.md`: 定義 RAG 通用問答的 System Prompt 範本。
-
-### 核心引擎 (RAG Engine)
-- `rag_engine.py`: 整合原 `chunker`, `embedding`, `reranker`, `retriever` 模組。
+### 文件處理與 AI 服務套件 (`document_processing/`)
+- `document_processing/converter.py`: 負責文件格式轉碼。支援 `.md`, `.txt`, `.pdf`, `.docx` 格式，自動建立並輸出至 `python/data/markdown/` 目錄。若為 MD 檔案則直接複製，其餘格式提取內文後包裝為標準 Markdown。
+- `document_processing/rag_engine.py`: 整合 `chunker`, `embedding`, `reranker`, `retriever` 模組。
   - **split_markdown**: 讀取 Markdown 並以 `RecursiveCharacterTextSplitter` 切片 (預設 500 字，50 重疊)。
   - **get_embeddings / get_reranker**: 採用 Lazy Singletons 載入 Jina AI 模型 (`jina-embeddings-v2-base-zh` 與 `jina-reranker-v2-base-multilingual`)。
   - **add_document / search / delete_document / list_documents**: 協調文件向量化、ChromaDB 寫入、物理 `.md` 檔案清理與 SQLite 紀錄。
+- `document_processing/llm_service.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
+  - 提供 `generate_answer` 函數處理 RAG 問答。
+  - 提供 `extract_structured_meeting_data` 函數，實現單檔 1-shot 全文 Prompt 結構化提取。
+  - 透過 `.env` 中的 `ACTIVE_MODEL` 變數支援切換雲端模型 (OpenAI, Gemini, DeepSeek) 及本地 llama.cpp。
+
+### Prompt 範本庫 (`prompts/`)
+- `prompts/meeting_extraction.md`: 定義 AI 會議紀錄 1-shot 結構化抽取的 System Prompt 範本（規範會議日期、討論問題、解決方案、最終決策與待辦事項 JSON 格式）。
+- `prompts/rag_qa.md`: 定義 RAG 通用問答的 System Prompt 範本。
 
 ### 資料庫 (Database Layer)
 - `database.py`: 統一資料庫存取層（結合原 `sqlite_db` 與 `chroma_db`）。
@@ -42,11 +46,6 @@
   - 管理文件 Metadata (包含 `markdown_path` 與 `markdown_content`) 以及 Activity、Meeting、Task、Decision、Schedule、Incident 的 SQLite 資料表與索引。
   - 提供 `get_vectorstore()` 回傳 Chroma 向量資料庫單例（儲存位在 `python/data/chroma_db/`）。
 
-### 語言模型 (LLM)
-- `llm_client.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
-  - 提供 `generate_answer` 函數處理 RAG 問答。
-  - 提供 `extract_meeting_summary` 函數，實現單檔 1-shot 全文 Prompt 結構化提取。
-  - 透過 `.env` 中的 `ACTIVE_MODEL` 變數支援切換雲端模型 (OpenAI, Gemini, DeepSeek) 及本地 llama.cpp。
 
 ---
 

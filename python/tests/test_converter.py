@@ -8,7 +8,7 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.converter import (
+from rag_project.document_processing.converter import (
     convert_to_markdown,
     _convert_txt_to_markdown,
     _convert_pdf_to_markdown,

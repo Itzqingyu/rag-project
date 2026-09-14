@@ -7,7 +7,7 @@ SRC_DIR = os.path.join(BASE_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.rag_engine import add_document, search
+from rag_project.document_processing.rag_engine import add_document, search
 from rag_project.database import get_vectorstore
 
 def main():

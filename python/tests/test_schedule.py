@@ -11,15 +11,15 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.activity import create_activity, delete_activity  # noqa: E402
-from rag_project.schedule import (  # noqa: E402
+from rag_project.activity_services.activity import create_activity, delete_activity  # noqa: E402
+from rag_project.activity_services.schedule import (  # noqa: E402
     create_schedule,
     delete_schedule,
     get_schedule,
     list_schedules,
     update_schedule,
 )
-from rag_project.meeting_task import add_meeting  # noqa: E402
+from rag_project.activity_services.meeting_task import add_meeting  # noqa: E402
 
 
 class ScheduleServiceTest(unittest.TestCase):

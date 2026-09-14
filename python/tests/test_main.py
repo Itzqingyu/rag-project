@@ -12,16 +12,16 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.llm_client import generate_answer
-from rag_project.activity import (
+from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
+from rag_project.document_processing.llm_service import generate_answer
+from rag_project.activity_services.activity import (
     create_activity,
     get_activity,
     list_activities,
     update_activity,
     delete_activity,
 )
-from rag_project.meeting_task import (
+from rag_project.activity_services.meeting_task import (
     add_meeting,
     get_meetings,
     get_meeting_by_id,
@@ -33,9 +33,9 @@ from rag_project.meeting_task import (
     update_task,
     delete_task,
 )
-from rag_project.decision import create_decision, list_decisions
-from rag_project.schedule import create_schedule, list_schedules
-from rag_project.incident import create_incident, list_incidents
+from rag_project.activity_services.decision import create_decision, list_decisions
+from rag_project.activity_services.schedule import create_schedule, list_schedules
+from rag_project.activity_services.incident import create_incident, list_incidents
 
 
 def print_main_menu():

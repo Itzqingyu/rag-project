@@ -12,15 +12,15 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.activity import create_activity, delete_activity  # noqa: E402
-from rag_project.decision import (  # noqa: E402
+from rag_project.activity_services.activity import create_activity, delete_activity  # noqa: E402
+from rag_project.activity_services.decision import (  # noqa: E402
     create_decision,
     delete_decision,
     get_decision,
     list_decisions,
     update_decision,
 )
-from rag_project.meeting_task import add_meeting  # noqa: E402
+from rag_project.activity_services.meeting_task import add_meeting  # noqa: E402
 
 
 class DecisionServiceTest(unittest.TestCase):

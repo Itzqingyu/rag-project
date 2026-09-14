@@ -7,7 +7,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from rag_project.activity_common import (
+from rag_project.activity_services.activity_common import (
     ensure_activity_exists,
     ensure_meeting_matches_activity,
     optional_positive_id,

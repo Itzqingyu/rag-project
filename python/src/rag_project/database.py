@@ -61,6 +61,13 @@ def init_db(db_path: Optional[str] = None) -> None:
                 chunk_count INTEGER NOT NULL
             )
         ''')
+        cursor.execute("PRAGMA table_info(documents)")
+        existing_doc_cols = [row[1] for row in cursor.fetchall()]
+        if "raw_file_path" not in existing_doc_cols:
+            cursor.execute("ALTER TABLE documents ADD COLUMN raw_file_path TEXT")
+        if "markdown_content" not in existing_doc_cols:
+            cursor.execute("ALTER TABLE documents ADD COLUMN markdown_content TEXT")
+
         # 1.2 活動主表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS activities (
@@ -290,7 +297,7 @@ def delete_doc_record_by_id(doc_id: int, db_path: Optional[str] = None) -> None:
 def get_vectorstore(db_dir: Optional[str] = None) -> Chroma:
     """獲取 Chroma 向量資料庫單例模式 (Singleton) 實例。"""
     global _vectorstore
-    from rag_project.rag_engine import get_embeddings
+    from rag_project.document_processing.rag_engine import get_embeddings
 
     target_dir = db_dir or CHROMA_DB_DIR
     if _vectorstore is None or db_dir is not None:
