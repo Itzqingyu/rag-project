@@ -96,24 +96,43 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"找不到檔案: {file_path}")
 
-    # 若傳入的檔案不在系統託管目錄 (python/data/markdown/)，自動轉換與複製託管
-    abs_file = os.path.abspath(file_path)
+    source_path = os.path.abspath(file_path)
     abs_default_dir = os.path.abspath(DEFAULT_MARKDOWN_DIR)
-    if not abs_file.startswith(abs_default_dir):
-        raw_file_path = raw_file_path or file_path
-        file_path = convert_to_markdown(file_path)
 
-    existing_record = db.get_doc_by_path(file_path, db_path=db_path)
+    # 1. 判斷預期的託管 Markdown 檔案路徑
+    if not source_path.startswith(abs_default_dir):
+        raw_name = os.path.basename(file_path)
+        file_stem = os.path.splitext(raw_name)[0]
+        target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
+    else:
+        target_md_path = source_path
+
+    # 2. 備份原始檔案內容
+    with open(source_path, "r", encoding="utf-8") as f:
+        source_content = f.read()
+
+    # 3. 檢查 SQLite 紀錄是否存在
+    existing_record = db.get_doc_by_path(target_md_path, db_path=db_path)
     if existing_record:
         if not force:
-            raise FileExistsError(f"檔案已存在於資料庫中: {file_path}")
+            raise FileExistsError(f"檔案已存在於資料庫中: {target_md_path}")
         else:
-            delete_document(file_path, db_path=db_path)
-    
-    with open(file_path, "r", encoding="utf-8") as f:
+            # 覆蓋模式：先刪除舊的 Chroma 向量與 SQLite 紀錄
+            delete_document(target_md_path, db_path=db_path)
+
+    # 4. 確保目標託管 Markdown 檔案存在且內容最新
+    if source_path != os.path.abspath(target_md_path):
+        target_md_path = convert_to_markdown(source_path)
+    else:
+        # 如果傳入的就是託管目錄下的檔案，重新寫入實體檔案
+        os.makedirs(os.path.dirname(target_md_path), exist_ok=True)
+        with open(target_md_path, "w", encoding="utf-8") as f:
+            f.write(source_content)
+
+    with open(target_md_path, "r", encoding="utf-8") as f:
         markdown_content = f.read()
 
-    docs = split_markdown(file_path)
+    docs = split_markdown(target_md_path)
     if not docs:
         return 0
         
@@ -122,7 +141,7 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
     
     actual_raw_path = raw_file_path if raw_file_path else file_path
     db.add_or_update_doc_record(
-        file_path=file_path, 
+        file_path=target_md_path, 
         chunk_count=len(docs),
         raw_file_path=actual_raw_path,
         markdown_content=markdown_content,
