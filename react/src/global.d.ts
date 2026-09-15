@@ -9,3 +9,5 @@ declare global {
     electronAPI: ElectronAPI;
   }
 }
+
+declare module '*.css';
