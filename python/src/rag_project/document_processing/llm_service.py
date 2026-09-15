@@ -29,20 +29,8 @@ def load_prompt_template(template_name: str) -> str:
         return f.read()
 
 
-def generate_answer(user_query: str, retrieved_chunks: List[str], system_prompt: Optional[str] = None) -> str:
-    """負責接收問題與 RAG 召回的文本片段，結合 Prompt 範本呼叫 LLM 進行問答生成。"""
-    if system_prompt is None:
-        try:
-            system_prompt = load_prompt_template("rag_qa")
-        except Exception:
-            system_prompt = (
-                "你是一個專業的 AI 助理。請根據使用者提供的【參考資料】來回答問題。"
-                "如果參考資料中沒有答案，請直接說「我不知道」，不要自行編造。"
-            )
-
-    context_text = "\n\n---\n\n".join(retrieved_chunks)
-    final_user_prompt = f"【參考資料】\n{context_text}\n\n【使用者問題】\n{user_query}"
-
+def _get_model_config():
+    """解析環境變數以取得 litellm 所需之 model_name, api_base, api_key。"""
     model_name = os.getenv("ACTIVE_MODEL", "local/my-model")
     api_base = None
     api_key = None
@@ -52,16 +40,79 @@ def generate_answer(user_query: str, retrieved_chunks: List[str], system_prompt:
         api_base = os.getenv("LLAMACPP_API_BASE", "http://localhost:8080/v1")
         api_key = "sk-no-key-required"
 
+    return model_name, api_base, api_key
+
+
+def chat_with_context(
+    user_query: str,
+    history_messages: Optional[List[Dict[str, Any]]] = None,
+    mode: str = "chat",
+    retrieved_chunks: Optional[List[str]] = None,
+    system_prompt: Optional[str] = None,
+    max_history_turns: int = 5,
+) -> str:
+    """支援多輪對話上下文與模式切換 (普通聊天 vs RAG 模式) 的 LLM 問答生成。
+    
+    具備 Clean Context Isolation (乾淨上下文隔離) 機制：
+    - 歷史訊息僅取 role ('user' | 'assistant') 與純文字 content，不混入過去輪次檢索的外部大段資料。
+    - 若當前輪次為 RAG 模式，當次檢索片段僅注入在當前使用者的 prompt 中：
+      【參考資料】\\n...\\n\\n【使用者問題】\\n...
+    - 避免同一 Session 進行多次 RAG 或切換模式時被過往的檢索片段污染記憶。
+    
+    :param user_query: 使用者當前問題
+    :param history_messages: 過去的歷史訊息清單 (每筆包含 role 與 content)
+    :param mode: 'chat' (普通對話) 或 'rag' (RAG 文件檢索對話)
+    :param retrieved_chunks: 若為 RAG 模式，當次檢索出的文本片段清單
+    :param system_prompt: 自訂 System Prompt (若無則依模式動態載入)
+    :param max_history_turns: 上下文歷史輪數上限 (每輪包含 user 與 assistant，預設 5 輪 = 最多 10 條訊息)
+    """
+    if system_prompt is None:
+        if mode == "rag":
+            try:
+                system_prompt = load_prompt_template("rag_qa")
+            except Exception:
+                system_prompt = (
+                    "你是一個專業的 AI 助理。請根據使用者提供的【參考資料】來回答問題。"
+                    "如果參考資料中沒有答案，請直接說「我不知道」，不要自行編造。"
+                )
+        else:
+            try:
+                system_prompt = load_prompt_template("chat_general")
+            except Exception:
+                system_prompt = (
+                    "你是一個親切、專業、條理分明的 AI 智能助手。請根據使用者的問題與歷史對話脈絡給予清晰的回答。"
+                )
+
+    # 1. 構建歷史訊息序列 (最多取最近 max_history_turns * 2 筆)
+    api_messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    
+    if history_messages:
+        max_messages_count = max_history_turns * 2
+        trimmed_history = history_messages[-max_messages_count:]
+        for msg in trimmed_history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant") and content:
+                api_messages.append({"role": role, "content": content})
+
+    # 2. 構建當前輪次的 User Prompt (僅當前輪次注入 RAG 檢索參考資料)
+    if mode == "rag" and retrieved_chunks:
+        context_text = "\n\n---\n\n".join(retrieved_chunks)
+        current_user_prompt = f"【參考資料】\n{context_text}\n\n【使用者問題】\n{user_query}"
+    else:
+        current_user_prompt = user_query
+
+    api_messages.append({"role": "user", "content": current_user_prompt})
+
+    model_name, api_base, api_key = _get_model_config()
+
     try:
         response = completion(
             model=model_name,
             api_base=api_base,
             api_key=api_key,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": final_user_prompt}
-            ],
-            temperature=0.2
+            messages=api_messages,
+            temperature=0.2 if mode == "rag" else 0.7
         )
         return response.choices[0].message.content
     except Exception as e:

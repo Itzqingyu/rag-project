@@ -14,8 +14,21 @@ if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
 from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.document_processing.llm_service import generate_answer, extract_structured_meeting_data
-from rag_project.database import get_doc_by_id, get_doc_by_path
+from rag_project.document_processing.llm_service import (
+    extract_structured_meeting_data,
+    chat_with_context,
+)
+from rag_project.database import (
+    get_doc_by_id,
+    get_doc_by_path,
+    create_session,
+    get_session,
+    list_sessions,
+    update_session_title,
+    delete_session,
+    add_chat_message,
+    get_chat_messages,
+)
 from rag_project.activity_services.activity import (
     create_activity,
     get_activity,
@@ -69,12 +82,13 @@ def print_main_menu():
     print("  4. 搜尋測試 (Search VectorStore)")
     print("  5. AI 生成回答測試 (LLM RAG QA)")
     print("  6. AI 結構化會議解析與寫入 (AI Extract & Commit)")
+    print("  7. 對話會話與上下文記憶 (Chat Sessions & Multi-turn)")
     print("-" * 60)
     print(" [ 輕量化業務功能管理 ]")
-    print("  7. 會議管理 (Meetings)")
-    print("  8. 待辦事項 (Tasks)")
-    print("  9. 活動管理與 Activity 工作區 (Activities)")
-    print("  10. 決策/流程/突發事件 (Decisions, Schedules, Incidents)")
+    print("  8. 會議管理 (Meetings)")
+    print("  9. 待辦事項 (Tasks)")
+    print("  10. 活動管理 (Activities)")
+    print("  11. 決策/流程/突發事件 (Decisions, Schedules, Incidents)")
     print("-" * 60)
     print("  0. 離開 (Exit)")
     print("=" * 60)
@@ -98,7 +112,7 @@ def handle_list_docs():
 
 
 def handle_upload_doc():
-    file_path = input("\n[?] 請輸入要上傳的 Markdown 檔案絕對路徑 (提示: 可用 tests/test_data 內的檔案):\n> ").strip().strip('\"\'')
+    file_path = input("\n[?] 請輸入要上傳的檔案絕對路徑 (支援 MD, TXT, PDF, DOCX，如 tests/test_data/ubuntu.pdf):\n> ").strip().strip('\"\'')
     if not file_path:
         return
         
@@ -166,7 +180,11 @@ def handle_generate_answer():
             
         print(f"[+] 找到 {len(docs)} 筆相關文獻，正在呼叫 LLM 生成回答...")
         retrieved_chunks = [doc.page_content for doc in docs]
-        answer = generate_answer(query, retrieved_chunks)
+        answer = chat_with_context(
+            user_query=query,
+            mode="rag",
+            retrieved_chunks=retrieved_chunks
+        )
         
         print("\n" + "="*45)
         print("🤖 AI 回答：")
@@ -1044,10 +1062,160 @@ def handle_extra_menu(activity_id: Optional[int] = None):
         handle_incident_menu(activity_id)
 
 
+def handle_chat_session_menu():
+    while True:
+        print("\n" + "-" * 50)
+        print("       對話會話 (Chat Session) 與記憶管理選單")
+        print("-" * 50)
+        print("  1. 列出所有 Sessions (List Sessions)")
+        print("  2. 建立新 Session (Create Session)")
+        print("  3. 進入 Session 互動對話 (Chat / RAG Mode Switch)")
+        print("  4. 查看 Session 歷史對話 (View Message History)")
+        print("  5. 修改 Session 標題 (Rename Session)")
+        print("  6. 刪除 Session (Delete Session)")
+        print("  0. 返回主選單 (Back)")
+        print("-" * 50)
+        sub_choice = input("[?] 請選擇 Session 操作 (0-6): ").strip()
+
+        if sub_choice == '1':
+            sessions = list_sessions()
+            if not sessions:
+                print("\n[INFO] 目前尚無任何對話會話。")
+            else:
+                print("\n--- 對話會話清單 ---")
+                for s in sessions:
+                    print(f"ID: {s['id']} | 標題: {s['title']} | 更新時間: {s['updated_at']}")
+        elif sub_choice == '2':
+            title = input("\n[?] 請輸入對話會話標題 (留空預設為 '新對話'):\n> ").strip()
+            new_s = create_session(title=title if title else None)
+            print(f"\n[OK] 成功建立會話 ID: {new_s['id']} | 標題: {new_s['title']}")
+        elif sub_choice == '3':
+            sessions = list_sessions()
+            if not sessions:
+                print("\n[!] 目前尚無任何 Session，請先建立新會話。")
+                continue
+            s_id_str = input("\n[?] 請輸入要進入的 Session ID:\n> ").strip()
+            if not s_id_str.isdigit():
+                print("[!] 請輸入有效的數字 ID。")
+                continue
+            session = get_session(int(s_id_str))
+            if not session:
+                print("[!] 找不到該 Session。")
+                continue
+
+            session_id = session["id"]
+            current_mode = "chat"
+            print(f"\n===== 進入會話 [{session['title']}] (ID: {session_id}) =====")
+            print("提示: 輸入 '/mode chat' 切換為普通聊天模式")
+            print("提示: 輸入 '/mode rag' 切換為 RAG 知識庫問答模式")
+            print("提示: 輸入 '/exit' 退出本次對話互動")
+            print(f"[目前模式]: {current_mode.upper()} (普通對話，基於上下文回答)")
+
+            while True:
+                user_input = input(f"\n[你 ({current_mode.upper()})]: ").strip()
+                if not user_input:
+                    continue
+                if user_input.lower() == "/exit":
+                    print("[INFO] 已結束對話。")
+                    break
+                if user_input.lower() == "/mode chat":
+                    current_mode = "chat"
+                    print("[切換模式] 已切換為普通聊天模式 (CHAT MODE) - 純上下文記憶，無 RAG 預處理")
+                    continue
+                if user_input.lower() == "/mode rag":
+                    current_mode = "rag"
+                    print("[切換模式] 已切換為知識庫模式 (RAG MODE) - 動態檢索最新片段並總結")
+                    continue
+
+                # 取得歷史上下文
+                history_records = get_chat_messages(session_id)
+                retrieved_chunks_texts = []
+                retrieved_chunks_meta = []
+
+                if current_mode == "rag":
+                    print("[檢索中] 正在檢索相關文件切片...")
+                    docs = search(user_input, top_k=3)
+                    retrieved_chunks_texts = [doc.page_content for doc in docs]
+                    retrieved_chunks_meta = [
+                        {"content": doc.page_content, "metadata": doc.metadata} for doc in docs
+                    ]
+                    print(f"[檢索完成] 召回 {len(docs)} 個相關切片片段。")
+
+                print("[AI 思考中] 生成回答...")
+                assistant_reply = chat_with_context(
+                    user_query=user_input,
+                    history_messages=history_records,
+                    mode=current_mode,
+                    retrieved_chunks=retrieved_chunks_texts if current_mode == "rag" else None
+                )
+
+                # 寫入歷史
+                add_chat_message(
+                    session_id=session_id,
+                    role="user",
+                    content=user_input,
+                    mode=current_mode,
+                    retrieved_chunks=None
+                )
+                add_chat_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=assistant_reply,
+                    mode=current_mode,
+                    retrieved_chunks=retrieved_chunks_meta if current_mode == "rag" else None
+                )
+
+                # 若標題為預設則自動更新標題
+                current_sess = get_session(session_id)
+                if current_sess and current_sess.get("title") == "新對話" and len(history_records) == 0:
+                    auto_t = user_input[:20].replace("\n", " ")
+                    update_session_title(session_id, auto_t)
+
+                print(f"\n[AI 助手]:\n{assistant_reply}")
+        elif sub_choice == '4':
+            s_id_str = input("\n[?] 請輸入要查看的 Session ID:\n> ").strip()
+            if not s_id_str.isdigit():
+                print("[!] 請輸入有效的數字 ID。")
+                continue
+            messages = get_chat_messages(int(s_id_str))
+            if not messages:
+                print("\n[INFO] 該 Session 尚無任何對話訊息。")
+            else:
+                print(f"\n--- Session {s_id_str} 完整對話歷史 (共 {len(messages)} 則) ---")
+                for m in messages:
+                    role_str = "使用者" if m["role"] == "user" else "AI 助手"
+                    mode_tag = f"[{m['mode'].upper()}]"
+                    print(f"[{m['created_at']}] {mode_tag} {role_str}:")
+                    print(f"  {m['content']}")
+                    if m.get("retrieved_chunks"):
+                        print(f"  (附帶檢索切片: {len(m['retrieved_chunks'])} 筆)")
+                    print("-" * 40)
+        elif sub_choice == '5':
+            s_id_str = input("\n[?] 請輸入要修改的 Session ID:\n> ").strip()
+            if not s_id_str.isdigit():
+                print("[!] 請輸入有效的數字 ID。")
+                continue
+            new_title = input("[?] 請輸入新的標題:\n> ").strip()
+            if new_title:
+                updated = update_session_title(int(s_id_str), new_title)
+                print(f"[{'OK' if updated else 'FAIL'}] 標題更新{'成功' if updated else '失敗'}")
+        elif sub_choice == '6':
+            s_id_str = input("\n[?] 請輸入要刪除的 Session ID:\n> ").strip()
+            if not s_id_str.isdigit():
+                print("[!] 請輸入有效的數字 ID。")
+                continue
+            confirm = input(f"確認要永久刪除 Session {s_id_str} 及其所有對話歷史嗎？(y/N): ").strip().lower()
+            if confirm == 'y':
+                deleted = delete_session(int(s_id_str))
+                print(f"[{'OK' if deleted else 'FAIL'}] 刪除會話{'成功' if deleted else '失敗'}")
+        elif sub_choice == '0':
+            break
+
+
 def main():
     while True:
         print_main_menu()
-        choice = input("[?] 請選擇操作 (0-10): ").strip()
+        choice = input("[?] 請選擇操作 (0-11): ").strip()
         
         if choice == '1':
             handle_list_docs()
@@ -1062,12 +1230,14 @@ def main():
         elif choice == '6':
             handle_ai_extract_and_commit()
         elif choice == '7':
-            handle_meeting_menu()
+            handle_chat_session_menu()
         elif choice == '8':
-            handle_task_menu()
+            handle_meeting_menu()
         elif choice == '9':
-            handle_activity_menu()
+            handle_task_menu()
         elif choice == '10':
+            handle_activity_menu()
+        elif choice == '11':
             handle_extra_menu()
         elif choice == '0' or choice.lower() == 'q':
             print("\n[INFO] 退出測試系統。")
@@ -1078,3 +1248,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

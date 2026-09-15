@@ -7,9 +7,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from rag_project.document_processing.converter import convert_to_markdown
-from rag_project.database import get_doc_by_id, get_doc_by_path, get_all_docs
+from rag_project.database import (
+    get_doc_by_id,
+    get_doc_by_path,
+    get_all_docs,
+    create_session,
+    get_session,
+    list_sessions,
+    update_session_title,
+    delete_session,
+    add_chat_message,
+    get_chat_messages,
+)
 from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.document_processing.llm_service import generate_answer, extract_structured_meeting_data
+from rag_project.document_processing.llm_service import (
+    extract_structured_meeting_data,
+    chat_with_context,
+)
 from rag_project.activity_services.activity import (
     create_activity,
     get_activity,
@@ -88,6 +102,18 @@ class DocumentChunk(BaseModel):
 class QueryResponse(BaseModel):
     results: List[DocumentChunk]
     answer: Optional[str] = None
+
+# Session & Chat 模式模型
+class SessionCreateRequest(BaseModel):
+    title: Optional[str] = None
+
+class SessionUpdateRequest(BaseModel):
+    title: str
+
+class ChatMessageSendRequest(BaseModel):
+    content: str
+    mode: str = Field(default="chat", description="'chat' (普通上下文對話) 或 'rag' (RAG 知識庫檢索對話)")
+    top_k: int = Field(default=5, ge=1, le=20)
 
 # AI 結構化萃取與 Preview-Commit 流程模型
 class ExtractSummaryRequest(BaseModel):
@@ -296,11 +322,141 @@ def query_docs(req: QueryRequest):
         answer = None
         if req.generate_answer and docs:
             chunks = [doc.page_content for doc in docs]
-            answer = generate_answer(req.query, chunks)
+            answer = chat_with_context(
+                user_query=req.query,
+                mode="rag",
+                retrieved_chunks=chunks
+            )
 
         return QueryResponse(results=results, answer=answer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# 對話會話與聊天 (Chat & Session) 端點
+# ==========================================
+
+@app.post("/sessions", tags=["Chat & Session"])
+def create_new_session(req: Optional[SessionCreateRequest] = None):
+    """建立新的對話會話 (Session)。"""
+    title = req.title if req else None
+    new_session = create_session(title=title)
+    return {"status": "success", "session": new_session}
+
+
+@app.get("/sessions", tags=["Chat & Session"])
+def get_all_sessions():
+    """列出所有對話會話清單 (依最新更新時間排序)。"""
+    return list_sessions()
+
+
+@app.get("/sessions/{session_id}", tags=["Chat & Session"])
+def get_session_detail(session_id: int):
+    """取得單一對話會話資訊及其所有歷史訊息。"""
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"找不到 ID 為 {session_id} 的對話會話")
+    messages = get_chat_messages(session_id)
+    return {
+        "status": "success",
+        "session": session,
+        "messages": messages
+    }
+
+
+@app.patch("/sessions/{session_id}", tags=["Chat & Session"])
+def update_session(session_id: int, req: SessionUpdateRequest):
+    """更新指定對話會話的標題。"""
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"找不到 ID 為 {session_id} 的對話會話")
+    success = update_session_title(session_id, req.title)
+    if not success:
+        raise HTTPException(status_code=400, detail="更新標題失敗")
+    return {"status": "success", "message": "標題已更新", "title": req.title}
+
+
+@app.delete("/sessions/{session_id}", tags=["Chat & Session"])
+def remove_session(session_id: int):
+    """刪除指定對話會話及其所有歷史紀錄 (CASCADE)。"""
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"找不到 ID 為 {session_id} 的對話會話")
+    delete_session(session_id)
+    return {"status": "success", "message": f"已成功刪除會話 {session_id}"}
+
+
+@app.post("/sessions/{session_id}/messages", tags=["Chat & Session"])
+def send_chat_message(session_id: int, req: ChatMessageSendRequest):
+    """在指定 Session 中發送訊息並獲得 AI 回答。
+    
+    支援模式 (mode)：
+    - 'chat': 普通對話模式，直接透過歷史上下文與使用者問題回答，不執行 RAG 預處理。
+    - 'rag': 知識庫檢索模式，動態檢索相關片段並結合上下文回答，杜絕記憶污染。
+    """
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"找不到 ID 為 {session_id} 的對話會話")
+    
+    if req.mode not in ("chat", "rag"):
+        raise HTTPException(status_code=400, detail="mode 必須為 'chat' 或 'rag'")
+
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="訊息內容不能為空")
+
+    # 1. 取得當前歷史對話紀錄 (用於送入 LLM 上下文)
+    history_records = get_chat_messages(session_id)
+
+    # 2. 若為 RAG 模式，執行檢索
+    retrieved_chunks_texts = []
+    retrieved_chunks_meta = []
+    if req.mode == "rag":
+        docs = search(req.content, top_k=req.top_k)
+        retrieved_chunks_texts = [doc.page_content for doc in docs]
+        retrieved_chunks_meta = [
+            {"content": doc.page_content, "metadata": doc.metadata} for doc in docs
+        ]
+
+    # 3. 呼叫 LLM (具 Clean Context Isolation，傳入純歷史對話)
+    assistant_reply = chat_with_context(
+        user_query=req.content,
+        history_messages=history_records,
+        mode=req.mode,
+        retrieved_chunks=retrieved_chunks_texts if req.mode == "rag" else None
+    )
+
+    # 4. 寫入使用者訊息與助理回答至 SQLite
+    user_msg = add_chat_message(
+        session_id=session_id,
+        role="user",
+        content=req.content,
+        mode=req.mode,
+        retrieved_chunks=None
+    )
+    
+    assistant_msg = add_chat_message(
+        session_id=session_id,
+        role="assistant",
+        content=assistant_reply,
+        mode=req.mode,
+        retrieved_chunks=retrieved_chunks_meta if req.mode == "rag" else None
+    )
+
+    # 5. 若此 Session 為第一則訊息且標題為預設 "新對話"，自動以問題前 20 字更新標題
+    if session.get("title") == "新對話" and len(history_records) == 0:
+        auto_title = req.content.strip().replace("\n", " ")[:20]
+        if auto_title:
+            update_session_title(session_id, auto_title)
+
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "mode": req.mode,
+        "user_message": user_msg,
+        "assistant_message": assistant_msg,
+        "retrieved_chunks": retrieved_chunks_meta if req.mode == "rag" else []
+    }
 
 
 # ==========================================
