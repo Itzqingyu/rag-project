@@ -92,5 +92,6 @@
 - **Clean Context Isolation (防記憶污染架構)**: 徹底解決同一 Session 中多次 RAG 或模式切換時，舊檢索資料干擾後續問答與 Token 浪費的問題。
 - **普通對話與 RAG 模式切換**: 擴充 `llm_service.chat_with_context`，支援動態加載 `chat_general.md` 與 `rag_qa.md`，並開放前端任意切換。
 - **FastAPI 端點擴展**: 新增 `/sessions` 與 `/sessions/{id}/messages` 完整 RESTful 路由。
+- **修復非 Markdown 檔案 (PDF/DOCX) 讀取解碼 Bug**: 修復 `rag_engine.add_document` 在執行 `convert_to_markdown` 之前誤以 utf-8 讀取二進位 PDF/DOCX 導致報錯的問題，現在可直接支援傳入 PDF/DOCX/TXT/MD 進行自動轉碼、切片與向量化。
 - **單元測試完整化**: 新增 `tests/test_chat_session.py` 單元測試覆蓋率 100%，並在 `tests/test_main.py` 整合 CLI 互動式對話測試選單。
 

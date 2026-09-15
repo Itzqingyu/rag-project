@@ -111,7 +111,7 @@ def handle_list_docs():
 
 
 def handle_upload_doc():
-    file_path = input("\n[?] 請輸入要上傳的 Markdown 檔案絕對路徑 (提示: 可用 tests/test_data 內的檔案):\n> ").strip().strip('\"\'')
+    file_path = input("\n[?] 請輸入要上傳的檔案絕對路徑 (支援 MD, TXT, PDF, DOCX，如 tests/test_data/ubuntu.pdf):\n> ").strip().strip('\"\'')
     if not file_path:
         return
         
