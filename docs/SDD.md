@@ -57,10 +57,11 @@ rag-project/
 │   ├── src/
 │   │   └── rag_project/
 │   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
-│   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema 與 ChromaDB 向量庫)
+│   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema、Sessions/Messages 與 ChromaDB 向量庫)
 │   │       ├── prompts/          # System Prompt Markdown 檔案目錄
 │   │       │   ├── meeting_extraction.md # 會議紀錄 1-shot 結構化抽取 Prompt
-│   │       │   └── rag_qa.md             # RAG 通用問答 Prompt
+│   │       │   ├── rag_qa.md             # RAG 通用問答 Prompt
+│   │       │   └── chat_general.md       # 普通對話模式 AI 助手 Prompt
 │   │       ├── activity_services/# 活動與事項管理微服務套件
 │   │       │   ├── activity_common.py # 共用驗證與時間工具
 │   │       │   ├── activity.py       # Activity 活動管理 CRUD
@@ -71,12 +72,13 @@ rag-project/
 │   │       └── document_processing/# 文件轉碼、RAG 檢索與 AI 服務套件
 │   │           ├── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
 │   │           ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
-│   │           └── llm_service.py    # LLM 統一呼叫與 Prompt 載入介面 (litellm 1-shot 結構化抽取)
+│   │           └── llm_service.py    # LLM 統一呼叫與多輪對話介面 (支援 Clean Context Isolation 與模式切換)
 │   ├── tests/                    # 測試指令碼與單元測試
-│   │   ├── test_main.py          # 整合 CLI 互動測試工具
-│   │   └── test_converter.py     # 多格式文件轉換與複製單元測試
+│   │   ├── test_main.py          # 整合 CLI 互動測試工具 (含 Session 多輪對話與模式切換測試)
+│   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
+│   │   └── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
-│   │   ├── rag_database.sqlite   # SQLite 資料庫
+│   │   ├── rag_database.sqlite   # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
 │   │   └── markdown/             # 託管之 Markdown 格式文本庫
 │   └── pyproject.toml            # 依賴套件配置
@@ -93,17 +95,19 @@ rag-project/
 
 ### AI 結構化提取與預覽寫入 (Preview-Commit 流程)
 1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
-2. `llm_client.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
+2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
 4. 前端展示預覽結果供使用者校對修改
 5. 使用者確認後發起 `/commit_summary` 請求，原子化寫入 SQLite `meetings`, `decisions`, `tasks` 表
 
-### 對話互動 (RAG)
-1. 使用者輸入問題
-2. ChromaDB 檢索相關 Markdown 切片並透過 Jina Reranker 重排序
-3. `llm_client.py` 載入 `prompts/rag_qa.md` 構建 Prompt
-4. `litellm` 呼叫 LLM API 生成回答
-5. 顯示回應並儲存對話歷史到 SQLite
+### 對話互動與會話記憶 (Session & Multi-turn Chat)
+1. 使用者可透過 `/sessions` 端點建立或管理對話會話。
+2. 發送訊息至 `/sessions/{id}/messages`，可自由指定當輪模式：
+   - **普通聊天模式 (`mode='chat'`)**：無需經過 RAG 預處理，LLM 基於歷史對話脈絡與使用者問題直接自然回答。
+   - **知識庫檢索模式 (`mode='rag'`)**：ChromaDB 檢索相關切片並由 Reranker 重排序，將文本片段注入當前 Prompt 提供總結回答。
+3. **乾淨上下文隔離 (Clean Context Isolation)**：
+   - SQLite `chat_messages` 僅保存純粹的「使用者問題」與「AI 回答」，當輪檢索到的參考切片以 JSON 儲存於 `retrieved_chunks` 欄位供前端回溯。
+   - 歷史對話傳入 LLM 時，不疊加過往龐大的檢索內容，徹底杜絕同一個 Session 中多次 RAG 或切換模式造成的記憶污染。
 
 ## 5. 開發步驟
 
