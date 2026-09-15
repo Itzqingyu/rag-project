@@ -43,38 +43,6 @@ def _get_model_config():
     return model_name, api_base, api_key
 
 
-def generate_answer(user_query: str, retrieved_chunks: List[str], system_prompt: Optional[str] = None) -> str:
-    """負責接收問題與 RAG 召回的文本片段，結合 Prompt 範本呼叫 LLM 進行問答生成。"""
-    if system_prompt is None:
-        try:
-            system_prompt = load_prompt_template("rag_qa")
-        except Exception:
-            system_prompt = (
-                "你是一個專業的 AI 助理。請根據使用者提供的【參考資料】來回答問題。"
-                "如果參考資料中沒有答案，請直接說「我不知道」，不要自行編造。"
-            )
-
-    context_text = "\n\n---\n\n".join(retrieved_chunks)
-    final_user_prompt = f"【參考資料】\n{context_text}\n\n【使用者問題】\n{user_query}"
-
-    model_name, api_base, api_key = _get_model_config()
-
-    try:
-        response = completion(
-            model=model_name,
-            api_base=api_base,
-            api_key=api_key,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": final_user_prompt}
-            ],
-            temperature=0.2
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"❌ LLM 呼叫失敗: {str(e)}"
-
-
 def chat_with_context(
     user_query: str,
     history_messages: Optional[List[Dict[str, Any]]] = None,

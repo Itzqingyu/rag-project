@@ -37,8 +37,7 @@
   - **get_embeddings / get_reranker**: 採用 Lazy Singletons 載入 Jina AI 模型 (`jina-embeddings-v2-base-zh` 與 `jina-reranker-v2-base-multilingual`)。
   - **add_document / search / delete_document / list_documents**: 協調文件向量化、ChromaDB 寫入、物理 `.md` 檔案清理與 SQLite 紀錄。
 - `document_processing/llm_service.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
-  - 提供 `generate_answer` 函數處理 RAG 問答。
-  - 提供 `chat_with_context` 函數，支援多輪對話上下文記憶、Clean Context Isolation 隔離過往檢索資料、以及普通對話與 RAG 模式動態切換。
+  - 提供 `chat_with_context` 函數處理對話與 RAG 問答生成，支援多輪對話上下文記憶、Clean Context Isolation 隔離過往檢索資料、以及普通對話與 RAG 模式動態切換。
   - 提供 `extract_structured_meeting_data` 函數，實現單檔 1-shot 全文 Prompt 結構化提取。
   - 透過 `.env` 中的 `ACTIVE_MODEL` 變數支援切換雲端模型 (OpenAI, Gemini, DeepSeek) 及本地 llama.cpp。
 
@@ -78,7 +77,7 @@
    - 刪除 Activity 時若存有子紀錄會觸發 `ON DELETE RESTRICT` 保護歷史資料。
 
 4. **回答生成流程 (LLM Generation)**:
-   - 在 `/query` 端點若帶入 `generate_answer=True`，FastAPI 會呼叫 `llm_service.generate_answer`，將 RAG 檢索出的片段組合成 Prompt 丟給 `litellm` 產生回答。
+   - 在 `/query` 端點若帶入 `generate_answer=True`，FastAPI 會呼叫 `llm_service.chat_with_context(..., mode='rag')`，將 RAG 檢索出的片段組合成 Prompt 丟給 `litellm` 產生回答。
 
 5. **對話會話與模式切換流程 (Chat Sessions & Context Isolation)**:
    - 使用者透過 `/sessions` 建立對話串，每次對話送出至 `/sessions/{id}/messages` 並可指定 `mode` ('chat' 或 'rag')。

@@ -14,7 +14,6 @@ if SRC_DIR not in sys.path:
 
 from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
 from rag_project.document_processing.llm_service import (
-    generate_answer,
     extract_structured_meeting_data,
     chat_with_context,
 )
@@ -180,7 +179,11 @@ def handle_generate_answer():
             
         print(f"[+] 找到 {len(docs)} 筆相關文獻，正在呼叫 LLM 生成回答...")
         retrieved_chunks = [doc.page_content for doc in docs]
-        answer = generate_answer(query, retrieved_chunks)
+        answer = chat_with_context(
+            user_query=query,
+            mode="rag",
+            retrieved_chunks=retrieved_chunks
+        )
         
         print("\n" + "="*45)
         print("🤖 AI 回答：")

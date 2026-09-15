@@ -21,7 +21,6 @@ from rag_project.database import (
 )
 from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
 from rag_project.document_processing.llm_service import (
-    generate_answer,
     extract_structured_meeting_data,
     chat_with_context,
 )
@@ -323,7 +322,11 @@ def query_docs(req: QueryRequest):
         answer = None
         if req.generate_answer and docs:
             chunks = [doc.page_content for doc in docs]
-            answer = generate_answer(req.query, chunks)
+            answer = chat_with_context(
+                user_query=req.query,
+                mode="rag",
+                retrieved_chunks=chunks
+            )
 
         return QueryResponse(results=results, answer=answer)
     except Exception as e:
