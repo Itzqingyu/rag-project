@@ -99,6 +99,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             CREATE TABLE IF NOT EXISTS meetings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 activity_id INTEGER NOT NULL,
+                source_document_id INTEGER,
                 name TEXT NOT NULL,
                 date TEXT DEFAULT '',
                 start_time TEXT DEFAULT '',
@@ -108,9 +109,24 @@ def init_db(db_path: Optional[str] = None) -> None:
                 content TEXT DEFAULT '',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(activity_id) REFERENCES activities(id)
-                    ON DELETE RESTRICT
+                    ON DELETE RESTRICT,
+                FOREIGN KEY(source_document_id) REFERENCES documents(id)
+                    ON DELETE SET NULL
             )
         ''')
+
+        # 舊版 SQLite 不能直接重建整張表；nullable FK 可安全以 ADD COLUMN
+        # 補入，既有 Meeting 會自然維持 NULL，不影響舊資料。
+        cursor.execute("PRAGMA table_info(meetings)")
+        existing_meeting_cols = [row[1] for row in cursor.fetchall()]
+        if "source_document_id" not in existing_meeting_cols:
+            cursor.execute(
+                """
+                ALTER TABLE meetings
+                ADD COLUMN source_document_id INTEGER
+                    REFERENCES documents(id) ON DELETE SET NULL
+                """
+            )
         # 1.4 待辦事項表 (SET NULL meeting_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tasks (
@@ -218,6 +234,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         # 1.10 為外鍵與查詢欄位自動建立索引以最佳化查詢效能
         indices = [
             ("idx_meetings_activity_id", "meetings(activity_id)"),
+            ("idx_meetings_source_document_id", "meetings(source_document_id)"),
             ("idx_tasks_activity_id", "tasks(activity_id)"),
             ("idx_tasks_meeting_id", "tasks(meeting_id)"),
             ("idx_decisions_activity_id", "decisions(activity_id)"),

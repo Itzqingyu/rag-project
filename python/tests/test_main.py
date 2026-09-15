@@ -1,6 +1,7 @@
+import json
 import os
 import sys
-from typing import List
+from typing import Any, List, Optional
 from dotenv import load_dotenv
 
 # 讀取 .env 檔案中的環境變數
@@ -225,14 +226,16 @@ def handle_ai_extract_and_commit():
     print(f"\n[*] 正在呼叫 LLM 進行全文本 1-shot 結構化萃取 ({record['filename']})...")
     try:
         extracted = extract_structured_meeting_data(markdown_content)
-        import json
         print("\n" + "=" * 55)
-        print("📋 【階段 1：預覽 JSON 數據 (Preview Data)】")
+        print("【階段 1：預覽 JSON 數據 (Preview Data)】")
         print("=" * 55)
         print(json.dumps(extracted, ensure_ascii=False, indent=2))
         print("=" * 55)
         
-        ans = input("\n[?] 是否將以上預覽資料原子化寫入 SQLite 資料庫 (meetings, decisions, tasks)？(y/n): ").strip().lower()
+        ans = input(
+            "\n[?] 是否將以上預覽資料逐筆寫入 SQLite？"
+            "（若中途失敗，先前成功的資料會保留）(y/n): "
+        ).strip().lower()
         if ans == 'y':
             act_id = select_or_create_activity_id()
             meeting_data = extracted.get("meeting", {})
@@ -244,7 +247,8 @@ def handle_ai_extract_and_commit():
                 location=meeting_data.get("location", ""),
                 participants=meeting_data.get("participants", ""),
                 content=meeting_data.get("content", ""),
-                date=meeting_data.get("date", "")
+                date=meeting_data.get("date", ""),
+                source_document_id=record["id"],
             )
             m_id = m_res["id"]
             
@@ -276,7 +280,7 @@ def handle_ai_extract_and_commit():
                 )
                 t_count += 1
                 
-            print(f"\n[+] 【階段 2：寫入成功 (Commit Success)】！")
+            print(f"\n[+] 【階段 2：逐筆寫入完成 (Commit Complete)】！")
             print(f"    新增會議 ID: {m_id}")
             print(f"    新增決策數: {d_count} 筆")
             print(f"    新增待辦數: {t_count} 筆")
@@ -300,43 +304,170 @@ def get_activity_label(activity_id: int) -> str:
 def print_activities_table() -> List[dict]:
     activities = list_activities()
     print("\n" + "-" * 55)
-    print("      📍 可用活動列表 (Activity Table)")
+    print("      可用活動列表 (Activity Table)")
     print("-" * 55)
     if not activities:
         print("  (目前資料庫無任何活動紀錄)")
     else:
-        for act in activities:
-            print(f"  [ ID: {act['id']} ] ➡️  {act['name']} ({act['year']}) [{act['status']}] 地點: {act['venue'] or '未填'}")
+        for number, act in enumerate(activities, 1):
+            print(
+                f"  {number}. {act['name']} ({act['year']}) "
+                f"[{act['status']}] 地點: {act['venue'] or '未填'} "
+                f"(ID: {act['id']})"
+            )
     print("-" * 55)
     return activities
 
 
+def _create_activity_from_cli() -> int:
+    """建立 Activity 並回傳 ID，供所有子模組共用目前活動脈絡。"""
+    name = input("輸入活動名稱: ").strip()
+    year_str = input("輸入活動年份 (預設 2026): ").strip() or "2026"
+    status = input("輸入活動狀態 (預設 '準備中'): ").strip() or "準備中"
+    created = create_activity(name=name, year=int(year_str), status=status)
+    print(f"[成功] 建立活動: {created['name']} (ID: {created['id']})")
+    return created["id"]
+
+
 def select_or_create_activity_id() -> int:
+    """以畫面編號選擇 Activity；沒有 Activity 時明確先建立一筆。"""
     activities = print_activities_table()
     if not activities:
-        print("\n[提示] 資料庫中尚無活動，請先建立一個活動：")
-        name = input("輸入活動名稱: ").strip()
-        year_str = input("輸入活動年份 (預設 2026): ").strip() or "2026"
-        status = input("輸入活動狀態 (預設 '準備中'): ").strip() or "準備中"
-        created = create_activity(name=name, year=int(year_str), status=status)
-        print(f"[成功] 自動建立活動: {created['name']} (ID: {created['id']})")
-        return created['id']
-    
-    act_str = input("輸入活動 ID (activity_id): ").strip()
-    return int(act_str)
+        print("\n[提示] 目前沒有 Activity，必須先建立後才能新增子資料。")
+        return _create_activity_from_cli()
+
+    selected = input("請輸入活動前方編號: ").strip()
+    if not selected.isdigit() or not 1 <= int(selected) <= len(activities):
+        raise ValueError("活動選項不存在")
+    return activities[int(selected) - 1]["id"]
 
 
-def handle_meeting_menu():
-    print("\n--- 會議管理 (Meetings) ---")
+_KEEP = object()
+
+
+def _choose_fixed_value(
+    label: str,
+    values: List[str],
+    *,
+    default: Optional[str] = None,
+    editing: bool = False,
+) -> Optional[str]:
+    """將既有 enum 以編號呈現；修改時 Enter 代表保留原值。"""
+    print(f"{label}:")
+    for number, value in enumerate(values, 1):
+        print(f"  {number}. {value}")
+    hint = "按 Enter 保留" if editing else f"預設 {default or values[0]}"
+    selected = input(f"請選擇 ({hint}): ").strip()
+    if not selected:
+        return None if editing else (default or values[0])
+    if not selected.isdigit() or not 1 <= int(selected) <= len(values):
+        raise ValueError(f"{label} 選項不存在")
+    return values[int(selected) - 1]
+
+
+def _choose_record(
+    records: List[dict],
+    entity_name: str,
+    summary_field: str,
+) -> Optional[dict]:
+    """只從目前 Activity 的資料清單選擇，避免用全域 ID 誤操作。"""
+    if not records:
+        print(f"[提示] 此 Activity 尚無 {entity_name}。")
+        return None
+    for number, record in enumerate(records, 1):
+        print(
+            f"  {number}. {record.get(summary_field, '')} "
+            f"(ID: {record['id']})"
+        )
+    selected = input(f"請輸入 {entity_name} 前方編號: ").strip()
+    if not selected.isdigit() or not 1 <= int(selected) <= len(records):
+        raise ValueError(f"{entity_name} 選項不存在")
+    return records[int(selected) - 1]
+
+
+def _choose_relation_id(
+    records: List[dict],
+    entity_name: str,
+    summary_field: str,
+    *,
+    editing: bool = False,
+) -> Any:
+    """用清單設定可選外鍵；修改時 /clear 清除、Enter 保留。"""
+    if records:
+        for number, record in enumerate(records, 1):
+            print(
+                f"  {number}. {record.get(summary_field, '')} "
+                f"(ID: {record['id']})"
+            )
+    else:
+        print(f"  (此 Activity 尚無可關聯的 {entity_name})")
+    hint = "Enter 保留，/clear 清除" if editing else "Enter 不關聯"
+    selected = input(f"選擇關聯 {entity_name} ({hint}): ").strip()
+    if editing and not selected:
+        return _KEEP
+    if selected == "/clear" or (not editing and not selected):
+        return None
+    if not selected.isdigit() or not 1 <= int(selected) <= len(records):
+        raise ValueError(f"{entity_name} 選項不存在")
+    return records[int(selected) - 1]["id"]
+
+
+def _text_change(label: str, *, clear_to: Any = _KEEP) -> Any:
+    """更新欄位時 Enter 保留；允許清除的欄位以 /clear 明確處理。"""
+    hint = "Enter 保留"
+    if clear_to is not _KEEP:
+        hint += "，/clear 清除"
+    value = input(f"{label} ({hint}): ").strip()
+    if not value:
+        return _KEEP
+    if value == "/clear":
+        if clear_to is _KEEP:
+            raise ValueError(f"{label} 為必填欄位，不能清除")
+        return clear_to
+    return value
+
+
+def _collect_changes(specs: List[tuple]) -> dict:
+    changes = {}
+    for field_name, label, clear_to in specs:
+        value = _text_change(label, clear_to=clear_to)
+        if value is not _KEEP:
+            changes[field_name] = value
+    return changes
+
+
+def _normalize_options(raw: str) -> str:
+    """接受 JSON array 或逗號分隔輸入，統一交給 Decision service。"""
+    if raw.lstrip().startswith("["):
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise ValueError("options JSON 必須是 array")
+        return json.dumps(parsed, ensure_ascii=False)
+    return json.dumps(
+        [item.strip() for item in raw.split(",") if item.strip()],
+        ensure_ascii=False,
+    )
+
+
+def handle_meeting_menu(activity_id: Optional[int] = None):
+    try:
+        activity_id = activity_id or select_or_create_activity_id()
+    except Exception as exc:
+        print(f"\n[錯誤] {exc}")
+        return
+    print(f"\n--- 會議管理 | {get_activity_label(activity_id)} ---")
     print("1. 新增會議")
     print("2. 查看會議列表")
     print("3. 修改會議")
     print("4. 刪除會議")
-    choice = input("選擇操作 (1-4): ").strip()
+    print("0. 回上一層")
+    choice = input("選擇操作 (0-4): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
         try:
-            act_id = select_or_create_activity_id()
             name = input("會議名稱: ").strip()
             start_time = input("開始時間 (可跳過): ").strip()
             end_time = input("結束時間 (可跳過): ").strip()
@@ -344,7 +475,7 @@ def handle_meeting_menu():
             participants = input("參與人員 (可跳過): ").strip()
             content = input("會議內容: ").strip()
             res = add_meeting(
-                activity_id=act_id,
+                activity_id=activity_id,
                 name=name,
                 start_time=start_time,
                 end_time=end_time,
@@ -357,69 +488,145 @@ def handle_meeting_menu():
             print(f"\n[錯誤] {e}")
 
     elif choice == '2':
-        meetings = get_meetings()
+        meetings = get_meetings(activity_id=activity_id)
         print(f"\n--- 會議列表 (共 {len(meetings)} 筆) ---")
         for m in meetings:
-            print(f"[ID: {m['id']}] 活動ID: {m['activity_id']} | 名稱: {m['name']} | 時間: {m['start_time']}~{m['end_time']}")
+            print(
+                f"[ID: {m['id']}] 名稱: {m['name']} | "
+                f"時間: {m['start_time']}~{m['end_time']} | "
+                f"來源文件: {m['source_document_id'] or '無'}"
+            )
 
     elif choice == '3':
         try:
-            m_id = int(input("會議 ID: ").strip())
-            name = input("新名稱 (按 Enter 跳過): ").strip() or None
-            location = input("新地點 (按 Enter 跳過): ").strip() or None
-            if update_meeting(m_id, name=name, location=location):
+            meeting = _choose_record(
+                get_meetings(activity_id=activity_id), "Meeting", "name"
+            )
+            if not meeting:
+                return
+            changes = _collect_changes([
+                ("name", "新名稱", _KEEP),
+                ("start_time", "新開始時間", ""),
+                ("end_time", "新結束時間", ""),
+                ("location", "新地點", ""),
+                ("participants", "新參與人員", ""),
+                ("content", "新會議內容", ""),
+            ])
+            if not changes:
+                print("\n[提示] 沒有變更任何欄位。")
+            elif update_meeting(meeting["id"], **changes):
                 print("\n[成功] 會議更新成功！")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
     elif choice == '4':
         try:
-            m_id = int(input("刪除會議 ID: ").strip())
-            if delete_meeting(m_id):
+            meeting = _choose_record(
+                get_meetings(activity_id=activity_id), "Meeting", "name"
+            )
+            if meeting and delete_meeting(meeting["id"]):
                 print("\n[成功] 會議已刪除！")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
 
-def handle_task_menu():
-    print("\n--- 待辦事項 (Tasks) ---")
+def handle_task_menu(activity_id: Optional[int] = None):
+    try:
+        activity_id = activity_id or select_or_create_activity_id()
+    except Exception as exc:
+        print(f"\n[錯誤] {exc}")
+        return
+    print(f"\n--- 待辦事項 | {get_activity_label(activity_id)} ---")
     print("1. 新增待辦")
     print("2. 查看待辦列表")
     print("3. 修改待辦")
     print("4. 刪除待辦")
-    choice = input("選擇操作 (1-4): ").strip()
+    print("0. 回上一層")
+    choice = input("選擇操作 (0-4): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
         try:
-            act_id = select_or_create_activity_id()
             content = input("待辦內容: ").strip()
             assignee = input("負責人: ").strip()
             due_date = input("期限: ").strip()
-            priority = input("優先級 (高/中/低): ").strip() or "中"
-            res = add_task(activity_id=act_id, content=content, assignee=assignee, due_date=due_date, priority=priority)
+            priority = _choose_fixed_value(
+                "優先級", ["高", "中", "低"], default="中"
+            )
+            status = _choose_fixed_value(
+                "狀態", ["pending", "completed"], default="pending"
+            )
+            meeting_id = _choose_relation_id(
+                get_meetings(activity_id=activity_id), "Meeting", "name"
+            )
+            res = add_task(
+                activity_id=activity_id,
+                content=content,
+                assignee=assignee,
+                due_date=due_date,
+                priority=priority or "中",
+                status=status or "pending",
+                meeting_id=meeting_id,
+            )
             print(f"\n[成功] 新增待辦成功 ID {res['id']}")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
     elif choice == '2':
-        tasks = get_tasks()
+        tasks = get_tasks(activity_id=activity_id)
         print(f"\n--- 待辦列表 (共 {len(tasks)} 筆) ---")
         for t in tasks:
-            print(f"[ID: {t['id']}] 活動ID: {t['activity_id']} | 狀態: [{t['status']}] | 優先級: [{t['priority']}] | 內容: {t['content']}")
+            print(
+                f"[ID: {t['id']}] 狀態: [{t['status']}] | "
+                f"優先級: [{t['priority']}] | 內容: {t['content']} | "
+                f"Meeting: {t['meeting_id'] or '無'}"
+            )
 
     elif choice == '3':
         try:
-            t_id = int(input("待辦 ID: ").strip())
-            status = input("新狀態 (pending/completed): ").strip() or None
-            if update_task(t_id, status=status):
+            task = _choose_record(
+                get_tasks(activity_id=activity_id), "Task", "content"
+            )
+            if not task:
+                return
+            changes = _collect_changes([
+                ("content", "新待辦內容", _KEEP),
+                ("assignee", "新負責人", ""),
+                ("due_date", "新期限", ""),
+            ])
+            priority = _choose_fixed_value(
+                "新優先級", ["高", "中", "低"], editing=True
+            )
+            status = _choose_fixed_value(
+                "新狀態", ["pending", "completed"], editing=True
+            )
+            meeting_id = _choose_relation_id(
+                get_meetings(activity_id=activity_id),
+                "Meeting",
+                "name",
+                editing=True,
+            )
+            if priority is not None:
+                changes["priority"] = priority
+            if status is not None:
+                changes["status"] = status
+            if meeting_id is not _KEEP:
+                changes["meeting_id"] = meeting_id
+            if not changes:
+                print("\n[提示] 沒有變更任何欄位。")
+            elif update_task(task["id"], **changes):
                 print("\n[成功] 待辦更新成功！")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
     elif choice == '4':
         try:
-            t_id = int(input("刪除待辦 ID: ").strip())
-            if delete_task(t_id):
+            task = _choose_record(
+                get_tasks(activity_id=activity_id), "Task", "content"
+            )
+            if task and delete_task(task["id"]):
                 print("\n[成功] 待辦已刪除！")
         except Exception as e:
             print(f"\n[錯誤] {e}")
@@ -429,77 +636,189 @@ def handle_activity_menu():
     print("\n--- 活動管理 (Activities) ---")
     print("1. 查看所有活動")
     print("2. 新增活動")
-    print("3. 刪除活動")
-    choice = input("選擇操作 (1-3): ").strip()
+    print("3. 修改活動")
+    print("4. 刪除活動")
+    print("5. 選擇 Activity 並管理其子資料")
+    print("0. 回主選單")
+    choice = input("選擇操作 (0-5): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
         print_activities_table()
     elif choice == '2':
         try:
-            name = input("活動名稱: ").strip()
-            year = int(input("年份 (預設 2026): ").strip() or "2026")
-            status = input("狀態 (預設 '準備中'): ").strip() or "準備中"
-            act = create_activity(name=name, year=year, status=status)
-            print(f"\n[成功] 建立活動 ID {act['id']}")
+            _create_activity_from_cli()
         except Exception as e:
             print(f"\n[錯誤] {e}")
     elif choice == '3':
         try:
-            act_id = int(input("刪除活動 ID: ").strip())
-            deleted = delete_activity(act_id)
+            activity = _choose_record(
+                print_activities_table(), "Activity", "name"
+            )
+            if not activity:
+                return
+            changes = _collect_changes([
+                ("name", "新活動名稱", _KEEP),
+                ("status", "新狀態", _KEEP),
+                ("start_date", "新開始日期", None),
+                ("end_date", "新結束日期", None),
+                ("venue", "新地點", None),
+                ("activity_type", "新活動類型", None),
+                ("coordinator", "新總召", None),
+            ])
+            year = input("新年份 (Enter 保留): ").strip()
+            attendees = input("新預計人數 (Enter 保留，/clear 清除): ").strip()
+            budget = input("新預算 (Enter 保留，/clear 清除): ").strip()
+            if year:
+                changes["year"] = int(year)
+            if attendees:
+                changes["expected_attendees"] = (
+                    None if attendees == "/clear" else int(attendees)
+                )
+            if budget:
+                changes["budget"] = None if budget == "/clear" else int(budget)
+            if not changes:
+                print("\n[提示] 沒有變更任何欄位。")
+            else:
+                updated = update_activity(activity["id"], **changes)
+                print(f"\n[成功] 已更新活動 {updated['name']}")
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
+    elif choice == '4':
+        try:
+            activity = _choose_record(
+                print_activities_table(), "Activity", "name"
+            )
+            if not activity:
+                return
+            deleted = delete_activity(activity["id"])
             if deleted:
                 print(f"\n[成功] 已刪除活動 {deleted['name']}")
         except Exception as e:
             print(f"\n[錯誤] {e}")
+    elif choice == '5':
+        try:
+            handle_activity_workspace(select_or_create_activity_id())
+        except Exception as e:
+            print(f"\n[錯誤] {e}")
 
 
-def handle_decision_menu():
-    print("\n--- 決策紀錄管理 (Decisions) ---")
+def handle_activity_workspace(activity_id: int):
+    """固定目前 Activity，連續操作其下五種子資料。"""
+    while True:
+        print(f"\n--- Activity 工作區 | {get_activity_label(activity_id)} ---")
+        print("1. Meeting")
+        print("2. Task")
+        print("3. Decision")
+        print("4. Schedule")
+        print("5. Incident")
+        print("0. 回主選單")
+        choice = input("選擇子模組 (0-5): ").strip()
+        if choice == "1":
+            handle_meeting_menu(activity_id)
+        elif choice == "2":
+            handle_task_menu(activity_id)
+        elif choice == "3":
+            handle_decision_menu(activity_id)
+        elif choice == "4":
+            handle_schedule_menu(activity_id)
+        elif choice == "5":
+            handle_incident_menu(activity_id)
+        elif choice == "0":
+            return
+        else:
+            print("[提示] 無效選項。")
+
+
+def handle_decision_menu(activity_id: Optional[int] = None):
+    try:
+        activity_id = activity_id or select_or_create_activity_id()
+    except Exception as exc:
+        print(f"\n[錯誤] {exc}")
+        return
+    print(f"\n--- 決策紀錄 | {get_activity_label(activity_id)} ---")
     print("1. 查看所有決策")
     print("2. 新增決策")
     print("3. 修改決策")
     print("4. 刪除決策")
-    choice = input("選擇操作 (1-4): ").strip()
+    print("0. 回上一層")
+    choice = input("選擇操作 (0-4): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
-        decisions = list_decisions()
+        decisions = list_decisions(activity_id=activity_id)
         print(f"\n--- 決策列表 (共 {len(decisions)} 筆) ---")
         for d in decisions:
-            print(f"[ID: {d['id']}] 活動ID: {d['activity_id']} | 問題: {d['problem']} | 決策: {d['final_decision']} | 原因: {d['reason']}")
+            print(
+                f"[ID: {d['id']}] 問題: {d['problem']} | "
+                f"決策: {d['final_decision']} | 狀態: {d['confirmation_status']} | "
+                f"Meeting: {d['meeting_id'] or '無'}"
+            )
     elif choice == '2':
         try:
-            act_id = select_or_create_activity_id()
             problem = input("討論問題: ").strip()
-            options = input("候選方案 (JSON 陣列字串或逗點分隔): ").strip()
-            if not options.startswith("["):
-                import json
-                opts_list = [o.strip() for o in options.split(",") if o.strip()]
-                options = json.dumps(opts_list, ensure_ascii=False)
+            options = _normalize_options(
+                input("候選方案 (JSON array 或逗號分隔): ").strip()
+            )
             final_decision = input("最終決策: ").strip()
             reason = input("決策原因: ").strip()
             source = input("來源 (例如 '第一次籌備會議'): ").strip() or "CLI 手動新增"
+            confirmation_status = _choose_fixed_value(
+                "確認狀態", ["pending", "confirmed"], default="pending"
+            )
+            meeting_id = _choose_relation_id(
+                get_meetings(activity_id=activity_id), "Meeting", "name"
+            )
             created = create_decision(
-                activity_id=act_id,
+                activity_id=activity_id,
                 problem=problem,
                 options=options,
                 final_decision=final_decision,
                 reason=reason,
-                source=source
+                source=source,
+                confirmation_status=confirmation_status or "pending",
+                meeting_id=meeting_id,
             )
             print(f"\n[成功] 新增決策成功 ID {created['id']}")
         except Exception as e:
             print(f"\n[錯誤] {e}")
     elif choice == '3':
         try:
-            d_id = int(input("修改決策 ID: ").strip())
-            problem = input("新討論問題 (按 Enter 跳過): ").strip() or None
-            final_decision = input("新最終決策 (按 Enter 跳過): ").strip() or None
-            reason = input("新決策原因 (按 Enter 跳過): ").strip() or None
-            changes = {}
-            if problem: changes["problem"] = problem
-            if final_decision: changes["final_decision"] = final_decision
-            if reason: changes["reason"] = reason
-            updated = update_decision(d_id, **changes)
+            decision = _choose_record(
+                list_decisions(activity_id=activity_id), "Decision", "problem"
+            )
+            if not decision:
+                return
+            changes = _collect_changes([
+                ("problem", "新討論問題", _KEEP),
+                ("final_decision", "新最終決策", _KEEP),
+                ("reason", "新決策原因", _KEEP),
+                ("source", "新來源", _KEEP),
+            ])
+            raw_options = input("新候選方案 (Enter 保留；JSON array 或逗號分隔): ").strip()
+            if raw_options:
+                changes["options"] = _normalize_options(raw_options)
+            confirmation_status = _choose_fixed_value(
+                "新確認狀態", ["pending", "confirmed"], editing=True
+            )
+            meeting_id = _choose_relation_id(
+                get_meetings(activity_id=activity_id),
+                "Meeting",
+                "name",
+                editing=True,
+            )
+            if confirmation_status is not None:
+                changes["confirmation_status"] = confirmation_status
+            if meeting_id is not _KEEP:
+                changes["meeting_id"] = meeting_id
+            if not changes:
+                print("\n[提示] 沒有變更任何欄位。")
+                return
+            updated = update_decision(decision["id"], **changes)
             if updated:
                 print("\n[成功] 決策紀錄已成功更新！")
             else:
@@ -508,61 +827,100 @@ def handle_decision_menu():
             print(f"\n[錯誤] {e}")
     elif choice == '4':
         try:
-            d_id = int(input("刪除決策 ID: ").strip())
-            deleted = delete_decision(d_id)
+            decision = _choose_record(
+                list_decisions(activity_id=activity_id), "Decision", "problem"
+            )
+            if not decision:
+                return
+            deleted = delete_decision(decision["id"])
             if deleted:
-                print(f"\n[成功] 已成功刪除決策 ID {d_id}")
+                print(f"\n[成功] 已成功刪除決策 ID {decision['id']}")
             else:
                 print("\n[!] 刪除失敗，找不到該決策紀錄。")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
 
-def handle_schedule_menu():
-    print("\n--- 流程日程管理 (Schedules) ---")
+def handle_schedule_menu(activity_id: Optional[int] = None):
+    try:
+        activity_id = activity_id or select_or_create_activity_id()
+    except Exception as exc:
+        print(f"\n[錯誤] {exc}")
+        return
+    print(f"\n--- 流程日程 | {get_activity_label(activity_id)} ---")
     print("1. 查看所有流程")
     print("2. 新增流程")
     print("3. 修改流程")
     print("4. 刪除流程")
-    choice = input("選擇操作 (1-4): ").strip()
+    print("0. 回上一層")
+    choice = input("選擇操作 (0-4): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
-        schedules = list_schedules()
+        schedules = list_schedules(activity_id=activity_id)
         print(f"\n--- 流程列表 (共 {len(schedules)} 筆) ---")
         for s in schedules:
-            print(f"[ID: {s['id']}] 活動ID: {s['activity_id']} | 名稱: {s['name']} | 開始時間: {s['start_time']} | 負責人: {s['owner']}")
+            print(
+                f"[ID: {s['id']}] 名稱: {s['name']} | "
+                f"開始時間: {s['start_time']} | 負責人: {s['owner']} | "
+                f"Meeting: {s['meeting_id'] or '無'}"
+            )
     elif choice == '2':
         try:
-            act_id = select_or_create_activity_id()
             name = input("流程名稱: ").strip()
             start_time = input("開始時間 (ISO 8601 或 '2026-09-15 09:00:00'): ").strip()
+            end_time = input("結束時間 (可跳過): ").strip() or None
             location = input("地點 (預設 '主會場'): ").strip() or "主會場"
             owner = input("負責人 (預設 '總幹事'): ").strip() or "總幹事"
-            notes = input("備註 (可跳過): ").strip() or ""
-            category = input("分類 (預設 '開幕'): ").strip() or "開幕"
+            notes = input("備註 (可跳過): ").strip() or "無"
+            category = input("分類: ").strip()
+            meeting_id = _choose_relation_id(
+                get_meetings(activity_id=activity_id), "Meeting", "name"
+            )
             created = create_schedule(
-                activity_id=act_id,
+                activity_id=activity_id,
                 name=name,
                 start_time=start_time,
+                end_time=end_time,
                 location=location,
                 owner=owner,
                 notes=notes,
-                category=category
+                category=category,
+                meeting_id=meeting_id,
             )
             print(f"\n[成功] 新增流程日程成功 ID {created['id']}")
         except Exception as e:
             print(f"\n[錯誤] {e}")
     elif choice == '3':
         try:
-            s_id = int(input("修改流程 ID: ").strip())
-            name = input("新名稱 (按 Enter 跳過): ").strip() or None
-            location = input("新地點 (按 Enter 跳過): ").strip() or None
-            owner = input("新負責人 (按 Enter 跳過): ").strip() or None
-            changes = {}
-            if name: changes["name"] = name
-            if location: changes["location"] = location
-            if owner: changes["owner"] = owner
-            updated = update_schedule(s_id, **changes)
+            schedule = _choose_record(
+                list_schedules(activity_id=activity_id), "Schedule", "name"
+            )
+            if not schedule:
+                return
+            changes = _collect_changes([
+                ("name", "新名稱", _KEEP),
+                ("start_time", "新開始時間", _KEEP),
+                ("end_time", "新結束時間", None),
+                ("location", "新地點", _KEEP),
+                ("owner", "新負責人", _KEEP),
+                ("notes", "新備註", _KEEP),
+                ("category", "新分類", _KEEP),
+            ])
+            meeting_id = _choose_relation_id(
+                get_meetings(activity_id=activity_id),
+                "Meeting",
+                "name",
+                editing=True,
+            )
+            if meeting_id is not _KEEP:
+                changes["meeting_id"] = meeting_id
+            if not changes:
+                print("\n[提示] 沒有變更任何欄位。")
+                return
+            updated = update_schedule(schedule["id"], **changes)
             if updated:
                 print("\n[成功] 流程日程已成功更新！")
             else:
@@ -571,57 +929,90 @@ def handle_schedule_menu():
             print(f"\n[錯誤] {e}")
     elif choice == '4':
         try:
-            s_id = int(input("刪除流程 ID: ").strip())
-            deleted = delete_schedule(s_id)
+            schedule = _choose_record(
+                list_schedules(activity_id=activity_id), "Schedule", "name"
+            )
+            if not schedule:
+                return
+            deleted = delete_schedule(schedule["id"])
             if deleted:
-                print(f"\n[成功] 已成功刪除流程日程 ID {s_id}")
+                print(f"\n[成功] 已成功刪除流程日程 ID {schedule['id']}")
             else:
                 print("\n[!] 刪除失敗，找不到該流程日程。")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
 
-def handle_incident_menu():
-    print("\n--- 突發事件管理 (Incidents) ---")
+def handle_incident_menu(activity_id: Optional[int] = None):
+    try:
+        activity_id = activity_id or select_or_create_activity_id()
+    except Exception as exc:
+        print(f"\n[錯誤] {exc}")
+        return
+    print(f"\n--- 突發事件 | {get_activity_label(activity_id)} ---")
     print("1. 查看所有突發事件")
     print("2. 新增突發事件")
     print("3. 修改突發事件")
     print("4. 刪除突發事件")
-    choice = input("選擇操作 (1-4): ").strip()
+    print("0. 回上一層")
+    choice = input("選擇操作 (0-4): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
-        incidents = list_incidents()
+        incidents = list_incidents(activity_id=activity_id)
         print(f"\n--- 突發事件列表 (共 {len(incidents)} 筆) ---")
         for inc in incidents:
-            print(f"[ID: {inc['id']}] 活動ID: {inc['activity_id']} | 發生時間: {inc['occurred_at']} | 內容: {inc['content']}")
+            print(
+                f"[ID: {inc['id']}] 發生時間: {inc['occurred_at']} | "
+                f"內容: {inc['content']} | Schedule: {inc['schedule_id'] or '無'}"
+            )
     elif choice == '2':
         try:
-            act_id = select_or_create_activity_id()
             content = input("事件內容: ").strip()
             occurred_at = input("發生時間 (ISO 8601 或 '2026-09-15 10:30:00'): ").strip()
             cause = input("原因說明 (可跳過): ").strip() or None
             suggestion = input("處置建議 (可跳過): ").strip() or None
+            schedule_id = _choose_relation_id(
+                list_schedules(activity_id=activity_id), "Schedule", "name"
+            )
             created = create_incident(
-                activity_id=act_id,
+                activity_id=activity_id,
                 content=content,
                 occurred_at=occurred_at,
+                schedule_id=schedule_id,
                 cause=cause,
-                suggestion=suggestion
+                suggestion=suggestion,
             )
             print(f"\n[成功] 新增突發事件成功 ID {created['id']}")
         except Exception as e:
             print(f"\n[錯誤] {e}")
     elif choice == '3':
         try:
-            inc_id = int(input("修改突發事件 ID: ").strip())
-            content = input("新事件內容 (按 Enter 跳過): ").strip() or None
-            cause = input("新原因說明 (按 Enter 跳過): ").strip() or None
-            suggestion = input("新處置建議 (按 Enter 跳過): ").strip() or None
-            changes = {}
-            if content: changes["content"] = content
-            if cause: changes["cause"] = cause
-            if suggestion: changes["suggestion"] = suggestion
-            updated = update_incident(inc_id, **changes)
+            incident = _choose_record(
+                list_incidents(activity_id=activity_id), "Incident", "content"
+            )
+            if not incident:
+                return
+            changes = _collect_changes([
+                ("content", "新事件內容", _KEEP),
+                ("occurred_at", "新發生時間", _KEEP),
+                ("cause", "新原因說明", None),
+                ("suggestion", "新處置建議", None),
+            ])
+            schedule_id = _choose_relation_id(
+                list_schedules(activity_id=activity_id),
+                "Schedule",
+                "name",
+                editing=True,
+            )
+            if schedule_id is not _KEEP:
+                changes["schedule_id"] = schedule_id
+            if not changes:
+                print("\n[提示] 沒有變更任何欄位。")
+                return
+            updated = update_incident(incident["id"], **changes)
             if updated:
                 print("\n[成功] 突發事件紀錄已成功更新！")
             else:
@@ -630,29 +1021,45 @@ def handle_incident_menu():
             print(f"\n[錯誤] {e}")
     elif choice == '4':
         try:
-            inc_id = int(input("刪除突發事件 ID: ").strip())
-            deleted = delete_incident(inc_id)
+            incident = _choose_record(
+                list_incidents(activity_id=activity_id), "Incident", "content"
+            )
+            if not incident:
+                return
+            deleted = delete_incident(incident["id"])
             if deleted:
-                print(f"\n[成功] 已成功刪除突發事件紀錄 ID {inc_id}")
+                print(f"\n[成功] 已成功刪除突發事件紀錄 ID {incident['id']}")
             else:
                 print("\n[!] 刪除失敗，找不到該突發事件紀錄。")
         except Exception as e:
             print(f"\n[錯誤] {e}")
 
 
-def handle_extra_menu():
-    print("\n--- 決策 / 流程 / 突發事件管理選單 ---")
+def handle_extra_menu(activity_id: Optional[int] = None):
+    try:
+        activity_id = activity_id or select_or_create_activity_id()
+    except Exception as exc:
+        print(f"\n[錯誤] {exc}")
+        return
+    print(
+        "\n--- 決策 / 流程 / 突發事件 | "
+        f"{get_activity_label(activity_id)} ---"
+    )
     print("1. 決策紀錄管理 (Decisions)")
     print("2. 流程日程管理 (Schedules)")
     print("3. 突發事件管理 (Incidents)")
-    choice = input("選擇模組 (1-3): ").strip()
+    print("0. 回主選單")
+    choice = input("選擇模組 (0-3): ").strip()
+
+    if choice == "0":
+        return
 
     if choice == '1':
-        handle_decision_menu()
+        handle_decision_menu(activity_id)
     elif choice == '2':
-        handle_schedule_menu()
+        handle_schedule_menu(activity_id)
     elif choice == '3':
-        handle_incident_menu()
+        handle_incident_menu(activity_id)
 
 
 def handle_chat_session_menu():

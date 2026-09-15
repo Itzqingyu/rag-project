@@ -6,11 +6,11 @@
 - `main.py`: FastAPI 應用程式的主程式。提供完整的 REST API 端點，包含：
   - **系統與健康檢查**: `/ping`
   - **RAG 文件管理與上傳轉碼**: `/upload` (上傳 MD, TXT, PDF, DOCX 並自動轉換儲存與向量化), `/documents` (GET 清單, DELETE 物理刪除包含 `.md` 與向量庫), `/query` (語意檢索與選填 LLM 回答)
-  - **AI 結構化提取與預覽寫入**: `/extract_summary` (發起 1-shot LLM 解析 SQLite 託管之完整 Markdown 文字並回傳預覽 JSON), `/commit_summary` (將前端校對後的結構化資料原子化寫入 SQLite)
   - **對話會話與上下文記憶 (Session & Chat)**:
     - `/sessions`: GET (列出所有 Sessions), POST (建立新 Session)
     - `/sessions/{id}`: GET (取得 Session 詳情與歷史訊息), PATCH (更新 Session 標題), DELETE (串聯刪除 Session 及其訊息)
     - `/sessions/{id}/messages`: POST (發送訊息，支援指定 `mode='chat'` 普通對話或 `mode='rag'` 知識庫檢索對話)
+  - **AI 結構化提取與預覽寫入**: `/extract_summary` (發起 1-shot LLM 解析 SQLite 託管之完整 Markdown 文字並回傳預覽 JSON), `/commit_summary` (將前端校對後的結構化資料逐筆寫入 SQLite；目前可能部分成功)
   - **活動管理 (Activity)**: `/activities` (GET, POST), `/activities/{id}` (GET, PUT, DELETE)
   - **會議管理 (Meeting)**: `/meetings` (GET, POST), `/meetings/{id}` (GET, PUT, DELETE)
   - **待辦事項 (Task)**: `/tasks` (GET, POST), `/tasks/{id}` (GET, PUT, DELETE)
@@ -18,13 +18,14 @@
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
 
-- `tests/test_main.py`: 整合了互動式 CLI 測試選單，支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試以及 Activity／Meeting／Task 等業務功能的本地 CLI 測試。
+- `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。同時支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 - `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
 - `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
 - `activity_services/meeting_task.py`: 負責會議 (Meeting) 與待辦事項 (Task) 的 SQLite CRUD 與 Activity／Meeting 關聯驗證。
+  - Meeting 的 nullable `source_document_id` 關聯 `documents.id`；來源文件刪除時以 `ON DELETE SET NULL` 保留 Meeting 及其 Task／Decision。
 - `activity_services/decision.py`: 負責決策 (Decision) CRUD、確認狀態、選項 JSON 與 Activity／Meeting 關聯驗證。
 - `activity_services/schedule.py`: 負責活動流程 (Schedule) CRUD、時間範圍與 Activity／Meeting 關聯驗證。
 - `activity_services/incident.py`: 負責臨時紀錄 (Incident) CRUD，並驗證可選 Schedule 與 Activity 的一致性。
@@ -69,10 +70,11 @@
    - 前端發起 `/extract_summary` 請求帶入 `document_id`。
    - `llm_service.extract_structured_meeting_data` 自 `prompts/meeting_extraction.md` 載入系統提示詞，將 SQLite 中 `markdown_content` 全文 1-shot 餵給 LLM 提取為 JSON。
    - 前端獲得預覽 JSON 供使用者檢視或人工校對修改。
-   - 前端發起 `/commit_summary` 請求，`main.py` 於單一 SQLite 事務中原子化完成 Meeting、Decisions、Tasks 之寫入與關聯綁定。
+   - 前端發起 `/commit_summary` 請求，`main.py` 依序建立 Meeting、Decisions、Tasks。各 service 目前各自提交，因此中途失敗時已成功的資料會保留，呼叫端需呈現可能部分成功的結果。
 
 3. **活動與業務資料管理流程 (Activity Management)**:
    - `Activity` 為核心主體，其餘 `Meeting`, `Task`, `Decision`, `Schedule`, `Incident` 透過外鍵與其關聯。
+   - `Meeting.source_document_id` 可追溯結構化來源文件；刪除 document 時只解除來源連結，不刪除任何活動歷史資料。
    - 所有業務 CRUD 直接經由 `main.py` 的 RESTful API 端點暴露給前端或第三方呼叫。
    - 刪除 Activity 時若存有子紀錄會觸發 `ON DELETE RESTRICT` 保護歷史資料。
 

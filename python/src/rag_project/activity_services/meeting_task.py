@@ -8,11 +8,29 @@ from typing import List, Dict, Any, Optional
 from rag_project.activity_services.activity_common import (
     ensure_activity_exists,
     ensure_meeting_matches_activity,
+    optional_positive_id,
 )
 from rag_project.database import get_connection, init_db
 
 
 _UNSET = object()
+
+
+def _ensure_document_exists(
+    conn: Any, source_document_id: Optional[int]
+) -> Optional[int]:
+    """驗證 Meeting 的可選來源文件，避免留下指向不存在文件的 ID。"""
+    normalized_id = optional_positive_id(
+        source_document_id, "source_document_id"
+    )
+    if normalized_id is None:
+        return None
+    row = conn.execute(
+        "SELECT 1 FROM documents WHERE id = ?", (normalized_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"source_document_id {normalized_id} 不存在")
+    return normalized_id
 
 
 def init_meeting_task_tables(db_path: Optional[str] = None) -> None:
@@ -54,6 +72,7 @@ def add_meeting(
     participants: str = "",
     content: str = "",
     date: str = "",
+    source_document_id: Optional[int] = None,
     *,
     db_path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -67,6 +86,7 @@ def add_meeting(
     :param participants: 參與人員
     :param content: 會議記錄內容文字
     :param date: 相容用日期欄位
+    :param source_document_id: 產生此會議的 Markdown 文件 ID，可不填
     :return: 新增成功的完整會議紀錄字典
     """
     init_meeting_task_tables(db_path)
@@ -75,11 +95,20 @@ def add_meeting(
         
     with get_connection(db_path) as conn:
         ensure_activity_exists(conn, activity_id)
+        normalized_source_id = _ensure_document_exists(
+            conn, source_document_id
+        )
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO meetings (activity_id, name, date, start_time, end_time, location, participants, content)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (activity_id, name, date, start_time, end_time, location, participants, content))
+            INSERT INTO meetings (
+                activity_id, source_document_id, name, date, start_time,
+                end_time, location, participants, content
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            activity_id, normalized_source_id, name, date, start_time,
+            end_time, location, participants, content
+        ))
         conn.commit()
         meeting_id = cursor.lastrowid
         
@@ -119,6 +148,7 @@ def update_meeting(
     content: Optional[str] = None,
     activity_id: Optional[int] = None,
     date: Optional[str] = None,
+    source_document_id: Any = _UNSET,
     *,
     db_path: Optional[str] = None
 ) -> bool:
@@ -154,6 +184,12 @@ def update_meeting(
     if activity_id is not None:
         fields.append("activity_id = ?")
         values.append(activity_id)
+    if source_document_id is not _UNSET:
+        normalized_source_id = optional_positive_id(
+            source_document_id, "source_document_id"
+        )
+        fields.append("source_document_id = ?")
+        values.append(normalized_source_id)
         
     if not fields:
         return False
@@ -180,6 +216,9 @@ def update_meeting(
                     raise ValueError(
                         "Meeting 已被其他 Activity 的關聯資料使用，無法變更 activity_id"
                     )
+
+        if source_document_id is not _UNSET:
+            _ensure_document_exists(conn, normalized_source_id)
 
         values.append(meeting_id)
         sql = f"UPDATE meetings SET {', '.join(fields)} WHERE id = ?"
