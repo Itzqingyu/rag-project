@@ -163,7 +163,10 @@ class IncidentServiceTest(unittest.TestCase):
 
         self.assertEqual(
             meeting_fks,
-            {("activity_id", "activities", "id", "RESTRICT")},
+            {
+                ("activity_id", "activities", "id", "RESTRICT"),
+                ("source_document_id", "documents", "id", "SET NULL"),
+            },
         )
         self.assertEqual(
             task_fks,

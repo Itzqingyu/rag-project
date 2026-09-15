@@ -96,7 +96,7 @@ rag-project/
 2. `llm_client.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
 4. 前端展示預覽結果供使用者校對修改
-5. 使用者確認後發起 `/commit_summary` 請求，原子化寫入 SQLite `meetings`, `decisions`, `tasks` 表
+5. 使用者確認後發起 `/commit_summary` 請求，依序寫入 SQLite `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時可能只完成部分寫入
 
 ### 對話互動 (RAG)
 1. 使用者輸入問題
@@ -125,9 +125,11 @@ npm run dev                                      # 啟動 Electron 前端
 ### 活動管理後端
 - Activity 是所有活動資料的根節點；其他模組均以 `activity_id` 關聯。
 - Activity 存在任何子資料時禁止刪除，避免連帶遺失歷史脈絡。
+- Meeting 可用 nullable `source_document_id` 指向產生它的 Markdown 文件；文件刪除時 Meeting 保留並將此欄位設為 `NULL`，Task／Decision 可再透過 `meeting_id` 追溯來源。
 - Meeting 刪除後，Task／Decision／Schedule 保留並將 `meeting_id` 設為 `NULL`。
 - Incident 可選擇關聯 Schedule；Schedule 刪除後 Incident 保留並解除關聯。
 - Activity Management service 只接收文字或結構化內容；檔案讀取與 Markdown 轉換由 `converter.py` 處理。
+- CLI 測試工具會先選擇 Activity，再於該 Activity 範圍內操作 Meeting／Task／Decision／Schedule／Incident，以降低使用全域 ID 誤操作其他活動資料的風險。
 
 ## 6. MVP 範圍
 - ✅ 文件上傳與轉換 (支援 MD, TXT, PDF, DOCX 格式)

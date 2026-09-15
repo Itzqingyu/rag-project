@@ -24,6 +24,12 @@ from rag_project.activity_services.meeting_task import (
     delete_task,
 )
 from rag_project.activity_services.schedule import create_schedule, get_schedule
+from rag_project.database import (
+    add_or_update_doc_record,
+    delete_doc_record_by_id,
+    get_connection,
+    init_db,
+)
 
 class MeetingTaskServiceTest(unittest.TestCase):
     def setUp(self):
@@ -295,6 +301,143 @@ class MeetingTaskServiceTest(unittest.TestCase):
         )
         self.assertIsNone(
             get_schedule(schedule["id"], db_path=self.db_path)["meeting_id"]
+        )
+
+    def test_meeting_source_document_is_nullable_and_cleared_on_delete(self):
+        """刪除來源文件只解除 Meeting 連結，會議與其子資料都必須保留。"""
+        file_path = os.path.join(self.temp_dir.name, "meeting-source.md")
+        add_or_update_doc_record(
+            file_path,
+            1,
+            markdown_content="# 籌備會議",
+            db_path=self.db_path,
+        )
+        with get_connection(self.db_path) as conn:
+            document_id = conn.execute(
+                "SELECT id FROM documents WHERE file_path = ?", (file_path,)
+            ).fetchone()["id"]
+
+        meeting = add_meeting(
+            activity_id=self.activity["id"],
+            source_document_id=document_id,
+            name="由 Markdown 解析的會議",
+            db_path=self.db_path,
+        )
+        decision = create_decision(
+            activity_id=self.activity["id"],
+            meeting_id=meeting["id"],
+            problem="交通方案",
+            options='["甲案", "乙案"]',
+            final_decision="乙案",
+            reason="較符合預算",
+            source="會議 Markdown",
+            db_path=self.db_path,
+        )
+        task = add_task(
+            activity_id=self.activity["id"],
+            meeting_id=meeting["id"],
+            content="確認車輛",
+            db_path=self.db_path,
+        )
+
+        self.assertEqual(meeting["source_document_id"], document_id)
+        delete_doc_record_by_id(document_id, db_path=self.db_path)
+
+        preserved_meeting = get_meeting_by_id(
+            meeting["id"], db_path=self.db_path
+        )
+        self.assertIsNotNone(preserved_meeting)
+        self.assertIsNone(preserved_meeting["source_document_id"])
+        self.assertIsNotNone(
+            get_decision(decision["id"], db_path=self.db_path)
+        )
+        self.assertIsNotNone(get_task_by_id(task["id"], db_path=self.db_path))
+
+    def test_meeting_source_document_update_and_legacy_db_migration(self):
+        """既有 DB 初始化後會補欄位；更新時也能設定或清除來源。"""
+        legacy_db = os.path.join(self.temp_dir.name, "legacy.sqlite")
+        legacy_conn = sqlite3.connect(legacy_db)
+        try:
+            legacy_conn.executescript(
+                """
+                CREATE TABLE documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_path TEXT UNIQUE NOT NULL,
+                    filename TEXT NOT NULL,
+                    upload_date DATETIME NOT NULL,
+                    chunk_count INTEGER NOT NULL
+                );
+                CREATE TABLE activities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    year INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE meetings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    activity_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    FOREIGN KEY(activity_id) REFERENCES activities(id)
+                        ON DELETE RESTRICT
+                );
+                """
+            )
+        finally:
+            # sqlite3.Connection 的 context manager 不會關閉檔案；Windows
+            # 測試清理前需明確 close，避免暫存 DB 被鎖定。
+            legacy_conn.close()
+        init_db(legacy_db)
+        with get_connection(legacy_db) as conn:
+            columns = {
+                row["name"] for row in conn.execute(
+                    "PRAGMA table_info(meetings)"
+                ).fetchall()
+            }
+            source_fk = [
+                dict(row) for row in conn.execute(
+                    "PRAGMA foreign_key_list(meetings)"
+                ).fetchall()
+                if row["from"] == "source_document_id"
+            ]
+        self.assertIn("source_document_id", columns)
+        self.assertEqual(source_fk[0]["table"], "documents")
+        self.assertEqual(source_fk[0]["on_delete"], "SET NULL")
+
+        file_path = os.path.join(self.temp_dir.name, "updated-source.md")
+        add_or_update_doc_record(file_path, 1, db_path=self.db_path)
+        with get_connection(self.db_path) as conn:
+            document_id = conn.execute(
+                "SELECT id FROM documents WHERE file_path = ?", (file_path,)
+            ).fetchone()["id"]
+        meeting = add_meeting(
+            activity_id=self.activity["id"],
+            name="先無來源的會議",
+            db_path=self.db_path,
+        )
+        self.assertTrue(
+            update_meeting(
+                meeting["id"],
+                source_document_id=document_id,
+                db_path=self.db_path,
+            )
+        )
+        self.assertEqual(
+            get_meeting_by_id(meeting["id"], db_path=self.db_path)[
+                "source_document_id"
+            ],
+            document_id,
+        )
+        self.assertTrue(
+            update_meeting(
+                meeting["id"], source_document_id=None, db_path=self.db_path
+            )
+        )
+        self.assertIsNone(
+            get_meeting_by_id(meeting["id"], db_path=self.db_path)[
+                "source_document_id"
+            ]
         )
 
 if __name__ == "__main__":

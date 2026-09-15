@@ -337,7 +337,7 @@ def extract_summary(req: ExtractSummaryRequest):
 
 @app.post("/commit_summary", tags=["AI Structured Extraction"])
 def commit_summary(req: CommitSummaryRequest):
-    """階段 2：接收使用者確認/編修後的結構化資料，一次性事務寫入 SQLite 業務表。"""
+    """階段 2：將確認後資料逐筆寫入；中途失敗時，先前成功資料仍會保留。"""
     try:
         # 1. 寫入 Meeting
         meeting_dict = req.meeting.model_dump()
