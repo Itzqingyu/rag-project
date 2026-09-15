@@ -3,7 +3,7 @@
 import sqlite3
 from typing import Any, Dict, List, Optional
 
-from rag_project.activity_common import (
+from rag_project.activity_services.activity_common import (
     ensure_activity_exists,
     iso_datetime,
     optional_positive_id,

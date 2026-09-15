@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List, Optional
 from litellm import completion
 
-PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
+PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 
 def load_prompt_template(template_name: str) -> str:

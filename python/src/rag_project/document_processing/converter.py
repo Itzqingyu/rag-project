@@ -11,7 +11,7 @@ from pypdf import PdfReader
 from docx import Document as DocxDocument
 
 # 定義預設的 Markdown 儲存目錄 (python/data/markdown/)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DEFAULT_MARKDOWN_DIR = os.path.join(BASE_DIR, "data", "markdown")
 os.makedirs(DEFAULT_MARKDOWN_DIR, exist_ok=True)
 

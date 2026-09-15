@@ -11,7 +11,7 @@ SRC_DIR = os.path.join(PYTHON_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from rag_project.activity import (  # noqa: E402
+from rag_project.activity_services.activity import (  # noqa: E402
     create_activity,
     delete_activity,
     get_activity,
