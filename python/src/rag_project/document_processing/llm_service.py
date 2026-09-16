@@ -93,7 +93,7 @@ def chat_with_context(
             role = msg.get("role")
             content = msg.get("content", "")
             # 防禦性過濾：排除帶有錯誤前綴的無效訊息，防止上下文污染
-            if content.startswith("❌"):
+            if content.startswith("[錯誤]") or content.startswith("[ERROR]") or content.startswith("ERROR:"):
                 continue
             if role in ("user", "assistant") and content:
                 api_messages.append({"role": role, "content": content})

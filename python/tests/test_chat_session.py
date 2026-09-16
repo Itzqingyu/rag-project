@@ -257,7 +257,7 @@ class TestChatSession(unittest.TestCase):
     def test_llm_failure_does_not_pollute_context_or_db(self, mock_completion):
         """驗證當 LLM API 呼叫失敗時：
         1. chat_with_context 應拋出 RuntimeError，而非回傳錯誤字串假裝成功。
-        2. 歷史中若曾有 ❌ 錯誤訊息，會被自動過濾，不送入上下文。
+        2. 歷史中若曾有 [錯誤] 訊息，會被自動過濾，不送入上下文。
         3. API 遇到錯誤時回傳 502，且 SQLite 不寫入任何殘留訊息（避免污染歷史）。
         """
         # 1. 測試 completion 拋出例外時，chat_with_context 是否拋出 RuntimeError
@@ -270,7 +270,7 @@ class TestChatSession(unittest.TestCase):
             )
         self.assertIn("LLM 呼叫失敗", str(ctx.exception))
 
-        # 2. 測試防禦性過濾：歷史中帶有 ❌ 的錯誤訊息不應被送入上下文
+        # 2. 測試防禦性過濾：歷史中帶有 [錯誤] 的錯誤訊息不應被送入上下文
         mock_completion.side_effect = None
         mock_resp = MagicMock()
         mock_resp.choices = [MagicMock(message=MagicMock(content="正常回答"))]
@@ -278,7 +278,7 @@ class TestChatSession(unittest.TestCase):
 
         dirty_history = [
             {"role": "user", "content": "上次問題"},
-            {"role": "assistant", "content": "❌ LLM 呼叫失敗: Connection timed out"},
+            {"role": "assistant", "content": "[錯誤] LLM 呼叫失敗: Connection timed out"},
             {"role": "user", "content": "正常問題"},
             {"role": "assistant", "content": "正常過去回答"}
         ]
@@ -290,7 +290,7 @@ class TestChatSession(unittest.TestCase):
         call_args = mock_completion.call_args[1]
         sent_messages = call_args["messages"]
         for msg in sent_messages:
-            self.assertFalse(msg["content"].startswith("❌"), "錯誤訊息不應出現在傳給 LLM 的上下文！")
+            self.assertFalse(msg["content"].startswith("[錯誤]"), "錯誤訊息不應出現在傳給 LLM 的上下文！")
 
         # 3. 測試 API 層面：當 LLM 失敗時，SQLite 完全不留任何半拉子訊息
         client = TestClient(app)

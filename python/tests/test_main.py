@@ -187,7 +187,7 @@ def handle_generate_answer():
         )
         
         print("\n" + "="*45)
-        print("🤖 AI 回答：")
+        print("[AI 回答]：")
         print("="*45)
         print(answer)
         print("="*45)
