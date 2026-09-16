@@ -253,6 +253,62 @@ class TestChatSession(unittest.TestCase):
         del_res = client.delete(f"/sessions/{session_id}")
         self.assertEqual(del_res.status_code, 200)
 
+    @patch("rag_project.document_processing.llm_service.completion")
+    def test_llm_failure_does_not_pollute_context_or_db(self, mock_completion):
+        """驗證當 LLM API 呼叫失敗時：
+        1. chat_with_context 應拋出 RuntimeError，而非回傳錯誤字串假裝成功。
+        2. 歷史中若曾有 ❌ 錯誤訊息，會被自動過濾，不送入上下文。
+        3. API 遇到錯誤時回傳 502，且 SQLite 不寫入任何殘留訊息（避免污染歷史）。
+        """
+        # 1. 測試 completion 拋出例外時，chat_with_context 是否拋出 RuntimeError
+        mock_completion.side_effect = Exception("OpenAI API 500 Internal Error")
+        with self.assertRaises(RuntimeError) as ctx:
+            chat_with_context(
+                user_query="測試問題",
+                history_messages=[],
+                mode="chat"
+            )
+        self.assertIn("LLM 呼叫失敗", str(ctx.exception))
+
+        # 2. 測試防禦性過濾：歷史中帶有 ❌ 的錯誤訊息不應被送入上下文
+        mock_completion.side_effect = None
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock(message=MagicMock(content="正常回答"))]
+        mock_completion.return_value = mock_resp
+
+        dirty_history = [
+            {"role": "user", "content": "上次問題"},
+            {"role": "assistant", "content": "❌ LLM 呼叫失敗: Connection timed out"},
+            {"role": "user", "content": "正常問題"},
+            {"role": "assistant", "content": "正常過去回答"}
+        ]
+        chat_with_context(
+            user_query="新問題",
+            history_messages=dirty_history,
+            mode="chat"
+        )
+        call_args = mock_completion.call_args[1]
+        sent_messages = call_args["messages"]
+        for msg in sent_messages:
+            self.assertFalse(msg["content"].startswith("❌"), "錯誤訊息不應出現在傳給 LLM 的上下文！")
+
+        # 3. 測試 API 層面：當 LLM 失敗時，SQLite 完全不留任何半拉子訊息
+        client = TestClient(app)
+        s = client.post("/sessions", json={"title": "失敗測試會話"}).json()["session"]
+        s_id = s["id"]
+
+        # mock chat_with_context 在 API 中拋出例外
+        with patch("rag_project.main.chat_with_context", side_effect=RuntimeError("連線中斷")):
+            fail_res = client.post(f"/sessions/{s_id}/messages", json={
+                "content": "這是一條會失敗的訊息",
+                "mode": "chat"
+            })
+            self.assertEqual(fail_res.status_code, 502)
+
+        # 驗證資料庫：完全沒有留下該條 user 或 assistant 訊息
+        detail = client.get(f"/sessions/{s_id}").json()
+        self.assertEqual(len(detail["messages"]), 0, "失敗時資料庫應保持乾淨，不可有任何殘留！")
+
 
 if __name__ == "__main__":
     unittest.main()

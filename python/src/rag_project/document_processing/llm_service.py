@@ -92,6 +92,9 @@ def chat_with_context(
         for msg in trimmed_history:
             role = msg.get("role")
             content = msg.get("content", "")
+            # 防禦性過濾：排除帶有錯誤前綴的無效訊息，防止上下文污染
+            if content.startswith("❌"):
+                continue
             if role in ("user", "assistant") and content:
                 api_messages.append({"role": role, "content": content})
 
@@ -116,7 +119,7 @@ def chat_with_context(
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"❌ LLM 呼叫失敗: {str(e)}"
+        raise RuntimeError(f"LLM 呼叫失敗: {str(e)}") from e
 
 
 def extract_structured_meeting_data(full_text: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:

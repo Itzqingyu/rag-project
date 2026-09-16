@@ -1142,14 +1142,19 @@ def handle_chat_session_menu():
                     print(f"[檢索完成] 召回 {len(docs)} 個相關切片片段。")
 
                 print("[AI 思考中] 生成回答...")
-                assistant_reply = chat_with_context(
-                    user_query=user_input,
-                    history_messages=history_records,
-                    mode=current_mode,
-                    retrieved_chunks=retrieved_chunks_texts if current_mode == "rag" else None
-                )
+                try:
+                    assistant_reply = chat_with_context(
+                        user_query=user_input,
+                        history_messages=history_records,
+                        mode=current_mode,
+                        retrieved_chunks=retrieved_chunks_texts if current_mode == "rag" else None
+                    )
+                except Exception as exc:
+                    print(f"\n[!] AI 呼叫失敗: {exc}")
+                    print("[提示] 本次失敗訊息未寫入資料庫，不會影響後續對話記憶。")
+                    continue
 
-                # 寫入歷史
+                # 僅在成功獲得回答後寫入歷史
                 add_chat_message(
                     session_id=session_id,
                     role="user",

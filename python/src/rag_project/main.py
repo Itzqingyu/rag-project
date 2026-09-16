@@ -419,14 +419,18 @@ def send_chat_message(session_id: int, req: ChatMessageSendRequest):
         ]
 
     # 3. 呼叫 LLM (具 Clean Context Isolation，傳入純歷史對話)
-    assistant_reply = chat_with_context(
-        user_query=req.content,
-        history_messages=history_records,
-        mode=req.mode,
-        retrieved_chunks=retrieved_chunks_texts if req.mode == "rag" else None
-    )
+    try:
+        assistant_reply = chat_with_context(
+            user_query=req.content,
+            history_messages=history_records,
+            mode=req.mode,
+            retrieved_chunks=retrieved_chunks_texts if req.mode == "rag" else None
+        )
+    except Exception as e:
+        # 發生錯誤時絕不寫入 SQLite，避免錯誤訊息污染上下文記憶
+        raise HTTPException(status_code=502, detail=f"LLM 模型服務呼叫失敗: {str(e)}")
 
-    # 4. 寫入使用者訊息與助理回答至 SQLite
+    # 4. 僅在 LLM 成功產出回答後，才寫入使用者訊息與助理回答至 SQLite
     user_msg = add_chat_message(
         session_id=session_id,
         role="user",
