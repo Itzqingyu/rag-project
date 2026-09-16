@@ -100,18 +100,11 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
     abs_default_dir = os.path.abspath(DEFAULT_MARKDOWN_DIR)
 
     # 1. 判斷預期的託管 Markdown 檔案路徑
-    if not source_path.startswith(abs_default_dir):
-        raw_name = os.path.basename(file_path)
-        file_stem = os.path.splitext(raw_name)[0]
-        target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
-    else:
-        target_md_path = source_path
+    raw_name = os.path.basename(file_path)
+    file_stem, ext = os.path.splitext(raw_name)
+    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
 
-    # 2. 備份原始檔案內容
-    with open(source_path, "r", encoding="utf-8") as f:
-        source_content = f.read()
-
-    # 3. 檢查 SQLite 紀錄是否存在
+    # 2. 檢查 SQLite 紀錄是否存在
     existing_record = db.get_doc_by_path(target_md_path, db_path=db_path)
     if existing_record:
         if not force:
@@ -120,15 +113,11 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
             # 覆蓋模式：先刪除舊的 Chroma 向量與 SQLite 紀錄
             delete_document(target_md_path, db_path=db_path)
 
-    # 4. 確保目標託管 Markdown 檔案存在且內容最新
-    if source_path != os.path.abspath(target_md_path):
+    # 3. 確保目標託管 Markdown 檔案存在且內容最新 (多格式轉檔 PDF/DOCX/TXT/MD)
+    if source_path != os.path.abspath(target_md_path) or ext.lower() != ".md":
         target_md_path = convert_to_markdown(source_path)
-    else:
-        # 如果傳入的就是託管目錄下的檔案，重新寫入實體檔案
-        os.makedirs(os.path.dirname(target_md_path), exist_ok=True)
-        with open(target_md_path, "w", encoding="utf-8") as f:
-            f.write(source_content)
 
+    # 4. 讀取託管的 Markdown 純文字內容
     with open(target_md_path, "r", encoding="utf-8") as f:
         markdown_content = f.read()
 

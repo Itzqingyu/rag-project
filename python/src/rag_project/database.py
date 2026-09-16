@@ -8,6 +8,7 @@
 
 import sqlite3
 import os
+import json
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional
@@ -204,8 +205,33 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
+
+        # 1.8 對話會話表 (Sessions)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+
+        # 1.9 對話訊息紀錄表 (Chat Messages - CASCADE session_id)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+                content TEXT NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'chat' CHECK(mode IN ('chat', 'rag')),
+                retrieved_chunks TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(session_id) REFERENCES sessions(id)
+                    ON DELETE CASCADE
+            )
+        ''')
         
-        # 1.8 為外鍵欄位自動建立索引以最佳化查詢效能
+        # 1.10 為外鍵與查詢欄位自動建立索引以最佳化查詢效能
         indices = [
             ("idx_meetings_activity_id", "meetings(activity_id)"),
             ("idx_meetings_source_document_id", "meetings(source_document_id)"),
@@ -217,6 +243,8 @@ def init_db(db_path: Optional[str] = None) -> None:
             ("idx_schedules_meeting_id", "schedules(meeting_id)"),
             ("idx_incidents_activity_id", "incidents(activity_id)"),
             ("idx_incidents_schedule_id", "incidents(schedule_id)"),
+            ("idx_chat_messages_session_id", "chat_messages(session_id)"),
+            ("idx_sessions_updated_at", "sessions(updated_at)"),
         ]
         for index_name, index_def in indices:
             cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {index_def}")
@@ -328,3 +356,155 @@ def get_vectorstore(db_dir: Optional[str] = None) -> Chroma:
             _vectorstore = store
         return store
     return _vectorstore
+
+
+# ==========================================
+# 4. Sessions & Chat Messages CRUD
+# ==========================================
+
+def create_session(title: Optional[str] = None, *, db_path: Optional[str] = None) -> Dict[str, Any]:
+    """建立新的對話會話 (Session)。若未指定標題，預設為 '新對話'。"""
+    init_db(db_path)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    session_title = title.strip() if title and title.strip() else "新對話"
+
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO sessions (title, created_at, updated_at) VALUES (?, ?, ?)",
+            (session_title, now, now)
+        )
+        session_id = cursor.lastrowid
+        conn.commit()
+        return {
+            "id": session_id,
+            "title": session_title,
+            "created_at": now,
+            "updated_at": now
+        }
+
+
+def get_session(session_id: int, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """根據 Session ID 查詢會話資訊。"""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def list_sessions(*, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """取得所有對話會話清單，依最新更新時間倒序排列。"""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sessions ORDER BY updated_at DESC, id DESC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+def update_session_title(session_id: int, title: str, *, db_path: Optional[str] = None) -> bool:
+    """更新指定 Session 的標題與更新時間。"""
+    init_db(db_path)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
+            (title.strip(), now, session_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def delete_session(session_id: int, *, db_path: Optional[str] = None) -> bool:
+    """刪除指定 Session，因 foreign key ON DELETE CASCADE，其對話訊息將一併被刪除。"""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def add_chat_message(
+    session_id: int,
+    role: str,
+    content: str,
+    mode: str = "chat",
+    retrieved_chunks: Optional[List[Dict[str, Any]]] = None,
+    *,
+    db_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """新增一筆對話訊息至特定 Session，並自動觸發更新 Session 的 updated_at。"""
+    init_db(db_path)
+    if role not in ("user", "assistant"):
+        raise ValueError("role 必須為 'user' 或 'assistant'")
+    if mode not in ("chat", "rag"):
+        raise ValueError("mode 必須為 'chat' 或 'rag'")
+
+    chunks_json = json.dumps(retrieved_chunks, ensure_ascii=False) if retrieved_chunks else None
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if not cursor.fetchone():
+            raise ValueError(f"Session {session_id} 不存在")
+
+        cursor.execute('''
+            INSERT INTO chat_messages (session_id, role, content, mode, retrieved_chunks, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (session_id, role, content, mode, chunks_json, now))
+        msg_id = cursor.lastrowid
+
+        cursor.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id))
+        conn.commit()
+
+        return {
+            "id": msg_id,
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "mode": mode,
+            "retrieved_chunks": retrieved_chunks,
+            "created_at": now
+        }
+
+
+def get_chat_messages(
+    session_id: int,
+    limit: Optional[int] = None,
+    *,
+    db_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """取得指定 Session 的對話紀錄 (依時間正序排列)。若指定 limit 則取最近的 N 筆訊息。"""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        if limit is not None and limit > 0:
+            cursor.execute('''
+                SELECT * FROM chat_messages 
+                WHERE session_id = ? 
+                ORDER BY id DESC 
+                LIMIT ?
+            ''', (session_id, limit))
+            rows = cursor.fetchall()
+            messages = [dict(row) for row in reversed(rows)]
+        else:
+            cursor.execute('''
+                SELECT * FROM chat_messages 
+                WHERE session_id = ? 
+                ORDER BY id ASC
+            ''', (session_id,))
+            messages = [dict(row) for row in cursor.fetchall()]
+
+        for msg in messages:
+            if msg.get("retrieved_chunks"):
+                try:
+                    msg["retrieved_chunks"] = json.loads(msg["retrieved_chunks"])
+                except Exception:
+                    pass
+        return messages
+

@@ -6,6 +6,10 @@
 - `main.py`: FastAPI 應用程式的主程式。提供完整的 REST API 端點，包含：
   - **系統與健康檢查**: `/ping`
   - **RAG 文件管理與上傳轉碼**: `/upload` (上傳 MD, TXT, PDF, DOCX 並自動轉換儲存與向量化), `/documents` (GET 清單, DELETE 物理刪除包含 `.md` 與向量庫), `/query` (語意檢索與選填 LLM 回答)
+  - **對話會話與上下文記憶 (Session & Chat)**:
+    - `/sessions`: GET (列出所有 Sessions), POST (建立新 Session)
+    - `/sessions/{id}`: GET (取得 Session 詳情與歷史訊息), PATCH (更新 Session 標題), DELETE (串聯刪除 Session 及其訊息)
+    - `/sessions/{id}/messages`: POST (發送訊息，支援指定 `mode='chat'` 普通對話或 `mode='rag'` 知識庫檢索對話)
   - **AI 結構化提取與預覽寫入**: `/extract_summary` (發起 1-shot LLM 解析 SQLite 託管之完整 Markdown 文字並回傳預覽 JSON), `/commit_summary` (將前端校對後的結構化資料逐筆寫入 SQLite；目前可能部分成功)
   - **活動管理 (Activity)**: `/activities` (GET, POST), `/activities/{id}` (GET, PUT, DELETE)
   - **會議管理 (Meeting)**: `/meetings` (GET, POST), `/meetings/{id}` (GET, PUT, DELETE)
@@ -14,8 +18,9 @@
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
 
-- `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。
+- `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。同時支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
+- `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
 - `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
@@ -33,18 +38,20 @@
   - **get_embeddings / get_reranker**: 採用 Lazy Singletons 載入 Jina AI 模型 (`jina-embeddings-v2-base-zh` 與 `jina-reranker-v2-base-multilingual`)。
   - **add_document / search / delete_document / list_documents**: 協調文件向量化、ChromaDB 寫入、物理 `.md` 檔案清理與 SQLite 紀錄。
 - `document_processing/llm_service.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
-  - 提供 `generate_answer` 函數處理 RAG 問答。
+  - 提供 `chat_with_context` 函數處理對話與 RAG 問答生成，支援多輪對話上下文記憶、Clean Context Isolation 隔離過往檢索資料、以及普通對話與 RAG 模式動態切換。
   - 提供 `extract_structured_meeting_data` 函數，實現單檔 1-shot 全文 Prompt 結構化提取。
   - 透過 `.env` 中的 `ACTIVE_MODEL` 變數支援切換雲端模型 (OpenAI, Gemini, DeepSeek) 及本地 llama.cpp。
 
 ### Prompt 範本庫 (`prompts/`)
 - `prompts/meeting_extraction.md`: 定義 AI 會議紀錄 1-shot 結構化抽取的 System Prompt 範本（規範會議日期、討論問題、解決方案、最終決策與待辦事項 JSON 格式）。
 - `prompts/rag_qa.md`: 定義 RAG 通用問答的 System Prompt 範本。
+- `prompts/chat_general.md`: 定義普通對話模式 (General Chat) 下 AI 智能助手的 System Prompt 範本。
 
 ### 資料庫 (Database Layer)
 - `database.py`: 統一資料庫存取層（結合原 `sqlite_db` 與 `chroma_db`）。
   - 提供共用 SQLite `get_connection`（自動啟用 `PRAGMA foreign_keys = ON`）與 `init_db` 表結構初始化（資料庫檔位在 `python/data/rag_database.sqlite`）。
   - 管理文件 Metadata (包含 `markdown_path` 與 `markdown_content`) 以及 Activity、Meeting、Task、Decision、Schedule、Incident 的 SQLite 資料表與索引。
+  - 管理對話會話 (`sessions`) 與對話歷史 (`chat_messages`) 資料表，提供 `create_session`, `get_session`, `list_sessions`, `update_session_title`, `delete_session`, `add_chat_message`, `get_chat_messages` 等 CRUD 函數。
   - 提供 `get_vectorstore()` 回傳 Chroma 向量資料庫單例（儲存位在 `python/data/chroma_db/`）。
 
 
@@ -61,7 +68,7 @@
 
 2. **AI 會議紀錄結構化提取與寫入流程 (Preview & Commit Workflow)**:
    - 前端發起 `/extract_summary` 請求帶入 `document_id`。
-   - `llm_client.extract_meeting_summary` 自 `prompts/meeting_extraction.md` 載入系統提示詞，將 SQLite 中 `markdown_content` 全文 1-shot 餵給 LLM 提取為 JSON。
+   - `llm_service.extract_structured_meeting_data` 自 `prompts/meeting_extraction.md` 載入系統提示詞，將 SQLite 中 `markdown_content` 全文 1-shot 餵給 LLM 提取為 JSON。
    - 前端獲得預覽 JSON 供使用者檢視或人工校對修改。
    - 前端發起 `/commit_summary` 請求，`main.py` 依序建立 Meeting、Decisions、Tasks。各 service 目前各自提交，因此中途失敗時已成功的資料會保留，呼叫端需呈現可能部分成功的結果。
 
@@ -72,15 +79,22 @@
    - 刪除 Activity 時若存有子紀錄會觸發 `ON DELETE RESTRICT` 保護歷史資料。
 
 4. **回答生成流程 (LLM Generation)**:
-   - 在 `/query` 端點若帶入 `generate_answer=True`，FastAPI 會呼叫 `llm_client.generate_answer`，將 RAG 檢索出的片段組合成 Prompt 丟給 `litellm` 產生回答。
+   - 在 `/query` 端點若帶入 `generate_answer=True`，FastAPI 會呼叫 `llm_service.chat_with_context(..., mode='rag')`，將 RAG 檢索出的片段組合成 Prompt 丟給 `litellm` 產生回答。
+
+5. **對話會話與模式切換流程 (Chat Sessions & Context Isolation)**:
+   - 使用者透過 `/sessions` 建立對話串，每次對話送出至 `/sessions/{id}/messages` 並可指定 `mode` ('chat' 或 'rag')。
+   - 系統從 `chat_messages` 載入最近 N 輪純歷史對話，過濾掉歷史舊檢索文本（Clean Context Isolation）。
+   - 若為 `rag` 模式，即時透過 `rag_engine.search` 檢索相關切片，將當次切片注入在當前使用者問題 prompt 中；若為 `chat` 模式，直接載入通用提示詞 `chat_general.md` 進行流暢對話。
+   - 助理回覆後，兩方訊息分別寫入 `chat_messages`，若為 RAG 回答則額外以 JSON 儲存當次檢索片段 (`retrieved_chunks`)，確保歷史可溯但不會污染後續對話上下文。
 
 ---
 
 ## 3. 技術細節與變更紀錄
-- **架構扁平化重構**: 消除 `rag_engine/`, `database/`, `llm/`, `activity/`, `decision/`, `incident/`, `schedule/` 資料夾，統一收納至 `rag_project/` 根目錄，大幅簡化引用層級。
-- **多格式文件轉換**: 新增 `converter.py`，導入 `pypdf` 與 `python-docx` 支援 PDF/DOCX 轉碼，託管檔統一存放至 `python/data/markdown/`。
-- **System Prompt 檔分離**: 建立 `prompts/` 資料夾收納 `.md` Prompt 檔，實現提示詞與邏輯代碼解耦。
-- **AI 結構化 1-shot 與 Preview-Commit 機制**: 新增 `/extract_summary` 與 `/commit_summary` 端點，解決傳統 RAG 召回不全、Token 浪費與人工不可控問題。
-- ** Fast API 完善**: 新增全套 CRUD REST API 覆蓋所有業務實體，並補上 Pydantic 驗證 Model。
-- **單元測試完整化**: `tests/test_main.py` CLI 測試與 `tests/test_converter.py` 轉碼單元測試 100% 通過。
+- **對話會話 (Session) 與上下文記憶**: 新增 `sessions` 與 `chat_messages` 資料表，外鍵關聯設定 `ON DELETE CASCADE`。
+- **Clean Context Isolation (防記憶污染架構)**: 徹底解決同一 Session 中多次 RAG 或模式切換時，舊檢索資料干擾後續問答與 Token 浪費的問題。
+- **普通對話與 RAG 模式切換**: 擴充 `llm_service.chat_with_context`，支援動態加載 `chat_general.md` 與 `rag_qa.md`，並開放前端任意切換。
+- **FastAPI 端點擴展**: 新增 `/sessions` 與 `/sessions/{id}/messages` 完整 RESTful 路由。
+- **修復非 Markdown 檔案 (PDF/DOCX) 讀取解碼 Bug**: 修復 `rag_engine.add_document` 在執行 `convert_to_markdown` 之前誤以 utf-8 讀取二進位 PDF/DOCX 導致報錯的問題，現在可直接支援傳入 PDF/DOCX/TXT/MD 進行自動轉碼、切片與向量化。
+- **修復 LLM 失敗訊息污染上下文 Bug**: 修復 `chat_with_context` 在底層拋錯時誤回傳錯誤字串假裝成功、導致錯誤訊息被寫入 SQLite 污染後續對話記憶的問題。改為明確拋出例外、API 回傳 502，且僅在 LLM 成功產生回答後才寫入 SQLite；同時於歷史載入時加入防禦性過濾，杜絕髒資料進入上下文。
+- **單元測試完整化**: 新增 `tests/test_chat_session.py` 單元測試覆蓋率 100%，並在 `tests/test_main.py` 整合 CLI 互動式對話測試選單。
 

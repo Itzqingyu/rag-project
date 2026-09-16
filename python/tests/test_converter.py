@@ -73,6 +73,26 @@ class ConverterTest(unittest.TestCase):
         self.assertTrue(os.path.exists(out_md))
         self.assertTrue(out_md.endswith(".md"))
 
+    def test_add_document_with_pdf(self):
+        """驗證直接傳入 PDF 檔案給 add_document，不會觸發 utf-8 解碼錯誤，並能正確轉檔。"""
+        from rag_project.document_processing.rag_engine import add_document
+        from rag_project.database import init_db
+
+        temp_db = os.path.join(self.temp_dir.name, "test_pdf.sqlite")
+        init_db(temp_db)
+
+        # 建立簡單的 PDF 檔案
+        pdf_file = os.path.join(self.temp_dir.name, "sample_doc.pdf")
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=200)
+        with open(pdf_file, "wb") as f:
+            writer.write(f)
+
+        # 呼叫 add_document，傳入 pdf 實體路徑
+        chunks = add_document(pdf_file, force=True, db_path=temp_db)
+        # blank page 切片為 1 或大於等於 0
+        self.assertGreaterEqual(chunks, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
