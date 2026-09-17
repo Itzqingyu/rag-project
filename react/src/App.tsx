@@ -54,13 +54,10 @@ export default function App() {
   // 控制右側 AI 歷史參考抽屜是否開啟
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
 
-  // 封裝一個切換畫面的小函式，方便後續擴充
+  // 封裝一個切換畫面的小函式：點擊切換頁面時自動收起側邊欄
   const handleSetView = (view: string) => {
     setCurrentView(view);
-    // 在窄螢幕行動端時切換頁面才自動收起側邊欄
-    if (typeof window !== 'undefined' && window.innerWidth <= 760) {
-      setIsSidebarOpen(false);
-    }
+    setIsSidebarOpen(false);
   };
 
   useEffect(() => {
