@@ -6,7 +6,7 @@
 .chat-panel-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  height: calc(100vh - 72px);
+  height: 100vh;
   background: var(--canvas, #f3f5f8);
   color: var(--ink, #101928);
   overflow: hidden;

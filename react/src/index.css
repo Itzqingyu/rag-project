@@ -370,72 +370,41 @@ a {
 }
 
 /* ==========================================
-   頂部導航列 (Topbar)
+   主區域與浮空選單按鈕 (Main Area & Floating Menu)
    ========================================== */
 .main {
   min-width: 0;
+  position: relative;
 }
 
-.topbar {
-  height: 72px;
-  padding: 0 clamp(22px, 4vw, 56px);
-  border-bottom: 1px solid var(--line);
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 8;
-}
-
-.breadcrumbs {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.breadcrumbs b {
-  color: var(--line);
-}
-
-.breadcrumbs strong {
-  color: var(--ink);
-}
-
-.menu-button {
-  display: grid !important;
+.floating-menu-btn {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 50;
+  display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
+  box-shadow: 0 4px 14px rgba(16, 25, 40, 0.08);
   cursor: pointer;
-  transition: all 0.15s ease;
-  margin-right: 10px;
-  flex-shrink: 0;
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
-.menu-button:hover {
+.floating-menu-btn:hover {
   background: var(--cyan-soft);
   border-color: var(--cyan);
   color: var(--cyan);
+  transform: scale(1.05);
 }
 
-.page-back-button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--canvas);
-  color: var(--ink);
-  cursor: pointer;
-  margin-right: 8px;
+/* 當側邊欄展開時，浮空按鈕隨動退讓到側欄右緣外側 */
+.app-shell:not(.sidebar-closed) .floating-menu-btn {
+  left: 262px;
 }
 
 .ai-button {

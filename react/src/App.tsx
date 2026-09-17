@@ -194,30 +194,16 @@ export default function App() {
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
         <main className="main" id="main-content">
-          <header className="topbar">
-            <button 
-              className="menu-button" 
-              type="button" 
-              aria-label={isSidebarOpen ? "收合選單" : "開啟選單"} 
-              title={isSidebarOpen ? "收合選單" : "開啟選單"}
-              aria-controls="primary-sidebar" 
-              aria-expanded={isSidebarOpen} 
-              onClick={() => setIsSidebarOpen(prev => !prev)}
-            >
-              <Menu size={18} />
-            </button>
-            <button className="page-back-button" id="page-back" type="button" aria-label="回到上一頁" hidden={currentView === 'activities' || currentView === 'chat'} onClick={() => handleSetView('activities')}>
-              <ArrowLeft size={16} />
-            </button>
-            <div className="breadcrumbs">
-              <span>工作台</span>
-              <b>/</b>
-              <strong>{currentView === 'chat' ? 'AI 對話' : '活動'}</strong>
-            </div>
-            <button className="ai-button" id="open-ai" type="button" aria-controls="ai-drawer" aria-expanded={isAiDrawerOpen} onClick={() => setIsAiDrawerOpen(true)}>
-              <Sparkles size={14} style={{ marginRight: '6px' }} />歷史參考
-            </button>
-          </header>
+          {/* 浮空在左上角的三線選單按鈕 */}
+          <button 
+            className="floating-menu-btn" 
+            type="button" 
+            aria-label={isSidebarOpen ? "收合選單" : "開啟選單"} 
+            title={isSidebarOpen ? "收合選單" : "開啟選單"}
+            onClick={() => setIsSidebarOpen(prev => !prev)}
+          >
+            <Menu size={18} />
+          </button>
 
           <div className="global-prototype-notice" role="note">
             <strong>Prototype｜僅供操作示意</strong>
