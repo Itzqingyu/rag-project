@@ -12,6 +12,8 @@ import {
   RefreshCw,
   Check,
   RotateCcw,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { fetchDocuments } from '../services/documentService';
 import { BackendDocument } from '../services/apiTypes';
@@ -135,6 +137,115 @@ export const MeetingExtractPanel: React.FC = () => {
   };
 
   /**
+   * 編輯會議摘要基本欄位
+   */
+  const handleUpdateMeetingField = (field: keyof typeof previewData.meeting, value: string) => {
+    if (!previewData) return;
+    setPreviewData({
+      ...previewData,
+      meeting: {
+        ...previewData.meeting,
+        [field]: value,
+      },
+    });
+  };
+
+  /**
+   * 編輯關鍵決策欄位
+   */
+  const handleUpdateDecisionField = (index: number, field: string, value: string) => {
+    if (!previewData) return;
+    const updatedDecisions = [...previewData.decisions];
+    updatedDecisions[index] = {
+      ...updatedDecisions[index],
+      [field]: value,
+    };
+    setPreviewData({
+      ...previewData,
+      decisions: updatedDecisions,
+    });
+  };
+
+  /**
+   * 刪除一筆決策
+   */
+  const handleDeleteDecision = (index: number) => {
+    if (!previewData) return;
+    setPreviewData({
+      ...previewData,
+      decisions: previewData.decisions.filter((_, i) => i !== index),
+    });
+  };
+
+  /**
+   * 新增一筆自訂決策
+   */
+  const handleAddDecision = () => {
+    if (!previewData) return;
+    const fallbackFilename = documents.find((d) => d.id === selectedDocId)?.filename || '會議紀錄全文';
+    setPreviewData({
+      ...previewData,
+      decisions: [
+        ...previewData.decisions,
+        {
+          problem: '',
+          options: '[]',
+          final_decision: '',
+          reason: '',
+          source: fallbackFilename,
+        },
+      ],
+    });
+  };
+
+  /**
+   * 編輯待辦清單欄位
+   */
+  const handleUpdateTaskField = (index: number, field: string, value: string) => {
+    if (!previewData) return;
+    const updatedTasks = [...previewData.tasks];
+    updatedTasks[index] = {
+      ...updatedTasks[index],
+      [field]: value,
+    };
+    setPreviewData({
+      ...previewData,
+      tasks: updatedTasks,
+    });
+  };
+
+  /**
+   * 刪除一筆待辦事項
+   */
+  const handleDeleteTask = (index: number) => {
+    if (!previewData) return;
+    setPreviewData({
+      ...previewData,
+      tasks: previewData.tasks.filter((_, i) => i !== index),
+    });
+  };
+
+  /**
+   * 新增一筆待辦事項
+   */
+  const handleAddTask = () => {
+    if (!previewData) return;
+    setPreviewData({
+      ...previewData,
+      tasks: [
+        ...previewData.tasks,
+        {
+          content: '',
+          assignee: '',
+          due_date: '',
+          priority: '中',
+          status: 'pending',
+        },
+      ],
+    });
+  };
+
+  /**
    * 重新整理或挑選其他文件
    */
   const handleReset = () => {
@@ -252,7 +363,7 @@ export const MeetingExtractPanel: React.FC = () => {
           </div>
         )}
 
-        {/* 2. 呈現 LLM 返回的標準化架構表格 (供確認) */}
+        {/* 2. 呈現 LLM 返回的標準化架構表格 (供檢視、編輯與確認) */}
         {previewData && !isExtracting && (
           <>
             {/* 會議基本資訊表格 */}
@@ -262,38 +373,91 @@ export const MeetingExtractPanel: React.FC = () => {
                   <Calendar size={18} />
                   <span>會議基本摘要</span>
                 </div>
-                <span className="extract-card-badge">會議概況</span>
+                <div className="extract-card-actions">
+                  <span className="extract-card-hint">可直接點擊欄位進行修改</span>
+                  <span className="extract-card-badge">會議概況</span>
+                </div>
               </div>
 
               <div className="standard-table-wrap">
-                <table className="standard-meeting-table">
+                <table className="standard-meeting-table editable">
                   <tbody>
                     <tr>
                       <th>會議名稱</th>
                       <td colSpan={3}>
-                        <strong>{previewData.meeting.name || '未提及'}</strong>
+                        <input
+                          type="text"
+                          className="table-input title-input"
+                          value={previewData.meeting.name || ''}
+                          onChange={(e) => handleUpdateMeetingField('name', e.target.value)}
+                          placeholder="例如：迎新宿營第一次籌備會"
+                        />
                       </td>
                     </tr>
                     <tr>
                       <th>開會日期</th>
-                      <td>{previewData.meeting.date || '未提及'}</td>
+                      <td>
+                        <input
+                          type="text"
+                          className="table-input"
+                          value={previewData.meeting.date || ''}
+                          onChange={(e) => handleUpdateMeetingField('date', e.target.value)}
+                          placeholder="例如：2026-09-20"
+                        />
+                      </td>
                       <th>時間範圍</th>
                       <td>
-                        {previewData.meeting.start_time || ''}
-                        {previewData.meeting.end_time ? ` - ${previewData.meeting.end_time}` : ''}
-                        {!previewData.meeting.start_time && !previewData.meeting.end_time && '未提及'}
+                        <div className="table-dual-input">
+                          <input
+                            type="text"
+                            className="table-input"
+                            value={previewData.meeting.start_time || ''}
+                            onChange={(e) => handleUpdateMeetingField('start_time', e.target.value)}
+                            placeholder="開始時間 (如 14:00)"
+                          />
+                          <span className="input-sep">-</span>
+                          <input
+                            type="text"
+                            className="table-input"
+                            value={previewData.meeting.end_time || ''}
+                            onChange={(e) => handleUpdateMeetingField('end_time', e.target.value)}
+                            placeholder="結束時間 (如 16:30)"
+                          />
+                        </div>
                       </td>
                     </tr>
                     <tr>
                       <th>會議地點</th>
-                      <td>{previewData.meeting.location || '未提及'}</td>
+                      <td>
+                        <input
+                          type="text"
+                          className="table-input"
+                          value={previewData.meeting.location || ''}
+                          onChange={(e) => handleUpdateMeetingField('location', e.target.value)}
+                          placeholder="例如：活動中心 201 會議室"
+                        />
+                      </td>
                       <th>參與成員</th>
-                      <td>{previewData.meeting.participants || '未提及'}</td>
+                      <td>
+                        <input
+                          type="text"
+                          className="table-input"
+                          value={previewData.meeting.participants || ''}
+                          onChange={(e) => handleUpdateMeetingField('participants', e.target.value)}
+                          placeholder="例如：王小明, 李大華, 張小芳"
+                        />
+                      </td>
                     </tr>
                     <tr>
                       <th>討論摘要</th>
                       <td colSpan={3} className="content-cell">
-                        {previewData.meeting.content || '無詳細摘要'}
+                        <textarea
+                          className="table-textarea"
+                          rows={3}
+                          value={previewData.meeting.content || ''}
+                          onChange={(e) => handleUpdateMeetingField('content', e.target.value)}
+                          placeholder="輸入或調整會議整體討論概述…"
+                        />
                       </td>
                     </tr>
                   </tbody>
@@ -308,34 +472,106 @@ export const MeetingExtractPanel: React.FC = () => {
                   <CheckCircle2 size={18} />
                   <span>關鍵決策事項 ({previewData.decisions.length} 項)</span>
                 </div>
-                <span className="extract-card-badge">Decisions</span>
+                <div className="extract-card-actions">
+                  <button
+                    type="button"
+                    className="button secondary sm-btn"
+                    onClick={handleAddDecision}
+                    title="新增一項決策"
+                  >
+                    <Plus size={14} />
+                    <span>新增決策</span>
+                  </button>
+                  <span className="extract-card-badge">Decisions</span>
+                </div>
               </div>
 
               {previewData.decisions.length === 0 ? (
-                <p className="no-data-note">此份會議紀錄中未識別出明確決策項目。</p>
+                <div className="no-data-action-wrap">
+                  <p className="no-data-note">此份會議紀錄中未識別出明確決策項目。</p>
+                  <button
+                    type="button"
+                    className="button secondary sm-btn"
+                    onClick={handleAddDecision}
+                  >
+                    <Plus size={14} />
+                    <span>新增第一筆決策</span>
+                  </button>
+                </div>
               ) : (
                 <div className="standard-table-wrap">
-                  <table className="standard-data-table">
+                  <table className="standard-data-table editable">
                     <thead>
                       <tr>
-                        <th style={{ width: '50px' }}>編號</th>
-                        <th>討論議題 / 問題</th>
-                        <th>最終決策結論</th>
-                        <th>考量理由</th>
-                        <th style={{ width: '130px' }}>資料來源</th>
+                        <th style={{ width: '45px' }}>編號</th>
+                        <th style={{ width: '25%' }}>討論議題 / 問題</th>
+                        <th style={{ width: '25%' }}>最終決策結論</th>
+                        <th style={{ width: '25%' }}>考量理由</th>
+                        <th style={{ width: '15%' }}>資料來源</th>
+                        <th style={{ width: '50px', textAlign: 'center' }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {previewData.decisions.map((dec, idx) => (
                         <tr key={idx}>
                           <td className="index-cell">{idx + 1}</td>
-                          <td className="topic-cell">{dec.problem}</td>
-                          <td className="decision-cell">{dec.final_decision}</td>
-                          <td className="reason-cell">{dec.reason || '無'}</td>
-                          <td className="source-cell">
-                            <span className="source-pill">
-                              {dec.source || documents.find((d) => d.id === selectedDocId)?.filename || '未指定'}
-                            </span>
+                          <td>
+                            <textarea
+                              className="table-cell-textarea topic-area"
+                              rows={2}
+                              value={dec.problem}
+                              onChange={(e) =>
+                                handleUpdateDecisionField(idx, 'problem', e.target.value)
+                              }
+                              placeholder="討論的問題或議題…"
+                            />
+                          </td>
+                          <td>
+                            <textarea
+                              className="table-cell-textarea decision-area"
+                              rows={2}
+                              value={dec.final_decision}
+                              onChange={(e) =>
+                                handleUpdateDecisionField(idx, 'final_decision', e.target.value)
+                              }
+                              placeholder="最終定案結論…"
+                            />
+                          </td>
+                          <td>
+                            <textarea
+                              className="table-cell-textarea reason-area"
+                              rows={2}
+                              value={dec.reason || ''}
+                              onChange={(e) =>
+                                handleUpdateDecisionField(idx, 'reason', e.target.value)
+                              }
+                              placeholder="決策考量之理由或背景…"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="table-cell-input source-area"
+                              value={
+                                dec.source !== undefined
+                                  ? dec.source
+                                  : documents.find((d) => d.id === selectedDocId)?.filename || ''
+                              }
+                              onChange={(e) =>
+                                handleUpdateDecisionField(idx, 'source', e.target.value)
+                              }
+                              placeholder="如：檔名或章節"
+                            />
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="table-row-delete-btn"
+                              onClick={() => handleDeleteDecision(idx)}
+                              title="刪除此項決策"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -352,40 +588,110 @@ export const MeetingExtractPanel: React.FC = () => {
                   <ListTodo size={18} />
                   <span>行動待辦清單 ({previewData.tasks.length} 項)</span>
                 </div>
-                <span className="extract-card-badge">Tasks</span>
+                <div className="extract-card-actions">
+                  <button
+                    type="button"
+                    className="button secondary sm-btn"
+                    onClick={handleAddTask}
+                    title="新增一項待辦"
+                  >
+                    <Plus size={14} />
+                    <span>新增待辦</span>
+                  </button>
+                  <span className="extract-card-badge">Tasks</span>
+                </div>
               </div>
 
               {previewData.tasks.length === 0 ? (
-                <p className="no-data-note">此份會議紀錄中未識別出待辦執行項目。</p>
+                <div className="no-data-action-wrap">
+                  <p className="no-data-note">此份會議紀錄中未識別出待辦執行項目。</p>
+                  <button
+                    type="button"
+                    className="button secondary sm-btn"
+                    onClick={handleAddTask}
+                  >
+                    <Plus size={14} />
+                    <span>新增第一筆待辦</span>
+                  </button>
+                </div>
               ) : (
                 <div className="standard-table-wrap">
-                  <table className="standard-data-table">
+                  <table className="standard-data-table editable">
                     <thead>
                       <tr>
-                        <th style={{ width: '60px' }}>編號</th>
+                        <th style={{ width: '45px' }}>編號</th>
                         <th>待辦執行項目</th>
-                        <th style={{ width: '120px' }}>指派人</th>
+                        <th style={{ width: '130px' }}>指派人</th>
                         <th style={{ width: '130px' }}>完成期限</th>
-                        <th style={{ width: '90px' }}>優先級</th>
+                        <th style={{ width: '100px' }}>優先級</th>
+                        <th style={{ width: '50px', textAlign: 'center' }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {previewData.tasks.map((tsk, idx) => (
                         <tr key={idx}>
                           <td className="index-cell">{idx + 1}</td>
-                          <td>{tsk.content}</td>
                           <td>
-                            <span className="person-pill">{tsk.assignee || '未指定'}</span>
+                            <input
+                              type="text"
+                              className="table-cell-input"
+                              value={tsk.content}
+                              onChange={(e) =>
+                                handleUpdateTaskField(idx, 'content', e.target.value)
+                              }
+                              placeholder="待辦工作內容…"
+                            />
                           </td>
-                          <td>{tsk.due_date || '無期限'}</td>
                           <td>
-                            <span
-                              className={`priority-tag ${
-                                tsk.priority === '高' ? 'high' : tsk.priority === '低' ? 'low' : 'mid'
+                            <input
+                              type="text"
+                              className="table-cell-input person-input"
+                              value={tsk.assignee || ''}
+                              onChange={(e) =>
+                                handleUpdateTaskField(idx, 'assignee', e.target.value)
+                              }
+                              placeholder="負責人"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="table-cell-input date-input"
+                              value={tsk.due_date || ''}
+                              onChange={(e) =>
+                                handleUpdateTaskField(idx, 'due_date', e.target.value)
+                              }
+                              placeholder="如：2026-09-30"
+                            />
+                          </td>
+                          <td>
+                            <select
+                              className={`priority-select ${
+                                tsk.priority === '高'
+                                  ? 'high'
+                                  : tsk.priority === '低'
+                                  ? 'low'
+                                  : 'mid'
                               }`}
+                              value={tsk.priority || '中'}
+                              onChange={(e) =>
+                                handleUpdateTaskField(idx, 'priority', e.target.value)
+                              }
                             >
-                              {tsk.priority || '中'}
-                            </span>
+                              <option value="高">高優先</option>
+                              <option value="中">中優先</option>
+                              <option value="低">低優先</option>
+                            </select>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="table-row-delete-btn"
+                              onClick={() => handleDeleteTask(idx)}
+                              title="刪除此項待辦"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </td>
                         </tr>
                       ))}

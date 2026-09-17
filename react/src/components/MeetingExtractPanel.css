@@ -364,6 +364,183 @@
   margin: 4px 0 0;
 }
 
+.no-data-action-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+/* 編輯欄位與按鈕通用樣式 */
+.extract-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.extract-card-hint {
+  font-size: .78rem;
+  color: var(--muted, #758097);
+  font-weight: 500;
+}
+
+.table-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 6px;
+  font-size: .86rem;
+  color: var(--ink, #101928);
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.table-input:focus {
+  outline: none;
+  border-color: var(--violet, #7657d5);
+  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+}
+
+.table-input.title-input {
+  font-weight: 700;
+  font-size: .92rem;
+}
+
+.table-dual-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-dual-input .input-sep {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.table-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 6px;
+  font-size: .86rem;
+  line-height: 1.5;
+  color: var(--ink, #101928);
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.table-textarea:focus {
+  outline: none;
+  border-color: var(--violet, #7657d5);
+  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+}
+
+/* 列表表格內輸入項 */
+.standard-data-table.editable td {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
+.table-cell-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 6px;
+  font-size: .83rem;
+  color: var(--ink, #101928);
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.table-cell-input:focus {
+  outline: none;
+  border-color: var(--violet, #7657d5);
+  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+}
+
+.table-cell-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 6px;
+  font-size: .83rem;
+  line-height: 1.4;
+  color: var(--ink, #101928);
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.table-cell-textarea:focus {
+  outline: none;
+  border-color: var(--violet, #7657d5);
+  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+}
+
+.table-cell-textarea.topic-area {
+  font-weight: 700;
+}
+
+.table-cell-textarea.decision-area {
+  font-weight: 700;
+  color: var(--violet, #7657d5);
+}
+
+.priority-select {
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line, #dfe4eb);
+  font-size: .8rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.priority-select.high {
+  background: var(--danger-soft, #ffece8);
+  color: var(--danger, #d93829);
+  border-color: #ffccc7;
+}
+
+.priority-select.mid {
+  background: var(--warning-soft, #fff3db);
+  color: var(--warning, #d97706);
+  border-color: #ffe58f;
+}
+
+.priority-select.low {
+  background: var(--cyan-soft, #e8efff);
+  color: var(--cyan, #4776e6);
+  border-color: #bae0ff;
+}
+
+.table-row-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted, #758097);
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.table-row-delete-btn:hover {
+  color: var(--danger, #d93829);
+  background: var(--danger-soft, #ffece8);
+}
+
 /* 底部確認寫入操作欄 */
 .extract-bottom-dock {
   flex-shrink: 0;
