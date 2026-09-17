@@ -416,3 +416,52 @@
 .send-btn:not(:disabled):hover {
   transform: translateY(-1px);
 }
+
+/* 後端 API 連線或執行異常提示列 */
+.chat-api-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff1f0;
+  border-bottom: 1px solid var(--danger, #ff4d4f);
+  color: var(--danger, #cf1322);
+  padding: 8px 24px;
+  font-size: .82rem;
+  font-weight: 600;
+  z-index: 10;
+  animation: slide-down 0.2s ease-out;
+}
+
+.chat-api-error-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-api-error-dismiss {
+  background: transparent;
+  border: 1px solid var(--danger, #ff4d4f);
+  color: var(--danger, #cf1322);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-api-error-dismiss:hover {
+  background: #ffe8e6;
+}
+
+/* 訊息氣泡錯誤狀態 */
+.assistant-body.error-body {
+  border-color: var(--danger, #ff4d4f);
+  background: #fff8f8;
+  color: var(--danger, #cf1322);
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

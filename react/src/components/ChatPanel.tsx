@@ -1,12 +1,37 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Bot, User, MessageSquare, Sparkles, ChevronDown, ChevronUp, FileText, BookOpen } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  Send,
+  Paperclip,
+  Bot,
+  User,
+  MessageSquare,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  BookOpen,
+  AlertCircle,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import SessionSidebar, { SessionItem } from './SessionSidebar';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
+import {
+  fetchSessions,
+  fetchSessionDetail,
+  createNewSession,
+  deleteSessionById,
+  sendChatMessage,
+} from '../services/chatService';
+import {
+  fetchDocuments,
+  uploadDocument,
+  deleteDocumentByIdentifier,
+} from '../services/documentService';
+import { RetrievedChunk } from '../services/apiTypes';
 import './ChatPanel.css';
 
 /**
- * 訊息氣泡介面定義
+ * 前端訊息氣泡介面定義
  */
 export interface ChatMessage {
   id: string;
@@ -14,50 +39,75 @@ export interface ChatMessage {
   content: string;
   mode?: 'chat' | 'rag';
   createdAt: string;
-  // 檢索切片引用來源 (可選)
+  // 檢索切片引用來源清單
   retrievedChunks?: Array<{
     content: string;
     source?: string;
   }>;
+  // 是否為呼叫失敗的錯誤提示氣泡
+  isError?: boolean;
+}
+
+/**
+ * 格式化 ISO 日期字串為易讀時間格式 (例如 "14:30" 或 "09-17 14:30")
+ */
+function formatTimeString(isoString?: string): string {
+  if (!isoString) {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return isoString;
+  }
 }
 
 /**
  * LLM 聊天面板主組件 (Chat Panel)
  * 整合：
  * 1. 雙欄佈局 (會話清單邊欄 + 聊天串流主區)
- * 2. 模式切換 Toggle Pill (💬 普通對話 vs 📚 知識庫問答)
- * 3. 極簡空狀態 (無訊息時顯示簡潔圖示與提示)
- * 4. 浮動知識庫文檔抽屜 (Document Drawer)
- * 5. 本機狀態發送互動與自動捲動
+ * 2. 模式切換 Toggle Pill (普通對話 vs 知識庫問答)
+ * 3. 完整接入 Python FastAPI 後端端點，無任何假資料或模擬回覆
+ * 4. 後端連線異常或處理失敗時即時返回真實錯誤狀態
+ * 5. 浮動知識庫文檔抽屜 (支援真實上傳切片與刪除)
  */
 export const ChatPanel: React.FC = () => {
-  // 會話列表狀態 (初始為空列表，無假資料)
+  // 會話列表狀態 (來源為後端 /sessions)
   const [sessions, setSessions] = useState<SessionItem[]>([]);
-  // 當前選中的會話 ID
+  // 當前選中的會話 ID (以 string 儲存對齊組件 props)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   // 當前對話模式：'chat' (普通對話) 或 'rag' (知識庫問答)
   const [currentMode, setCurrentMode] = useState<'chat' | 'rag'>('chat');
 
-  // 訊息串流狀態 (對應各會話的訊息對應表，初始皆為空)
+  // 訊息串流狀態 (各會話的歷史訊息快取)
   const [sessionMessages, setSessionMessages] = useState<Record<string, ChatMessage[]>>({});
 
   // 輸入框文字狀態
   const [input, setInput] = useState('');
-  // 訊息發送中的 Loading 狀態 (供互動模擬)
+  // 訊息發送與後端 LLM 推理中的 Loading 狀態
   const [loading, setLoading] = useState(false);
+
+  // 全域/頂部 API 連線或操作錯誤訊息
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // 知識庫文檔抽屜開啟狀態
   const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
-  // 知識庫文件清單狀態 (初始為空列表，無假資料)
+  // 知識庫文件清單狀態 (來源為後端 /documents)
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  // 知識庫文件上傳中狀態
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  // 知識庫抽屜專屬錯誤訊息
+  const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
 
   // 參考切片折疊狀態 (key: messageId, value: boolean)
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 訊息更新時自動向下滾動至最新訊息
+  // 自動向下滾動至最新訊息
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -69,125 +119,291 @@ export const ChatPanel: React.FC = () => {
   }, [currentMessages, loading]);
 
   /**
-   * 新增對話會話 (本機狀態)
+   * 從後端獲取文件清單
    */
-  const handleCreateSession = () => {
-    const newId = `session-${Date.now()}`;
-    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newSession: SessionItem = {
-      id: newId,
-      title: '新對話',
-      createdAt: nowStr,
-    };
-
-    setSessions((prev) => [newSession, ...prev]);
-    setActiveSessionId(newId);
-    setSessionMessages((prev) => ({
-      ...prev,
-      [newId]: [],
-    }));
-  };
+  const loadDocuments = useCallback(async () => {
+    try {
+      const backendDocs = await fetchDocuments();
+      const mappedDocs: DocumentItem[] = backendDocs.map((doc) => ({
+        id: String(doc.id),
+        name: doc.filename,
+        size: `${doc.chunk_count} 個切片`,
+        uploadedAt: formatTimeString(doc.upload_date),
+        chunkCount: doc.chunk_count,
+      }));
+      setDocuments(mappedDocs);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDocDrawerError(`無法載入知識庫文檔：${msg}`);
+    }
+  }, []);
 
   /**
-   * 刪除指定會話 (本機狀態)
+   * 從後端獲取會話清單
    */
-  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    setSessionMessages((prev) => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
+  const loadSessions = useCallback(async () => {
+    try {
+      const backendSessions = await fetchSessions();
+      const mappedSessions: SessionItem[] = backendSessions.map((s) => ({
+        id: String(s.id),
+        title: s.title || '對話會話',
+        createdAt: formatTimeString(s.created_at || s.updated_at),
+      }));
+      setSessions(mappedSessions);
 
-    if (activeSessionId === id) {
-      // 若刪除的是當前會話，自動切換至剩餘的第一個會話或 null
-      const remaining = sessions.filter((s) => s.id !== id);
-      setActiveSessionId(remaining.length > 0 ? remaining[0].id : null);
+      // 若目前尚未選擇會話且有歷史會話，預設選取最新一個
+      if (mappedSessions.length > 0 && !activeSessionId) {
+        setActiveSessionId(mappedSessions[0].id);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`無法載入會話清單：${msg}`);
+    }
+  }, [activeSessionId]);
+
+  /**
+   * 載入指定會話的歷史訊息
+   */
+  const loadSessionHistory = useCallback(async (sessionIdStr: string) => {
+    const numId = Number(sessionIdStr);
+    if (isNaN(numId)) return;
+
+    try {
+      const detail = await fetchSessionDetail(numId);
+      const mappedMessages: ChatMessage[] = (detail.messages || []).map((m) => {
+        // 解析檢索切片格式 (相容 SQLite 字串儲存或 Python 物件)
+        let parsedChunks: Array<{ content: string; source?: string }> = [];
+        if (m.retrieved_chunks) {
+          try {
+            const raw =
+              typeof m.retrieved_chunks === 'string'
+                ? JSON.parse(m.retrieved_chunks)
+                : m.retrieved_chunks;
+            if (Array.isArray(raw)) {
+              parsedChunks = raw.map((c: RetrievedChunk | Record<string, unknown>) => ({
+                content: (c as { content?: string }).content || '',
+                source:
+                  (c as { metadata?: { source?: string } }).metadata?.source ||
+                  (c as { source?: string }).source ||
+                  '文件知識庫',
+              }));
+            }
+          } catch {
+            // 若切片解析異常則略過
+          }
+        }
+
+        return {
+          id: String(m.id),
+          role: m.role,
+          content: m.content,
+          mode: m.mode,
+          createdAt: formatTimeString(m.created_at),
+          retrievedChunks: parsedChunks.length > 0 ? parsedChunks : undefined,
+        };
+      });
+
+      setSessionMessages((prev) => ({
+        ...prev,
+        [sessionIdStr]: mappedMessages,
+      }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`無法載入會話歷史：${msg}`);
+    }
+  }, []);
+
+  // 組件載入時，從後端取得會話與文件資料
+  useEffect(() => {
+    loadSessions();
+    loadDocuments();
+  }, [loadSessions, loadDocuments]);
+
+  // 當切換會話且該會話歷史尚未載入時，觸發取得
+  useEffect(() => {
+    if (activeSessionId && !sessionMessages[activeSessionId]) {
+      loadSessionHistory(activeSessionId);
+    }
+  }, [activeSessionId, sessionMessages, loadSessionHistory]);
+
+  /**
+   * 新增對話會話 (呼叫後端 POST /sessions)
+   */
+  const handleCreateSession = async () => {
+    try {
+      setApiError(null);
+      const newSession = await createNewSession('新對話');
+      const newSessionItem: SessionItem = {
+        id: String(newSession.id),
+        title: newSession.title || '新對話',
+        createdAt: formatTimeString(newSession.created_at),
+      };
+
+      setSessions((prev) => [newSessionItem, ...prev]);
+      setActiveSessionId(newSessionItem.id);
+      setSessionMessages((prev) => ({
+        ...prev,
+        [newSessionItem.id]: [],
+      }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`建立新對話失敗：${msg}`);
     }
   };
 
   /**
-   * 發送訊息處理函式 (第一階段：本機狀態互動)
+   * 刪除指定會話 (呼叫後端 DELETE /sessions/{id})
    */
-  const handleSendMessage = () => {
+  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const numId = Number(id);
+    if (isNaN(numId)) return;
+
+    try {
+      setApiError(null);
+      await deleteSessionById(numId);
+
+      // 本機狀態同步移除
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      setSessionMessages((prev) => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
+
+      if (activeSessionId === id) {
+        const remaining = sessions.filter((s) => s.id !== id);
+        setActiveSessionId(remaining.length > 0 ? remaining[0].id : null);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`刪除會話失敗：${msg}`);
+    }
+  };
+
+  /**
+   * 發送訊息至後端 (呼叫 POST /sessions/{id}/messages)
+   * 絕不使用假資料模擬，後端異常則顯示真實錯誤
+   */
+  const handleSendMessage = async () => {
     if (!input.trim() || loading) return;
 
-    // 若當前尚未有選中的會話，自動為使用者建立一個
+    const userText = input.trim();
+    setInput('');
+    setApiError(null);
+
     let targetSessionId = activeSessionId;
+
+    // 1. 若當前尚未有選中的會話，先向後端請求建立一個
     if (!targetSessionId) {
-      const newId = `session-${Date.now()}`;
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const newSession: SessionItem = {
-        id: newId,
-        title: input.trim().slice(0, 15),
-        createdAt: nowStr,
-      };
-      setSessions((prev) => [newSession, ...prev]);
-      targetSessionId = newId;
-      setActiveSessionId(newId);
+      try {
+        const newSession = await createNewSession(userText.slice(0, 16));
+        const newSessionItem: SessionItem = {
+          id: String(newSession.id),
+          title: newSession.title || userText.slice(0, 16),
+          createdAt: formatTimeString(newSession.created_at),
+        };
+        setSessions((prev) => [newSessionItem, ...prev]);
+        targetSessionId = newSessionItem.id;
+        setActiveSessionId(newSessionItem.id);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setApiError(`無法自動建立對話會話：${msg}`);
+        return;
+      }
     }
 
-    const userText = input.trim();
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const sessionIdNum = Number(targetSessionId);
+    if (isNaN(sessionIdNum)) {
+      setApiError('會話 ID 無效');
+      return;
+    }
 
-    // 建立使用者自身訊息氣泡
+    // 2. 在前端即時插入使用者輸入氣泡 (樂觀更新)
+    const tempUserMsgId = `temp-user-${Date.now()}`;
     const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: tempUserMsgId,
       role: 'user',
       content: userText,
       mode: currentMode,
-      createdAt: nowTime,
+      createdAt: formatTimeString(),
     };
 
-    // 更新當前會話的訊息紀錄
     setSessionMessages((prev) => ({
       ...prev,
       [targetSessionId as string]: [...(prev[targetSessionId as string] || []), userMsg],
     }));
 
-    // 若會話標題仍為「新對話」，自動更新為提問文字
-    setSessions((prev) =>
-      prev.map((s) => {
-        if (s.id === targetSessionId && s.title === '新對話') {
-          return { ...s, title: userText.slice(0, 16) };
-        }
-        return s;
-      })
-    );
-
-    setInput('');
     setLoading(true);
 
-    // 模擬助手回傳預留提示訊息 (供驗證氣泡與滾動樣式)
-    setTimeout(() => {
-      const assistantReply: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
+    // 3. 呼叫後端 API 發送訊息
+    try {
+      const response = await sendChatMessage(sessionIdNum, userText, currentMode, 5);
+
+      // 解析後端檢索切片來源
+      const rawChunks = response.retrieved_chunks || [];
+      const parsedChunks = rawChunks.map((c) => ({
+        content: c.content,
+        source: c.metadata?.source || '文件知識庫',
+      }));
+
+      // 構建後端真實回傳之助手訊息
+      const assistantMsg: ChatMessage = {
+        id: String(response.assistant_message.id),
         role: 'assistant',
-        content:
-          currentMode === 'rag'
-            ? `（UI 框架展示階段）您在「**知識庫問答**」模式下提問：\n\n> ${userText}\n\n目前尚未連接後端 API，後續將自動檢索入庫文檔並提供結構化解答與引用來源。`
-            : `（UI 框架展示階段）您在「**普通對話**」模式下提問：\n\n> ${userText}\n\n目前尚未連接後端 API，後續將由大語言模型直接生成回覆。`,
+        content: response.assistant_message.content,
+        mode: response.assistant_message.mode,
+        createdAt: formatTimeString(response.assistant_message.created_at),
+        retrievedChunks: parsedChunks.length > 0 ? parsedChunks : undefined,
+      };
+
+      // 將臨時使用者訊息以真實後端紀錄取代，並附加助理回覆
+      setSessionMessages((prev) => {
+        const currentList = prev[targetSessionId as string] || [];
+        const filteredList = currentList.filter((m) => m.id !== tempUserMsgId);
+        const realUserMsg: ChatMessage = {
+          id: String(response.user_message.id),
+          role: 'user',
+          content: response.user_message.content,
+          mode: response.user_message.mode,
+          createdAt: formatTimeString(response.user_message.created_at),
+        };
+        return {
+          ...prev,
+          [targetSessionId as string]: [...filteredList, realUserMsg, assistantMsg],
+        };
+      });
+
+      // 同步更新側邊欄會話標題 (若後端自動命名)
+      setSessions((prev) =>
+        prev.map((s) => {
+          if (s.id === targetSessionId && (s.title === '新對話' || s.title === '對話會話')) {
+            return { ...s, title: userText.slice(0, 16) };
+          }
+          return s;
+        })
+      );
+    } catch (err: unknown) {
+      // 後端無回應或執行失敗時，嚴格返回真實錯誤訊息，絕不假裝回覆
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`後端服務處理失敗：${msg}`);
+
+      const errorBubble: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `**對話服務發生錯誤**\n\n${msg}`,
         mode: currentMode,
-        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        // 若為 RAG 模式，展示預留的切片來源卡片骨架
-        retrievedChunks:
-          currentMode === 'rag'
-            ? [
-              {
-                source: '活動籌備規劃指引.md',
-                content: '活動籌備期間應定期召開籌備協調會議，各組工作進度與突發狀況應詳實記錄...',
-              },
-            ]
-            : undefined,
+        createdAt: formatTimeString(),
+        isError: true,
       };
 
       setSessionMessages((prev) => ({
         ...prev,
-        [targetSessionId as string]: [...(prev[targetSessionId as string] || []), assistantReply],
+        [targetSessionId as string]: [...(prev[targetSessionId as string] || []), errorBubble],
       }));
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   /**
@@ -210,21 +426,36 @@ export const ChatPanel: React.FC = () => {
     }));
   };
 
-  // 本機上傳文件模擬
-  const handleUploadFileLocal = (file: File) => {
-    const newDoc: DocumentItem = {
-      id: `doc-${Date.now()}`,
-      name: file.name,
-      size: `${(file.size / 1024).toFixed(1)} KB`,
-      uploadedAt: '剛才',
-      chunkCount: 3,
-    };
-    setDocuments((prev) => [newDoc, ...prev]);
+  /**
+   * 知識庫文件真實上傳 (呼叫 POST /upload)
+   */
+  const handleUploadFile = async (file: File) => {
+    setIsUploadingDoc(true);
+    setDocDrawerError(null);
+    try {
+      await uploadDocument(file);
+      // 上傳完成後重新獲取文檔列表
+      await loadDocuments();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDocDrawerError(`上傳檔案失敗：${msg}`);
+    } finally {
+      setIsUploadingDoc(false);
+    }
   };
 
-  // 本機刪除文件模擬
-  const handleDeleteDocumentLocal = (id: string) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
+  /**
+   * 知識庫文件真實刪除 (呼叫 DELETE /documents/{id})
+   */
+  const handleDeleteDocument = async (id: string) => {
+    try {
+      setDocDrawerError(null);
+      await deleteDocumentByIdentifier(id);
+      await loadDocuments();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDocDrawerError(`刪除文檔失敗：${msg}`);
+    }
   };
 
   const activeSessionTitle =
@@ -263,16 +494,33 @@ export const ChatPanel: React.FC = () => {
           </div>
         </header>
 
+        {/* 全域 API 異常提示列 (後端未連線或報錯時顯示) */}
+        {apiError && (
+          <div className="chat-api-error-banner" role="alert">
+            <div className="chat-api-error-info">
+              <AlertCircle size={16} />
+              <span>{apiError}</span>
+            </div>
+            <button
+              type="button"
+              className="chat-api-error-dismiss"
+              onClick={() => setApiError(null)}
+            >
+              關閉
+            </button>
+          </div>
+        )}
+
         {/* 聊天串流訊息滾動區 */}
         <div className="chat-stream-container">
           {currentMessages.length === 0 ? (
-            // 極簡空狀態 (符合用戶偏好：簡約圖示與提示字樣)
+            // 極簡空狀態：簡約圖示與操作提示
             <div className="chat-empty-state">
               <div className="empty-icon-wrapper">
                 <Bot size={40} />
               </div>
               <h3>尚無訊息</h3>
-              <p>在下方輸入開始對話，或切換模式詢問知識庫</p>
+              <p>在下方輸入開始對話，或切換至知識庫問答查詢入庫文件</p>
             </div>
           ) : (
             // 渲染訊息氣泡列表
@@ -281,6 +529,7 @@ export const ChatPanel: React.FC = () => {
                 const isUser = msg.role === 'user';
                 const hasChunks = msg.retrievedChunks && msg.retrievedChunks.length > 0;
                 const isExpanded = !!expandedChunks[msg.id];
+                const isErrorBubble = !!msg.isError;
 
                 return (
                   <div
@@ -288,14 +537,30 @@ export const ChatPanel: React.FC = () => {
                     className={`chat-bubble-row ${isUser ? 'user-row' : 'assistant-row'}`}
                   >
                     {/* 頭像 */}
-                    <div className={`chat-avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}`}>
-                      {isUser ? <User size={18} /> : <Bot size={18} />}
+                    <div
+                      className={`chat-avatar ${
+                        isUser
+                          ? 'user-avatar'
+                          : isErrorBubble
+                          ? 'assistant-avatar error-avatar'
+                          : 'assistant-avatar'
+                      }`}
+                    >
+                      {isUser ? (
+                        <User size={18} />
+                      ) : isErrorBubble ? (
+                        <AlertCircle size={18} />
+                      ) : (
+                        <Bot size={18} />
+                      )}
                     </div>
 
                     {/* 氣泡內容 */}
                     <div className="chat-bubble-wrapper">
                       <div className="chat-bubble-meta">
-                        <span className="bubble-author">{isUser ? '你' : 'AI 助手'}</span>
+                        <span className="bubble-author">
+                          {isUser ? '你' : isErrorBubble ? '系統提示' : 'AI 助手'}
+                        </span>
                         <span className="bubble-time">{msg.createdAt}</span>
                         {msg.mode && (
                           <span className={`bubble-mode-tag ${msg.mode}`}>
@@ -304,7 +569,15 @@ export const ChatPanel: React.FC = () => {
                         )}
                       </div>
 
-                      <div className={`chat-bubble-body ${isUser ? 'user-body' : 'assistant-body'}`}>
+                      <div
+                        className={`chat-bubble-body ${
+                          isUser
+                            ? 'user-body'
+                            : isErrorBubble
+                            ? 'assistant-body error-body'
+                            : 'assistant-body'
+                        }`}
+                      >
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
 
                         {/* RAG 參考來源折疊卡片 */}
@@ -387,8 +660,8 @@ export const ChatPanel: React.FC = () => {
             </div>
             <span className="mode-tip-text">
               {currentMode === 'rag'
-                ? '將檢索已導入之文件切片輔助回答'
-                : '無需檢索文件，由 AI 自由發揮與上下文記憶對話'}
+                ? '檢索已導入之文件向量切片輔助回答'
+                : '無需檢索文件，由 AI 自由推理與歷史上下文記憶對話'}
             </span>
           </div>
 
@@ -434,8 +707,11 @@ export const ChatPanel: React.FC = () => {
         isOpen={isDocDrawerOpen}
         onClose={() => setIsDocDrawerOpen(false)}
         documents={documents}
-        onUploadFile={handleUploadFileLocal}
-        onDeleteDocument={handleDeleteDocumentLocal}
+        onUploadFile={handleUploadFile}
+        onDeleteDocument={handleDeleteDocument}
+        isUploading={isUploadingDoc}
+        errorMessage={docDrawerError}
+        onClearError={() => setDocDrawerError(null)}
       />
     </div>
   );

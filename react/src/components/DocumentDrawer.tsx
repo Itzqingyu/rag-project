@@ -20,10 +20,16 @@ interface DocumentDrawerProps {
   onClose: () => void;
   // 目前已導入的文件清單
   documents: DocumentItem[];
-  // 本機上傳檔案回呼
+  // 上傳檔案回呼
   onUploadFile?: (file: File) => void;
-  // 本機刪除檔案回呼
+  // 刪除檔案回呼
   onDeleteDocument?: (id: string) => void;
+  // 是否正在上傳與向量化
+  isUploading?: boolean;
+  // 錯誤提示訊息
+  errorMessage?: string | null;
+  // 清除錯誤提示
+  onClearError?: () => void;
 }
 
 /**
@@ -36,6 +42,9 @@ export const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
   documents,
   onUploadFile,
   onDeleteDocument,
+  isUploading = false,
+  errorMessage = null,
+  onClearError,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,19 +107,33 @@ export const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
             onChange={handleFileChange}
           />
           <div
-            className="doc-upload-dropzone"
-            onClick={handleTriggerUpload}
+            className={`doc-upload-dropzone ${isUploading ? 'uploading' : ''}`}
+            onClick={!isUploading ? handleTriggerUpload : undefined}
             role="button"
             tabIndex={0}
           >
-            <UploadCloud size={28} className="upload-icon" />
-            <strong>點擊或拖曳檔案至此上傳</strong>
+            <UploadCloud size={28} className={`upload-icon ${isUploading ? 'spinning' : ''}`} />
+            <strong>{isUploading ? '文件上傳與向量化處理中…' : '點擊或拖曳檔案至此上傳'}</strong>
             <small>支援 Markdown (.md)、純文字 (.txt)、PDF (.pdf)、Word (.docx)</small>
           </div>
-          <div className="doc-upload-tip">
-            <AlertCircle size={14} />
-            <span>檔案上傳後將自動切片並建立向量索引</span>
-          </div>
+          {errorMessage ? (
+            <div className="doc-error-banner" role="alert">
+              <AlertCircle size={15} />
+              <div className="doc-error-content">
+                <span>{errorMessage}</span>
+                {onClearError && (
+                  <button type="button" className="doc-error-dismiss" onClick={onClearError}>
+                    關閉
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="doc-upload-tip">
+              <AlertCircle size={14} />
+              <span>檔案上傳後將自動切片並建立向量索引</span>
+            </div>
+          )}
         </div>
 
         {/* 文件清單標題與數量統計 */}

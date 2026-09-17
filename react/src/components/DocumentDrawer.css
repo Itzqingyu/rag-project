@@ -79,6 +79,54 @@
   color: var(--muted, #758097);
 }
 
+.doc-upload-dropzone.uploading {
+  border-color: var(--cyan);
+  background: var(--cyan-soft);
+  cursor: wait;
+}
+
+.upload-icon.spinning {
+  animation: doc-spin 1s linear infinite;
+}
+
+@keyframes doc-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.doc-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: .75rem;
+  color: var(--danger, #e53935);
+  background: #fff0f0;
+  border: 1px solid var(--danger, #e53935);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.doc-error-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doc-error-dismiss {
+  align-self: flex-end;
+  background: transparent;
+  border: none;
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--danger, #e53935);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
 .doc-upload-tip {
   display: flex;
   align-items: center;
