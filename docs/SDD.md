@@ -46,9 +46,11 @@ rag-project/
 │   │   │   ├── apiTypes.ts       # 後端資料結構與 TypeScript 介面定義
 │   │   │   ├── apiClient.ts      # HTTP 請求封裝、錯誤攔截與後端斷線處理
 │   │   │   ├── chatService.ts    # 對話會話增刪查改與雙模式訊息發送
-│   │   │   └── documentService.ts # 知識庫文件清單、上傳轉檔向量化與刪除
+│   │   │   ├── documentService.ts # 知識庫文件清單、上傳轉檔向量化與刪除
+│   │   │   └── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
 │   │   ├── components/           # 組件與同名獨立樣式 (.tsx & .css)
 │   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、即時 API 串接與真實錯誤反饋)
+│   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流，提取會議、決策與待辦)
 │   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、刪除)
 │   │   │   ├── DocumentDrawer.tsx # 知識庫文檔抽屜 (文件清單、真實上傳與刪除)
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
@@ -145,6 +147,7 @@ npm run dev                                      # 啟動 Electron 前端
 - ✅ 活動管理 Python／SQLite 核心 CRUD 與關聯驗證
 - ✅ 前端 LLM 聊天大面板 UI 框架 (雙欄佈局、會話管理側欄、模式切換 Toggle Pill、極簡空狀態、知識庫文檔抽屜)
 - ✅ 前後端 API 串接與端對端整合 (完整接入 Session、Message 雙模式、Document 上傳與向量化，全面剔除模擬假資料並建立嚴格錯誤反饋機制)
+- ✅ 前端「AI 功能」側欄下拉折疊導航與 AI 會議紀錄整理面板 (接入 /extract_summary 與 /commit_summary，實現 1-shot 萃取、即時預覽與活動資料庫寫入)
 - ⏳ Electron 打包與自動化端對端啟動流程整合 (進行中)
 - ❌ 高級權限與團隊協作 (後續)
 - ❌ 版本控制與複雜自訂設定 (後續)

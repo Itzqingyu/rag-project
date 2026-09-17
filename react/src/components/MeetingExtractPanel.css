@@ -1,0 +1,374 @@
+/* ==========================================
+   MeetingExtractPanel.css - AI 會議紀錄整理面板樣式
+   ========================================== */
+
+.extract-panel-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--canvas, #f3f5f8);
+  color: var(--ink, #101928);
+  overflow: hidden;
+  position: relative;
+}
+
+/* 頂部標題列 */
+.extract-top-header {
+  flex-shrink: 0;
+  height: 56px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line, #dfe4eb);
+  background: #ffffff;
+}
+
+.extract-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.extract-header-title h2 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin: 0;
+  color: #101928 !important;
+}
+
+.extract-sparkle-icon {
+  color: var(--violet, #7657d5);
+}
+
+.extract-header-tag {
+  font-size: .72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--violet-soft, #efe8ff);
+  color: var(--violet, #7657d5);
+}
+
+/* 內容可滾動串流區 */
+.extract-content-scroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px clamp(20px, 4vw, 48px) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 全域 API 異常提示列 */
+.extract-api-error-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff1f0;
+  border-bottom: 1px solid var(--danger, #ff4d4f);
+  color: var(--danger, #cf1322);
+  padding: 8px 28px;
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.extract-api-error-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extract-api-error-dismiss {
+  background: transparent;
+  border: 1px solid var(--danger, #ff4d4f);
+  color: var(--danger, #cf1322);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 步驟卡片通用樣式 */
+.extract-card {
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: var(--radius, 12px);
+  padding: 22px 24px;
+  box-shadow: 0 4px 16px rgba(16, 25, 40, 0.03);
+}
+
+.extract-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line, #dfe4eb);
+}
+
+.extract-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .95rem;
+  font-weight: 800;
+  color: var(--ink, #101928);
+}
+
+.extract-card-badge {
+  font-size: .75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--canvas);
+  color: var(--muted);
+}
+
+/* 第一階段：設定與選擇區 */
+.extract-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 800px) {
+  .extract-selector-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.selector-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selector-field label {
+  font-size: .82rem;
+  font-weight: 800;
+  color: var(--ink, #101928);
+}
+
+.selector-field select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line, #dfe4eb);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink, #101928);
+  font-size: .88rem;
+  cursor: pointer;
+}
+
+.selector-field select:focus {
+  outline: none;
+  border-color: var(--violet, #7657d5);
+}
+
+.selector-field small {
+  font-size: .75rem;
+  color: var(--muted, #758097);
+}
+
+.extract-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.extract-run-btn {
+  background: var(--violet, #7657d5) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.extract-run-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 分析中載入狀態 */
+.extract-loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: var(--radius, 12px);
+}
+
+.extract-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--violet-soft, #efe8ff);
+  border-top-color: var(--violet, #7657d5);
+  border-radius: 50%;
+  animation: extract-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes extract-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.extract-loading-box strong {
+  font-size: 1.05rem;
+  color: var(--ink, #101928);
+  margin-bottom: 6px;
+}
+
+.extract-loading-box p {
+  font-size: .85rem;
+  color: var(--muted, #758097);
+}
+
+/* 預覽表單欄位 */
+.preview-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .preview-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.preview-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.preview-form-group label {
+  font-size: .78rem;
+  font-weight: 800;
+  color: var(--muted, #758097);
+}
+
+.preview-form-group input,
+.preview-form-group textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 6px;
+  background: var(--canvas, #f3f5f8);
+  color: var(--ink, #101928);
+  font-size: .88rem;
+  font-family: inherit;
+}
+
+.preview-form-group input:focus,
+.preview-form-group textarea:focus {
+  outline: none;
+  border-color: var(--violet, #7657d5);
+  background: #ffffff;
+}
+
+/* 決策與待辦列表項目卡片 */
+.extract-items-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.extract-sub-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 8px;
+  background: var(--canvas, #f3f5f8);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.extract-sub-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.extract-sub-card-num {
+  font-size: .75rem;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--navy, #111b2e);
+  color: #ffffff;
+}
+
+.extract-item-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink, #101928);
+  font-size: .84rem;
+}
+
+/* 提交成功提示卡片 */
+.extract-success-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 8px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #389e0d;
+  font-size: .88rem;
+  font-weight: 700;
+}
+
+.extract-success-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 底部操作固定欄 */
+.extract-bottom-dock {
+  flex-shrink: 0;
+  padding: 14px 28px;
+  background: #ffffff;
+  border-top: 1px solid var(--line, #dfe4eb);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.commit-btn {
+  background: var(--cyan, #4776e6) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.commit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

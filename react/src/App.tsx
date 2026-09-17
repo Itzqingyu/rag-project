@@ -1,5 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Loader2, Bot, User, LayoutGrid, Sparkles, Menu, ArrowLeft, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Send,
+  Paperclip,
+  Loader2,
+  Bot,
+  User,
+  LayoutGrid,
+  Sparkles,
+  Menu,
+  ArrowLeft,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  FileSpreadsheet,
+  MessageSquare,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { activityList, activities } from './mockData';
 import OverviewPanel from './components/OverviewPanel';
@@ -13,6 +30,8 @@ import AfterPanel from './components/AfterPanel';
 import SourceRecordPanel from './components/SourceRecordPanel';
 // 引入 LLM 聊天面板組件
 import ChatPanel from './components/ChatPanel';
+// 引入 AI 會議紀錄整理面板組件
+import MeetingExtractPanel from './components/MeetingExtractPanel';
 
 interface Message {
   id: string;
@@ -53,6 +72,9 @@ export default function App() {
 
   // 控制右側 AI 歷史參考抽屜是否開啟
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+
+  // 控制左側邊欄「AI 功能」下拉選單展開/收合 (預設展開)
+  const [isAiNavOpen, setIsAiNavOpen] = useState(true);
 
   // 封裝一個切換畫面的小函式：點擊切換頁面時自動收起側邊欄
   const handleSetView = (view: string) => {
@@ -170,13 +192,61 @@ export default function App() {
           </button>
 
           <nav className="main-nav">
-            <a className={`nav-item ${currentView === 'activities' ? 'active' : ''}`} href="#activities" data-route="activities" aria-current={currentView === 'activities' ? 'page' : undefined} onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
-              <span className="nav-icon" aria-hidden="true"><LayoutGrid size={16} /></span>活動
+            <a
+              className={`nav-item ${currentView === 'activities' ? 'active' : ''}`}
+              href="#activities"
+              data-route="activities"
+              aria-current={currentView === 'activities' ? 'page' : undefined}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSetView('activities');
+              }}
+            >
+              <span className="nav-icon" aria-hidden="true"><LayoutGrid size={16} /></span>
+              <span>活動</span>
             </a>
-            {/* 新增：AI 對話 (LLM 聊天面板入口) */}
-            <a className={`nav-item ${currentView === 'chat' ? 'active' : ''}`} href="#chat" data-route="chat" aria-current={currentView === 'chat' ? 'page' : undefined} onClick={(e) => { e.preventDefault(); handleSetView('chat'); }}>
-              <span className="nav-icon" aria-hidden="true"><Sparkles size={16} /></span>AI 對話
-            </a>
+
+            {/* AI 功能下拉折疊分組選單 */}
+            <div className="nav-group">
+              <button
+                type="button"
+                className={`nav-group-toggle ${['chat', 'extract'].includes(currentView) ? 'active' : ''}`}
+                onClick={() => setIsAiNavOpen((prev) => !prev)}
+                aria-expanded={isAiNavOpen}
+              >
+                <div className="nav-group-left">
+                  <span className="nav-icon" aria-hidden="true"><Sparkles size={16} /></span>
+                  <span>AI 功能</span>
+                </div>
+                <span className="nav-group-arrow">
+                  {isAiNavOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </span>
+              </button>
+
+              {isAiNavOpen && (
+                <div className="nav-sub-list">
+                  {/* 子選項 1：AI 對話 */}
+                  <button
+                    type="button"
+                    className={`nav-sub-item ${currentView === 'chat' ? 'active' : ''}`}
+                    onClick={() => handleSetView('chat')}
+                  >
+                    <MessageSquare size={14} />
+                    <span>AI 對話</span>
+                  </button>
+
+                  {/* 子選項 2：會議紀錄整理 */}
+                  <button
+                    type="button"
+                    className={`nav-sub-item ${currentView === 'extract' ? 'active' : ''}`}
+                    onClick={() => handleSetView('extract')}
+                  >
+                    <FileSpreadsheet size={14} />
+                    <span>會議紀錄整理</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
 
           <div className="sidebar-note">
@@ -191,7 +261,7 @@ export default function App() {
         </aside>
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
-        <main className={`main ${currentView === 'chat' ? 'chat-mode' : ''}`} id="main-content">
+        <main className={`main ${['chat', 'extract'].includes(currentView) ? 'chat-mode' : ''}`} id="main-content">
           <section className="page" id="activity-list-view" hidden={currentView !== 'activities'}>
             <div className="page-heading">
               <div>
@@ -364,6 +434,16 @@ export default function App() {
 
           {/* 9. LLM 聊天大面板視圖 */}
           {currentView === 'chat' && <ChatPanel />}
+
+          {/* 10. AI 會議紀錄整理視圖 */}
+          {currentView === 'extract' && (
+            <MeetingExtractPanel
+              onNavigateToActivity={(actId) => {
+                // 跳轉至活動頁面檢視
+                handleSetView('activities');
+              }}
+            />
+          )}
         </main>
       </div>
 
