@@ -1,117 +1,130 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { activityApi } from '../api/activityApi';
+import type { ConfirmationStatus, Decision, DecisionInput, Meeting } from '../types/activity';
 import './DecisionsPanel.css';
 
-export default function DecisionsPanel({ currentActivity, currentView }: any) {
-  // 取得這個活動的所有決策 (如果沒有就給空陣列)
-  const decisions = currentActivity.decisions || [];
-  
-  // 🌟 魔法狀態：記住目前選中的是哪一筆決策的 ID (預設選中第一筆)
-  const [selectedId, setSelectedId] = useState(decisions.length > 0 ? decisions[0].id : null);
+interface DecisionsPanelProps {
+  activityId: number;
+  currentView: string;
+  meetingVersion: number;
+}
 
-  // 當切換活動時，如果新活動有決策，自動選中它的第一筆
+interface DecisionFormState {
+  meeting_id: string;
+  problem: string;
+  options: string[];
+  final_decision: string;
+  reason: string;
+  source: string;
+  confirmation_status: ConfirmationStatus;
+}
+
+const EMPTY_FORM: DecisionFormState = {
+  meeting_id: '', problem: '', options: [''], final_decision: '', reason: '', source: '', confirmation_status: 'pending',
+};
+
+function parseOptions(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function formFromDecision(decision: Decision): DecisionFormState {
+  const options = parseOptions(decision.options);
+  return {
+    meeting_id: decision.meeting_id == null ? '' : String(decision.meeting_id),
+    problem: decision.problem,
+    options: options.length > 0 ? options : [''],
+    final_decision: decision.final_decision,
+    reason: decision.reason,
+    source: decision.source,
+    confirmation_status: decision.confirmation_status,
+  };
+}
+
+export default function DecisionsPanel({ activityId, currentView, meetingVersion }: DecisionsPanelProps) {
+  const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
+  const [form, setForm] = useState<DecisionFormState>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
-    if (decisions.length > 0) {
-      setSelectedId(decisions[0].id);
-    } else {
-      setSelectedId(null);
-    }
-  }, [currentActivity]);
+    let active = true;
+    setLoading(true); setError(null); setDecisions([]); setMeetings([]); setSelectedId(null); setFormMode(null); setForm(EMPTY_FORM);
+    Promise.all([activityApi.listDecisions(activityId), activityApi.listMeetings(activityId)])
+      .then(([decisionRows, meetingRows]) => {
+        if (!active) return;
+        setDecisions(decisionRows); setMeetings(meetingRows); setSelectedId(decisionRows[0]?.id ?? null);
+      })
+      .catch((requestError: Error) => { if (active) setError(requestError.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [activityId, meetingVersion]);
 
-  // 找出目前選中的那筆決策完整資料，準備給右邊的畫面用
-  const activeDecision = decisions.find((d: any) => d.id === selectedId);
+  const activeDecision = useMemo(() => decisions.find((decision) => decision.id === selectedId) ?? null, [decisions, selectedId]);
+  const meetingNames = useMemo(() => new Map(meetings.map((meeting) => [meeting.id, meeting.name])), [meetings]);
+
+  const closeForm = () => { if (!saving) { setFormMode(null); setFormError(null); setForm(EMPTY_FORM); } };
+  const setField = <K extends keyof DecisionFormState>(field: K, value: DecisionFormState[K]) => setForm((current) => ({ ...current, [field]: value }));
+  const setOption = (index: number, value: string) => setForm((current) => ({ ...current, options: current.options.map((option, optionIndex) => optionIndex === index ? value : option) }));
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const options = form.options.map((option) => option.trim()).filter(Boolean);
+    if (options.length === 0) { setFormError('至少需要一個選項'); return; }
+    setSaving(true); setFormError(null);
+    const payload: DecisionInput = {
+      activity_id: activityId,
+      meeting_id: form.meeting_id ? Number(form.meeting_id) : null,
+      problem: form.problem.trim(), options: JSON.stringify(options), final_decision: form.final_decision.trim(),
+      reason: form.reason.trim(), source: form.source.trim(), confirmation_status: form.confirmation_status,
+    };
+    try {
+      if (formMode === 'edit' && activeDecision) {
+        const updated = await activityApi.updateDecision(activeDecision.id, payload);
+        setDecisions((current) => current.map((decision) => decision.id === updated.id ? updated : decision));
+      } else {
+        const created = await activityApi.createDecision(payload);
+        setDecisions((current) => [created, ...current]); setSelectedId(created.id);
+      }
+      setFormMode(null); setForm(EMPTY_FORM);
+    } catch (requestError) {
+      setFormError(requestError instanceof Error ? requestError.message : '決策儲存失敗');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!activeDecision || !window.confirm(`確定刪除「${activeDecision.problem}」？`)) return;
+    setDeleting(true); setError(null);
+    try {
+      await activityApi.deleteDecision(activeDecision.id);
+      const remaining = decisions.filter((decision) => decision.id !== activeDecision.id);
+      setDecisions(remaining); setSelectedId(remaining[0]?.id ?? null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '決策刪除失敗');
+    } finally { setDeleting(false); }
+  };
 
   return (
     <section className={`view-panel ${currentView === 'decisions' ? 'active' : ''}`} data-panel="decisions">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">DECISIONS</p>
-          <h2>決策紀錄</h2>
-          <p>記下做了什麼，也記下當時為什麼這樣做。</p>
-        </div>
-        <button className="button primary" type="button">＋ 新增決策</button>
-      </div>
-
-      {/* 判斷：如果有決策資料才顯示左右版面，否則顯示空狀態 */}
-      {decisions.length > 0 ? (
-        <div className="decision-layout">
-          
-          {/* 👈 左側：決策列表 */}
-          <div className="decision-list" role="listbox" aria-label="決策列表">
-            {decisions.map((decision: any) => (
-              <button
-                key={decision.id}
-                // 如果這顆按鈕的 id 剛好是我們選中的 id，就加上 active class 讓它反白！
-                className={`decision-list-item ${selectedId === decision.id ? 'active' : ''}`}
-                type="button"
-                onClick={() => setSelectedId(decision.id)}
-              >
-                <span className={`decision-state ${decision.state === '已確認' ? 'confirmed' : 'review'}`}>
-                  {decision.state}
-                </span>
-                <strong>{decision.title}</strong>
-                <small>{decision.date}</small>
-              </button>
-            ))}
-          </div>
-
-          {/* 👉 右側：決策詳細內容 */}
-          {activeDecision && (
-            <article className="decision-detail" id="decision-detail">
-              <div className="decision-detail-head">
-                <div>
-                  <span className={`decision-state ${activeDecision.state === '已確認' ? 'confirmed' : 'review'}`}>
-                    {activeDecision.state}
-                  </span>
-                  <h3>{activeDecision.title}</h3>
-                </div>
-                <button className="text-button" type="button">編輯</button>
-              </div>
-              
-              <div className="decision-section">
-                <span>當時考慮的選項</span>
-                <ol>
-                  {/* 動態列出所有選項 */}
-                  {activeDecision.options.map((opt: string, index: number) => (
-                    <li key={index}>{opt}</li>
-                  ))}
-                </ol>
-              </div>
-              
-              <div className="decision-answer">
-                <span>最終決定</span>
-                <strong>{activeDecision.answer}</strong>
-                <p>{activeDecision.description}</p>
-              </div>
-              
-              <div className="decision-meta">
-                <div><span>決定原因</span><strong>{activeDecision.reason}</strong></div>
-                <div><span>執行狀況</span><strong>{activeDecision.execution}</strong></div>
-              </div>
-              
-              <button className="source-link" type="button">
-                <span>⌕</span>
-                <div><strong>來源：{activeDecision.source}</strong><small>查看原文</small></div>
-                <b>›</b>
-              </button>
-              
-              {/* 如果有歷史相似案例，才把它顯示出來 */}
-              {activeDecision.history && (
-                <div className="historical-match">
-                  <p className="eyebrow">✦ 歷史相似案例・假資料</p>
-                  <strong>{activeDecision.history}</strong>
-                  <button className="text-button memory-open" type="button">查看完整案例</button>
-                </div>
-              )}
-            </article>
-          )}
-        </div>
-      ) : (
-        // 🈳 當完全沒有決策資料時，顯示這個畫面
-        <div style={{ textAlign: 'center', padding: '64px 24px', backgroundColor: 'var(--surface)', borderRadius: '12px' }}>
-          <h3>目前沒有決策紀錄</h3>
-          <p style={{ color: 'var(--ink-light)', marginTop: '8px' }}>籌備過程中的重要選擇，都會保存在這裡供日後參考。</p>
-        </div>
-      )}
+      <div className="section-heading"><div><p className="eyebrow">DECISIONS</p><h2>決策紀錄</h2><p>只顯示目前 Activity 的決策。</p></div><button className="button primary" type="button" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setFormMode('create'); }}>＋ 新增決策</button></div>
+      {error && <div className="api-message error" role="alert">{error}</div>}
+      {loading && <div className="api-state">載入決策中…</div>}
+      {!loading && decisions.length === 0 && <div className="api-state empty"><h3>目前沒有決策紀錄</h3><p>新增決策後會顯示在這裡。</p></div>}
+      {decisions.length > 0 && <div className="decision-layout">
+        <div className="decision-list" role="listbox" aria-label="決策列表">{decisions.map((decision) => <button key={decision.id} className={`decision-list-item ${selectedId === decision.id ? 'active' : ''}`} type="button" onClick={() => setSelectedId(decision.id)}><span className={`decision-state ${decision.confirmation_status === 'confirmed' ? 'confirmed' : 'review'}`}>{decision.confirmation_status}</span><strong>{decision.problem}</strong><small>{decision.meeting_id == null ? '未綁定會議' : meetingNames.get(decision.meeting_id) || `會議 #${decision.meeting_id}`}</small></button>)}</div>
+        {activeDecision && <article className="decision-detail"><div className="decision-detail-head"><div><span className={`decision-state ${activeDecision.confirmation_status === 'confirmed' ? 'confirmed' : 'review'}`}>{activeDecision.confirmation_status}</span><h3>{activeDecision.problem}</h3></div><div className="heading-actions"><button className="button secondary" type="button" onClick={() => { setForm(formFromDecision(activeDecision)); setFormError(null); setFormMode('edit'); }}>編輯</button><button className="button danger" type="button" onClick={() => void handleDelete()} disabled={deleting}>{deleting ? '刪除中…' : '刪除'}</button></div></div><div className="decision-section"><span>考慮選項</span><ol>{parseOptions(activeDecision.options).map((option, index) => <li key={`${option}-${index}`}>{option}</li>)}</ol></div><div className="decision-answer"><span>最終決定</span><strong>{activeDecision.final_decision}</strong><p>{activeDecision.reason}</p></div><div className="decision-meta"><div><span>來源</span><strong>{activeDecision.source}</strong></div><div><span>會議</span><strong>{activeDecision.meeting_id == null ? '未綁定' : meetingNames.get(activeDecision.meeting_id) || `#${activeDecision.meeting_id}`}</strong></div></div></article>}
+      </div>}
+      {formMode && <div className="activity-modal-backdrop" role="presentation" onMouseDown={closeForm}><section className="activity-data-modal" role="dialog" aria-modal="true" aria-labelledby="decision-form-title" onMouseDown={(event) => event.stopPropagation()}><form onSubmit={handleSubmit}><div className="modal-head"><div><p className="eyebrow">DECISION</p><h2 id="decision-form-title">{formMode === 'create' ? '新增決策' : '編輯決策'}</h2></div><button className="close-button" type="button" onClick={closeForm}>×</button></div>{formError && <div className="api-message error" role="alert">{formError}</div>}<label className="field"><span>問題</span><input value={form.problem} onChange={(event) => setField('problem', event.target.value)} required /></label><label className="field"><span>考慮選項</span>{form.options.map((option, index) => <span className="two-fields" key={index}><input value={option} onChange={(event) => setOption(index, event.target.value)} required /><button className="button secondary" type="button" onClick={() => setField('options', form.options.filter((_, optionIndex) => optionIndex !== index))} disabled={form.options.length === 1}>移除</button></span>)}<button className="text-button" type="button" onClick={() => setField('options', [...form.options, ''])}>＋ 新增選項</button></label><label className="field"><span>最終決定</span><input value={form.final_decision} onChange={(event) => setField('final_decision', event.target.value)} required /></label><label className="field"><span>原因</span><textarea rows={3} value={form.reason} onChange={(event) => setField('reason', event.target.value)} required /></label><div className="two-fields"><label className="field"><span>來源</span><input value={form.source} onChange={(event) => setField('source', event.target.value)} required /></label><label className="field"><span>確認狀態</span><select value={form.confirmation_status} onChange={(event) => setField('confirmation_status', event.target.value as ConfirmationStatus)}><option value="pending">pending</option><option value="confirmed">confirmed</option></select></label></div><label className="field"><span>所屬會議（選填）</span><select value={form.meeting_id} onChange={(event) => setField('meeting_id', event.target.value)}><option value="">不綁定會議</option>{meetings.map((meeting) => <option key={meeting.id} value={meeting.id}>{meeting.name}</option>)}</select></label><div className="modal-actions"><button className="button secondary" type="button" onClick={closeForm}>取消</button><button className="button primary" type="submit" disabled={saving}>{saving ? '儲存中…' : '儲存決策'}</button></div></form></section></div>}
     </section>
   );
 }
