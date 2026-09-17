@@ -148,11 +148,11 @@
 
 .doc-select-wrap select:focus {
   outline: none;
-  border-color: var(--violet, #7657d5);
+  border-color: var(--cyan, #4776e6);
 }
 
 .extract-run-btn {
-  background: var(--violet, #7657d5) !important;
+  background: var(--cyan, #4776e6) !important;
   color: #ffffff !important;
   border: 1px solid var(--line) !important;
   display: flex;
@@ -183,8 +183,8 @@
 .extract-loading-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid var(--violet-soft, #efe8ff);
-  border-top-color: var(--violet, #7657d5);
+  border: 4px solid var(--cyan-soft, #e8efff);
+  border-top-color: var(--cyan, #4776e6);
   border-radius: 50%;
   animation: extract-spin 1s linear infinite;
   margin-bottom: 14px;
@@ -303,7 +303,7 @@
 
 .decision-cell {
   font-weight: 700;
-  color: var(--violet, #7657d5);
+  color: var(--cyan, #4776e6);
 }
 
 .reason-cell {
@@ -399,8 +399,8 @@
 
 .table-input:focus {
   outline: none;
-  border-color: var(--violet, #7657d5);
-  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+  border-color: var(--cyan, #4776e6);
+  box-shadow: 0 0 0 2px rgba(71, 118, 230, 0.12);
 }
 
 .table-input.title-input {
@@ -436,8 +436,8 @@
 
 .table-textarea:focus {
   outline: none;
-  border-color: var(--violet, #7657d5);
-  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+  border-color: var(--cyan, #4776e6);
+  box-shadow: 0 0 0 2px rgba(71, 118, 230, 0.12);
 }
 
 /* 列表表格內輸入項 */
@@ -461,8 +461,8 @@
 
 .table-cell-input:focus {
   outline: none;
-  border-color: var(--violet, #7657d5);
-  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+  border-color: var(--cyan, #4776e6);
+  box-shadow: 0 0 0 2px rgba(71, 118, 230, 0.12);
 }
 
 .table-cell-textarea {
@@ -482,8 +482,8 @@
 
 .table-cell-textarea:focus {
   outline: none;
-  border-color: var(--violet, #7657d5);
-  box-shadow: 0 0 0 2px rgba(118, 87, 213, 0.12);
+  border-color: var(--cyan, #4776e6);
+  box-shadow: 0 0 0 2px rgba(71, 118, 230, 0.12);
 }
 
 .table-cell-textarea.topic-area {
@@ -492,7 +492,7 @@
 
 .table-cell-textarea.decision-area {
   font-weight: 700;
-  color: var(--violet, #7657d5);
+  color: var(--cyan, #4776e6);
 }
 
 .priority-select {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Sparkles,
   FileText,
   CheckCircle2,
   Calendar,
@@ -260,7 +259,6 @@ export const MeetingExtractPanel: React.FC = () => {
       {/* 頂部標題列 */}
       <header className="extract-top-header">
         <div className="extract-header-title">
-          <Sparkles size={20} className="extract-sparkle-icon" />
           <h2>AI 會議紀錄整理</h2>
         </div>
         <button
@@ -330,7 +328,6 @@ export const MeetingExtractPanel: React.FC = () => {
               onClick={handleExtract}
               disabled={isExtracting || !selectedDocId || documents.length === 0}
             >
-              <Sparkles size={16} />
               <span>{isExtracting ? 'LLM 整理分析中…' : '開始整理會議紀錄'}</span>
             </button>
           </div>

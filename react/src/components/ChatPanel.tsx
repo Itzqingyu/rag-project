@@ -5,7 +5,6 @@ import {
   Bot,
   User,
   MessageSquare,
-  Sparkles,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -479,7 +478,6 @@ export const ChatPanel: React.FC = () => {
         {/* 頂部資訊列 */}
         <header className="chat-top-header">
           <div className="chat-header-title">
-            <Sparkles size={18} className="sparkle-icon" />
             <h2>{activeSessionId ? activeSessionTitle : 'AI 智庫對話'}</h2>
           </div>
           <div className="chat-header-actions">
@@ -578,7 +576,9 @@ export const ChatPanel: React.FC = () => {
                             : 'assistant-body'
                         }`}
                       >
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <div className="chat-markdown-content">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
 
                         {/* RAG 參考來源折疊卡片 */}
                         {hasChunks && (

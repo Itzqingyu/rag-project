@@ -6,7 +6,6 @@ import {
   Bot,
   User,
   LayoutGrid,
-  Sparkles,
   Menu,
   ArrowLeft,
   X,
@@ -215,7 +214,7 @@ export default function App() {
                 aria-expanded={isAiNavOpen}
               >
                 <div className="nav-group-left">
-                  <span className="nav-icon" aria-hidden="true"><Sparkles size={16} /></span>
+                  <span className="nav-icon" aria-hidden="true"><Bot size={16} /></span>
                   <span>AI 功能</span>
                 </div>
                 <span className="nav-group-arrow">
