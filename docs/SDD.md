@@ -43,9 +43,9 @@ rag-project/
 │   ├── src/
 │   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話)
 │   │   ├── components/
-│   │   │   ├── chat-panel.tsx    # LLM 聊天大面板主組件 (雙欄佈局、模式切換、空狀態)
-│   │   │   ├── session-sidebar.tsx # 對話會話側邊欄 (新對話、切換、刪除)
-│   │   │   ├── document-drawer.tsx # 知識庫文檔抽屜 (文件清單、上傳區塊)
+│   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、空狀態)
+│   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、刪除)
+│   │   │   ├── DocumentDrawer.tsx # 知識庫文檔抽屜 (文件清單、上傳區塊)
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
 │   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等)
 │   │   └── index.css             # 全域 Neo-brutalism 設計系統樣式

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Loader2, Bot, User } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, User, LayoutGrid, Sparkles, Menu, ArrowLeft, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { activityList, activities } from './mockData';
 import OverviewPanel from './components/OverviewPanel';
@@ -158,15 +158,17 @@ export default function App() {
             <span className="brand-mark" aria-hidden="true">A</span>
             <span><strong>Archive</strong><small>組織記憶工作台</small></span>
           </a>
-          <button className="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="關閉選單" onClick={() => setIsSidebarOpen(false)}>✕</button>
+          <button className="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="關閉選單" onClick={() => setIsSidebarOpen(false)}>
+            <X size={16} />
+          </button>
 
           <nav className="main-nav">
             <a className={`nav-item ${currentView === 'activities' ? 'active' : ''}`} href="#activities" data-route="activities" aria-current={currentView === 'activities' ? 'page' : undefined} onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
-              <span className="nav-icon" aria-hidden="true">▦</span>活動
+              <span className="nav-icon" aria-hidden="true"><LayoutGrid size={16} /></span>活動
             </a>
             {/* 新增：AI 對話 (LLM 聊天面板入口) */}
             <a className={`nav-item ${currentView === 'chat' ? 'active' : ''}`} href="#chat" data-route="chat" aria-current={currentView === 'chat' ? 'page' : undefined} onClick={(e) => { e.preventDefault(); handleSetView('chat'); }}>
-              <span className="nav-icon" aria-hidden="true">✦</span>AI 對話
+              <span className="nav-icon" aria-hidden="true"><Sparkles size={16} /></span>AI 對話
             </a>
           </nav>
 
@@ -184,14 +186,20 @@ export default function App() {
 
         <main className="main" id="main-content">
           <header className="topbar">
-            <button className="menu-button" type="button" aria-label="開啟選單" aria-controls="primary-sidebar" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(true)}>☰</button>
-            <button className="page-back-button" id="page-back" type="button" aria-label="回到上一頁" hidden={currentView === 'activities' || currentView === 'chat'} onClick={() => handleSetView('activities')}>←</button>
+            <button className="menu-button" type="button" aria-label="開啟選單" aria-controls="primary-sidebar" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(true)}>
+              <Menu size={18} />
+            </button>
+            <button className="page-back-button" id="page-back" type="button" aria-label="回到上一頁" hidden={currentView === 'activities' || currentView === 'chat'} onClick={() => handleSetView('activities')}>
+              <ArrowLeft size={16} />
+            </button>
             <div className="breadcrumbs">
               <span>工作台</span>
               <b>/</b>
               <strong>{currentView === 'chat' ? 'AI 對話' : '活動'}</strong>
             </div>
-            <button className="ai-button" id="open-ai" type="button" aria-controls="ai-drawer" aria-expanded={isAiDrawerOpen} onClick={() => setIsAiDrawerOpen(true)}><span aria-hidden="true">✦</span>歷史參考</button>
+            <button className="ai-button" id="open-ai" type="button" aria-controls="ai-drawer" aria-expanded={isAiDrawerOpen} onClick={() => setIsAiDrawerOpen(true)}>
+              <Sparkles size={14} style={{ marginRight: '6px' }} />歷史參考
+            </button>
           </header>
 
           <div className="global-prototype-notice" role="note">

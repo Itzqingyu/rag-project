@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Bot, User, MessageSquare, Sparkles, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Send, Paperclip, Bot, User, MessageSquare, Sparkles, ChevronDown, ChevronUp, FileText, BookOpen } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import SessionSidebar, { SessionItem } from './SessionSidebar';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
@@ -315,7 +315,7 @@ export const ChatPanel: React.FC = () => {
                               onClick={() => toggleChunkExpand(msg.id)}
                             >
                               <div className="rag-chunk-title">
-                                <span>📎</span>
+                                <Paperclip size={14} />
                                 <strong>參考來源 ({msg.retrievedChunks!.length} 筆切片)</strong>
                               </div>
                               {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -372,7 +372,7 @@ export const ChatPanel: React.FC = () => {
                 className={`mode-toggle-option ${currentMode === 'chat' ? 'active' : ''}`}
                 onClick={() => setCurrentMode('chat')}
               >
-                <span>💬</span>
+                <MessageSquare size={14} />
                 <strong>普通對話</strong>
               </button>
               <button
@@ -380,7 +380,7 @@ export const ChatPanel: React.FC = () => {
                 className={`mode-toggle-option ${currentMode === 'rag' ? 'active' : ''}`}
                 onClick={() => setCurrentMode('rag')}
               >
-                <span>📚</span>
+                <BookOpen size={14} />
                 <strong>知識庫問答</strong>
               </button>
             </div>
