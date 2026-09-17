@@ -320,6 +320,21 @@
   font-weight: 700;
 }
 
+.source-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--surface-muted, #f1f5f9);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: .76rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .priority-tag {
   display: inline-block;
   padding: 2px 8px;

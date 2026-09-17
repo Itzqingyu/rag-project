@@ -112,8 +112,11 @@ export const MeetingExtractPanel: React.FC = () => {
     setSuccessMessage(null);
 
     try {
+      const selectedDoc = documents.find((d) => d.id === selectedDocId);
       const res = await commitMeetingSummary({
         activity_id: defaultActivityId,
+        doc_id: typeof selectedDocId === 'number' ? selectedDocId : undefined,
+        source_file: selectedDoc?.filename,
         meeting: previewData.meeting,
         decisions: previewData.decisions,
         tasks: previewData.tasks,
@@ -315,10 +318,11 @@ export const MeetingExtractPanel: React.FC = () => {
                   <table className="standard-data-table">
                     <thead>
                       <tr>
-                        <th style={{ width: '60px' }}>編號</th>
+                        <th style={{ width: '50px' }}>編號</th>
                         <th>討論議題 / 問題</th>
                         <th>最終決策結論</th>
                         <th>考量理由</th>
+                        <th style={{ width: '130px' }}>資料來源</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -328,6 +332,11 @@ export const MeetingExtractPanel: React.FC = () => {
                           <td className="topic-cell">{dec.problem}</td>
                           <td className="decision-cell">{dec.final_decision}</td>
                           <td className="reason-cell">{dec.reason || '無'}</td>
+                          <td className="source-cell">
+                            <span className="source-pill">
+                              {dec.source || documents.find((d) => d.id === selectedDocId)?.filename || '未指定'}
+                            </span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -109,9 +109,22 @@ describe('Meeting Extract Service & Panel Integration', () => {
 
     const payload = {
       activity_id: 1,
+      doc_id: 3,
+      source_file: 'meeting_record_sample.md',
       meeting: { name: '第一次迎新籌備會' },
-      decisions: [],
-      tasks: [],
+      decisions: [
+        {
+          problem: '場地選擇',
+          options: ['方案A', '方案B'],
+          final_decision: '方案A',
+          reason: '場地大',
+        },
+      ],
+      tasks: [
+        {
+          content: '簽訂場地合約',
+        },
+      ],
     };
 
     const res = await commitMeetingSummary(payload);
@@ -122,7 +135,38 @@ describe('Meeting Extract Service & Panel Integration', () => {
       'http://127.0.0.1:8000/commit_summary',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          activity_id: 1,
+          meeting: {
+            name: '第一次迎新籌備會',
+            date: '',
+            start_time: '',
+            end_time: '',
+            location: '',
+            participants: '',
+            content: '',
+            source_document_id: 3,
+          },
+          decisions: [
+            {
+              problem: '場地選擇',
+              options: JSON.stringify(['方案A', '方案B']),
+              final_decision: '方案A',
+              reason: '場地大',
+              source: 'meeting_record_sample.md',
+              confirmation_status: 'pending',
+            },
+          ],
+          tasks: [
+            {
+              content: '簽訂場地合約',
+              assignee: '',
+              due_date: '',
+              priority: '中',
+              status: 'pending',
+            },
+          ],
+        }),
       })
     );
   });

@@ -36,10 +36,10 @@ export interface ExtractedMeeting {
  */
 export interface ExtractedDecision {
   problem: string;
-  options: string; // JSON 字串如 '["選項A", "選項B"]' 或一般文字
+  options: string[] | string; // 容許陣列或已序列化之 JSON 字串
   final_decision: string;
   reason: string;
-  source: string;
+  source?: string;
   confirmation_status?: string;
 }
 
@@ -77,6 +77,8 @@ export interface ExtractSummaryResponse {
  */
 export interface CommitSummaryRequest {
   activity_id: number;
+  doc_id?: number;
+  source_file?: string;
   meeting: ExtractedMeeting;
   decisions: ExtractedDecision[];
   tasks: ExtractedTask[];
@@ -125,11 +127,62 @@ export async function extractMeetingSummary(
 /**
  * 將使用者確認後的結構化會議、決策與待辦寫入活動資料庫
  * 對應後端 main.py:498 之 @app.post("/commit_summary") 端點
- * 依序寫入 SQLite 的 meetings, decisions, tasks 資料表
+ * 全面遵循 test_main.py:199~290 之規範：
+ * 1. options: 陣列自動 json.dumps，支援字串傳入 (test_main.py:257-259)
+ * 2. source: 採納 d.source || source_file || '會議紀錄來源' (test_main.py:266)
+ * 3. tasks: 預設 priority="中", status="pending" (test_main.py:278)
+ * 4. meeting: 支援 source_document_id 綁定來源文檔 (test_main.py:251)
  */
 export async function commitMeetingSummary(
   payload: CommitSummaryRequest
 ): Promise<CommitSummaryResponse> {
-  return await apiClient.post<CommitSummaryResponse>('/commit_summary', payload);
+  const fallbackSource = payload.source_file || '會議紀錄全文';
+
+  // 1. 標準化 decisions：完全對齊 test_main.py L256~268
+  const normalizedDecisions = (payload.decisions || []).map((d) => {
+    let opts = d.options;
+    if (Array.isArray(opts)) {
+      opts = JSON.stringify(opts);
+    } else if (typeof opts !== 'string') {
+      opts = JSON.stringify([]);
+    }
+
+    return {
+      problem: d.problem || '',
+      options: opts,
+      final_decision: d.final_decision || '',
+      reason: d.reason || '',
+      source: (d.source && d.source.trim()) ? d.source.trim() : fallbackSource,
+      confirmation_status: d.confirmation_status || 'pending',
+    };
+  });
+
+  // 2. 標準化 tasks：完全對齊 test_main.py L271~281
+  const normalizedTasks = (payload.tasks || []).map((t) => ({
+    content: t.content || '',
+    assignee: t.assignee || '',
+    due_date: t.due_date || '',
+    priority: t.priority || '中',
+    status: t.status || 'pending',
+  }));
+
+  // 3. 標準化 meeting 欄位：完全對齊 test_main.py L241~252
+  const normalizedMeeting = {
+    name: payload.meeting.name || '未命名會議',
+    date: payload.meeting.date || '',
+    start_time: payload.meeting.start_time || '',
+    end_time: payload.meeting.end_time || '',
+    location: payload.meeting.location || '',
+    participants: payload.meeting.participants || '',
+    content: payload.meeting.content || '',
+    source_document_id: payload.doc_id ?? undefined,
+  };
+
+  return await apiClient.post<CommitSummaryResponse>('/commit_summary', {
+    activity_id: payload.activity_id,
+    meeting: normalizedMeeting,
+    decisions: normalizedDecisions,
+    tasks: normalizedTasks,
+  });
 }
 

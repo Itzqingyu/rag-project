@@ -49,10 +49,22 @@ export async function apiRequest<T>(
       try {
         const errorJson = await response.json();
         if (errorJson.detail) {
-          detail = typeof errorJson.detail === 'string' 
-            ? errorJson.detail 
-            : JSON.stringify(errorJson.detail);
-          errorMessage = detail;
+          if (typeof errorJson.detail === 'string') {
+            detail = errorJson.detail;
+            errorMessage = detail;
+          } else if (Array.isArray(errorJson.detail)) {
+            const formatted = errorJson.detail
+              .map((d: { loc?: unknown[]; msg?: string }) => {
+                const field = Array.isArray(d.loc) ? d.loc.slice(1).join('.') : '欄位';
+                return `${field}: ${d.msg || '格式不符'}`;
+              })
+              .join('；');
+            detail = JSON.stringify(errorJson.detail);
+            errorMessage = `資料驗證失敗（${formatted}）`;
+          } else {
+            detail = JSON.stringify(errorJson.detail);
+            errorMessage = detail;
+          }
         } else if (errorJson.message) {
           errorMessage = errorJson.message;
         }
