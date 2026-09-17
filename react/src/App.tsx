@@ -192,11 +192,6 @@ export default function App() {
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
         <main className={`main ${currentView === 'chat' ? 'chat-mode' : ''}`} id="main-content">
-          <div className="global-prototype-notice" role="note">
-            <strong>Prototype｜僅供操作示意</strong>
-            <span>目前使用假資料，操作結果不會保存，重新整理後會還原。</span>
-          </div>
-
           <section className="page" id="activity-list-view" hidden={currentView !== 'activities'}>
             <div className="page-heading">
               <div>

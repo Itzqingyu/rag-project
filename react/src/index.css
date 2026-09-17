@@ -412,11 +412,6 @@ a {
   flex-direction: column;
 }
 
-.main.chat-mode .global-prototype-notice {
-  flex-shrink: 0;
-}
-
-
 .ai-button {
   padding: 9px 14px;
   border: 1px solid var(--line);
@@ -433,16 +428,6 @@ a {
 
 .ai-button:hover {
   transform: translateY(-1px);
-}
-
-.global-prototype-notice {
-  padding: 8px clamp(22px, 4vw, 56px);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 /* ==========================================
