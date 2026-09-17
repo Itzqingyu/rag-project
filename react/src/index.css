@@ -201,18 +201,18 @@ a {
   display: flex;
   flex-direction: column;
   z-index: 10;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, width 0.25s ease, padding 0.25s ease;
-  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease;
   white-space: nowrap;
 }
 
 .app-shell.sidebar-closed .sidebar {
-  transform: translateX(-100%);
-  opacity: 0;
-  pointer-events: none;
-  width: 0 !important;
-  padding-inline: 0 !important;
-  border-right-color: transparent !important;
+  transform: translateX(-248px);
+  border-right-color: transparent;
+}
+
+.app-shell.sidebar-closed .sidebar a,
+.app-shell.sidebar-closed .sidebar button:not(.sidebar-tab-toggle) {
+  visibility: hidden;
 }
 
 .brand {
@@ -251,20 +251,33 @@ a {
   font-size: 0.75rem;
 }
 
-.sidebar-toggle {
+/* 側邊欄邊緣小半圓箭頭按鈕 */
+.sidebar-tab-toggle {
   position: absolute;
-  top: 31px;
-  right: -16px;
+  top: 32px;
+  right: -18px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 18px;
+  height: 38px;
   border: 1px solid var(--line);
-  border-radius: 50%;
-  background: #ffffff;
+  border-left: 0;
+  border-radius: 0 19px 19px 0;
+  background: var(--panel);
   color: var(--ink);
   cursor: pointer;
-  z-index: 3;
+  z-index: 25;
+  box-shadow: 3px 0 10px rgba(16, 25, 40, 0.12);
+  transition: all 0.15s ease;
+  padding-left: 1px;
+}
+
+.sidebar-tab-toggle:hover {
+  background: var(--cyan-soft);
+  color: var(--cyan);
+  border-color: var(--cyan);
+  width: 22px;
+  right: -22px;
 }
 
 .main-nav {
@@ -370,41 +383,11 @@ a {
 }
 
 /* ==========================================
-   主區域與浮空選單按鈕 (Main Area & Floating Menu)
+   主區域 (Main Content Area)
    ========================================== */
 .main {
   min-width: 0;
   position: relative;
-}
-
-.floating-menu-btn {
-  position: fixed;
-  top: 18px;
-  left: 18px;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--ink);
-  box-shadow: 0 4px 14px rgba(16, 25, 40, 0.08);
-  cursor: pointer;
-  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-
-.floating-menu-btn:hover {
-  background: var(--cyan-soft);
-  border-color: var(--cyan);
-  color: var(--cyan);
-  transform: scale(1.05);
-}
-
-/* 當側邊欄展開時，浮空按鈕隨動退讓到側欄右緣外側 */
-.app-shell:not(.sidebar-closed) .floating-menu-btn {
-  left: 262px;
 }
 
 .ai-button {

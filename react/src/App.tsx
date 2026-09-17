@@ -160,15 +160,16 @@ export default function App() {
             <span className="brand-mark" aria-hidden="true">A</span>
             <span><strong>Archive</strong><small>組織記憶工作台</small></span>
           </a>
+          {/* 側邊欄邊緣小半圓箭頭收合/展開按鈕 */}
           <button 
-            className="sidebar-toggle" 
+            className="sidebar-tab-toggle" 
             id="sidebar-toggle" 
             type="button" 
-            aria-label="收合選單"
-            title="收合選單"
-            onClick={() => setIsSidebarOpen(false)}
+            aria-label={isSidebarOpen ? "收合側邊欄" : "展開側邊欄"}
+            title={isSidebarOpen ? "收合側邊欄" : "展開側邊欄"}
+            onClick={() => setIsSidebarOpen(prev => !prev)}
           >
-            <ChevronLeft size={16} />
+            {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
           </button>
 
           <nav className="main-nav">
@@ -194,17 +195,6 @@ export default function App() {
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
         <main className="main" id="main-content">
-          {/* 浮空在左上角的三線選單按鈕 */}
-          <button 
-            className="floating-menu-btn" 
-            type="button" 
-            aria-label={isSidebarOpen ? "收合選單" : "開啟選單"} 
-            title={isSidebarOpen ? "收合選單" : "開啟選單"}
-            onClick={() => setIsSidebarOpen(prev => !prev)}
-          >
-            <Menu size={18} />
-          </button>
-
           <div className="global-prototype-notice" role="note">
             <strong>Prototype｜僅供操作示意</strong>
             <span>目前使用假資料，操作結果不會保存，重新整理後會還原。</span>
