@@ -2,11 +2,14 @@
    ChatPanel.css - LLM 聊天面板主區域樣式
    ========================================== */
 
-/* 聊天面板佈局：填滿扣除頂欄後的可用高度 */
+/* 聊天面板佈局：填滿可用彈性空間，由內部各區域獨立滾動 */
 .chat-panel-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  height: 100vh;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   background: var(--canvas, #f3f5f8);
   color: var(--ink, #101928);
   overflow: hidden;
@@ -17,11 +20,14 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   background: var(--canvas, #f3f5f8);
   position: relative;
+  overflow: hidden;
 }
 
 .chat-top-header {
+  flex-shrink: 0;
   height: 56px;
   padding: 0 24px;
   display: flex;
@@ -58,10 +64,12 @@
   gap: 6px;
 }
 
-/* 訊息滾動串流 */
+/* 訊息滾動串流 (完全獨立滾動的 Session 對話區塊) */
 .chat-stream-container {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px clamp(16px, 4vw, 48px);
   display: flex;
   flex-direction: column;
@@ -311,6 +319,7 @@
 
 /* 底部輸入區域 */
 .chat-bottom-dock {
+  flex-shrink: 0;
   padding: 16px 24px 20px;
   background: #ffffff;
   border-top: 2px solid var(--line, #dfe4eb);
@@ -419,6 +428,7 @@
 
 /* 後端 API 連線或執行異常提示列 */
 .chat-api-error-banner {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;

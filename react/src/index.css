@@ -403,6 +403,20 @@ a {
   position: relative;
 }
 
+/* 當切換至 AI 對話面板時，主容器鎖定視窗高度採 Flex 縱向排列，徹底消除外層被鎖定在 Prototype 警告的假滾動 */
+.main.chat-mode {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.main.chat-mode .global-prototype-notice {
+  flex-shrink: 0;
+}
+
+
 .ai-button {
   padding: 9px 14px;
   border: 1px solid var(--line);
