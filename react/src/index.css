@@ -181,13 +181,19 @@ a {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  transition: grid-template-columns 0.2s ease;
+  transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 側邊欄完全收合 (完全消失，主內容佔滿全寬) */
+.app-shell.sidebar-closed {
+  grid-template-columns: 0px minmax(0, 1fr);
 }
 
 .sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
+  width: 248px;
   padding: 26px 18px 18px;
   border-right: 1px solid var(--line);
   background: var(--navy);
@@ -195,7 +201,18 @@ a {
   display: flex;
   flex-direction: column;
   z-index: 10;
-  transition: transform 0.2s ease;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, width 0.25s ease, padding 0.25s ease;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.app-shell.sidebar-closed .sidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+  width: 0 !important;
+  padding-inline: 0 !important;
+  border-right-color: transparent !important;
 }
 
 .brand {
@@ -389,11 +406,24 @@ a {
 }
 
 .menu-button {
-  display: none;
-  padding: 8px;
-  background: transparent;
-  font-size: 1.2rem;
+  display: grid !important;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
   cursor: pointer;
+  transition: all 0.15s ease;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.menu-button:hover {
+  background: var(--cyan-soft);
+  border-color: var(--cyan);
+  color: var(--cyan);
 }
 
 .page-back-button {

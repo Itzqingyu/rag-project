@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Loader2, Bot, User, LayoutGrid, Sparkles, Menu, ArrowLeft, X } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, User, LayoutGrid, Sparkles, Menu, ArrowLeft, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { activityList, activities } from './mockData';
 import OverviewPanel from './components/OverviewPanel';
@@ -48,8 +48,8 @@ export default function App() {
   // 控制目前顯示的畫面，預設為 'activities' (活動列表)
   const [currentView, setCurrentView] = useState('activities');
 
-  // 控制左側主選單是否開啟 (手機版用)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // 控制左側主選單是否開啟 (預設為開啟；收合時完全隱藏並由三線按鈕控制)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // 控制右側 AI 歷史參考抽屜是否開啟
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
@@ -57,7 +57,10 @@ export default function App() {
   // 封裝一個切換畫面的小函式，方便後續擴充
   const handleSetView = (view: string) => {
     setCurrentView(view);
-    setIsSidebarOpen(false); // 切換頁面後自動收起側邊欄
+    // 在窄螢幕行動端時切換頁面才自動收起側邊欄
+    if (typeof window !== 'undefined' && window.innerWidth <= 760) {
+      setIsSidebarOpen(false);
+    }
   };
 
   useEffect(() => {
@@ -151,15 +154,21 @@ export default function App() {
   // ==========================================
   return (
     <>
-      // 注意這裡的反引號 ` 和 ${ } 語法
-      <div className={`app-shell ${isSidebarOpen ? 'nav-open' : ''}`}>
-        <aside className="sidebar" id="primary-sidebar" aria-label="主選單" aria-hidden={!isSidebarOpen}>
+      <div className={`app-shell ${!isSidebarOpen ? 'sidebar-closed' : ''}`}>
+        <aside className="sidebar" id="primary-sidebar" aria-label="主選單">
           <a className="brand" href="#activities" data-route="activities" aria-label="回到活動首頁" onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
             <span className="brand-mark" aria-hidden="true">A</span>
             <span><strong>Archive</strong><small>組織記憶工作台</small></span>
           </a>
-          <button className="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="關閉選單" onClick={() => setIsSidebarOpen(false)}>
-            <X size={16} />
+          <button 
+            className="sidebar-toggle" 
+            id="sidebar-toggle" 
+            type="button" 
+            aria-label="收合選單"
+            title="收合選單"
+            onClick={() => setIsSidebarOpen(false)}
+          >
+            <ChevronLeft size={16} />
           </button>
 
           <nav className="main-nav">
@@ -186,7 +195,15 @@ export default function App() {
 
         <main className="main" id="main-content">
           <header className="topbar">
-            <button className="menu-button" type="button" aria-label="開啟選單" aria-controls="primary-sidebar" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(true)}>
+            <button 
+              className="menu-button" 
+              type="button" 
+              aria-label={isSidebarOpen ? "收合選單" : "開啟選單"} 
+              title={isSidebarOpen ? "收合選單" : "開啟選單"}
+              aria-controls="primary-sidebar" 
+              aria-expanded={isSidebarOpen} 
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+            >
               <Menu size={18} />
             </button>
             <button className="page-back-button" id="page-back" type="button" aria-label="回到上一頁" hidden={currentView === 'activities' || currentView === 'chat'} onClick={() => handleSetView('activities')}>
