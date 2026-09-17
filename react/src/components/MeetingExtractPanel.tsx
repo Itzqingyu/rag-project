@@ -21,6 +21,7 @@ import {
   commitMeetingSummary,
   MeetingPreviewData,
 } from '../services/meetingExtractService';
+import ConfirmModal from './ConfirmModal';
 import './MeetingExtractPanel.css';
 
 /**
@@ -52,6 +53,19 @@ export const MeetingExtractPanel: React.FC = () => {
 
   // LLM 返回之標準化預覽資料
   const [previewData, setPreviewData] = useState<MeetingPreviewData | null>(null);
+
+  // 全域防手殘確認對話框狀態
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   /**
    * 載入已上傳文件清單
@@ -166,13 +180,27 @@ export const MeetingExtractPanel: React.FC = () => {
   };
 
   /**
-   * 刪除一筆決策
+   * 刪除一筆決策 (先跳出全螢幕模糊確認視窗)
    */
   const handleDeleteDecision = (index: number) => {
     if (!previewData) return;
-    setPreviewData({
-      ...previewData,
-      decisions: previewData.decisions.filter((_, i) => i !== index),
+    const targetDecision = previewData.decisions[index];
+    const decisionTopic = targetDecision?.problem ? `「${targetDecision.problem}」` : `第 ${index + 1} 項決策`;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: '確定要刪除此項決策？',
+      message: `確定要從本次會議整理中移除決策 ${decisionTopic} 嗎？`,
+      onConfirm: () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        setPreviewData((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            decisions: prev.decisions.filter((_, i) => i !== index),
+          };
+        });
+      },
     });
   };
 
@@ -214,13 +242,27 @@ export const MeetingExtractPanel: React.FC = () => {
   };
 
   /**
-   * 刪除一筆待辦事項
+   * 刪除一筆待辦事項 (先跳出全螢幕模糊確認視窗)
    */
   const handleDeleteTask = (index: number) => {
     if (!previewData) return;
-    setPreviewData({
-      ...previewData,
-      tasks: previewData.tasks.filter((_, i) => i !== index),
+    const targetTask = previewData.tasks[index];
+    const taskContent = targetTask?.content ? `「${targetTask.content}」` : `第 ${index + 1} 項待辦事項`;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: '確定要刪除此項待辦？',
+      message: `確定要從本次待辦清單中移除待辦 ${taskContent} 嗎？`,
+      onConfirm: () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        setPreviewData((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            tasks: prev.tasks.filter((_, i) => i !== index),
+          };
+        });
+      },
     });
   };
 
@@ -730,6 +772,15 @@ export const MeetingExtractPanel: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* 全域模糊防手殘確認對話框 */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

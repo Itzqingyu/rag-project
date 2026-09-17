@@ -14,6 +14,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import SessionSidebar, { SessionItem } from './SessionSidebar';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
+import ConfirmModal from './ConfirmModal';
 import {
   fetchSessions,
   fetchSessionDetail,
@@ -103,6 +104,19 @@ export const ChatPanel: React.FC = () => {
 
   // 參考切片折疊狀態 (key: messageId, value: boolean)
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>({});
+
+  // 全域防手殘確認對話框狀態
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -251,33 +265,44 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
-   * 刪除指定會話 (呼叫後端 DELETE /sessions/{id})
+   * 刪除指定會話 (先跳出全螢幕模糊確認視窗，確認後呼叫後端 DELETE /sessions/{id})
    */
-  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const numId = Number(id);
     if (isNaN(numId)) return;
 
-    try {
-      setApiError(null);
-      await deleteSessionById(numId);
+    const targetSession = sessions.find((s) => s.id === id);
+    const sessionTitle = targetSession ? `「${targetSession.title}」` : '此對話會話';
 
-      // 本機狀態同步移除
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-      setSessionMessages((prev) => {
-        const updated = { ...prev };
-        delete updated[id];
-        return updated;
-      });
+    setConfirmDialog({
+      isOpen: true,
+      title: '確定要刪除對話？',
+      message: `確定要刪除 ${sessionTitle} 嗎？刪除後所有歷史對話訊息將無法復原。`,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setApiError(null);
+          await deleteSessionById(numId);
 
-      if (activeSessionId === id) {
-        const remaining = sessions.filter((s) => s.id !== id);
-        setActiveSessionId(remaining.length > 0 ? remaining[0].id : null);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setApiError(`刪除會話失敗：${msg}`);
-    }
+          // 本機狀態同步移除
+          setSessions((prev) => prev.filter((s) => s.id !== id));
+          setSessionMessages((prev) => {
+            const updated = { ...prev };
+            delete updated[id];
+            return updated;
+          });
+
+          if (activeSessionId === id) {
+            const remaining = sessions.filter((s) => s.id !== id);
+            setActiveSessionId(remaining.length > 0 ? remaining[0].id : null);
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setApiError(`刪除會話失敗：${msg}`);
+        }
+      },
+    });
   };
 
   /**
@@ -444,17 +469,28 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
-   * 知識庫文件真實刪除 (呼叫 DELETE /documents/{id})
+   * 知識庫文件真實刪除 (先跳出全螢幕模糊確認視窗，確認後呼叫後端 DELETE /documents/{id})
    */
-  const handleDeleteDocument = async (id: string) => {
-    try {
-      setDocDrawerError(null);
-      await deleteDocumentByIdentifier(id);
-      await loadDocuments();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setDocDrawerError(`刪除文檔失敗：${msg}`);
-    }
+  const handleDeleteDocument = (id: string) => {
+    const targetDoc = documents.find((d) => d.id === id);
+    const docName = targetDoc ? `「${targetDoc.name}」` : '此文件';
+
+    setConfirmDialog({
+      isOpen: true,
+      title: '確定要刪除知識庫文檔？',
+      message: `確定要自知識庫中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setDocDrawerError(null);
+          await deleteDocumentByIdentifier(id);
+          await loadDocuments();
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setDocDrawerError(`刪除文檔失敗：${msg}`);
+        }
+      },
+    });
   };
 
   const activeSessionTitle =
@@ -512,11 +548,8 @@ export const ChatPanel: React.FC = () => {
         {/* 聊天串流訊息滾動區 */}
         <div className="chat-stream-container">
           {currentMessages.length === 0 ? (
-            // 極簡空狀態：簡約圖示與操作提示
+            // 極簡空狀態：簡潔文字與操作提示
             <div className="chat-empty-state">
-              <div className="empty-icon-wrapper">
-                <Bot size={40} />
-              </div>
               <h3>尚無訊息</h3>
               <p>在下方輸入開始對話，或切換至知識庫問答查詢入庫文件</p>
             </div>
@@ -712,6 +745,15 @@ export const ChatPanel: React.FC = () => {
         isUploading={isUploadingDoc}
         errorMessage={docDrawerError}
         onClearError={() => setDocDrawerError(null)}
+      />
+
+      {/* 4. 全域模糊防手殘確認對話框 */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );
