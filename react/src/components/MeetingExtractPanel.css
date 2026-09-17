@@ -1,5 +1,6 @@
 /* ==========================================
    MeetingExtractPanel.css - AI 會議紀錄整理面板樣式
+   專注呈現清晰結構化的標準會議表格
    ========================================== */
 
 .extract-panel-layout {
@@ -42,15 +43,6 @@
   color: var(--violet, #7657d5);
 }
 
-.extract-header-tag {
-  font-size: .72rem;
-  font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--violet-soft, #efe8ff);
-  color: var(--violet, #7657d5);
-}
-
 /* 內容可滾動串流區 */
 .extract-content-scroll {
   flex: 1 1 0%;
@@ -60,7 +52,7 @@
   padding: 24px clamp(20px, 4vw, 48px) 40px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 /* 全域 API 異常提示列 */
@@ -94,12 +86,12 @@
   cursor: pointer;
 }
 
-/* 步驟卡片通用樣式 */
+/* 卡片容器 */
 .extract-card {
   background: #ffffff;
   border: 1px solid var(--line, #dfe4eb);
   border-radius: var(--radius, 12px);
-  padding: 22px 24px;
+  padding: 20px 24px;
   box-shadow: 0 4px 16px rgba(16, 25, 40, 0.03);
 }
 
@@ -130,58 +122,33 @@
   color: var(--muted);
 }
 
-/* 第一階段：設定與選擇區 */
-.extract-selector-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-@media (max-width: 800px) {
-  .extract-selector-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.selector-field {
+/* 挑選文件橫列 */
+.doc-pick-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
 }
 
-.selector-field label {
-  font-size: .82rem;
-  font-weight: 800;
-  color: var(--ink, #101928);
+.doc-select-wrap {
+  flex: 1;
 }
 
-.selector-field select {
-  height: 40px;
-  padding: 0 12px;
+.doc-select-wrap select {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
   border: 1.5px solid var(--line, #dfe4eb);
   border-radius: 8px;
   background: #ffffff;
   color: var(--ink, #101928);
-  font-size: .88rem;
+  font-size: .9rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.selector-field select:focus {
+.doc-select-wrap select:focus {
   outline: none;
   border-color: var(--violet, #7657d5);
-}
-
-.selector-field small {
-  font-size: .75rem;
-  color: var(--muted, #758097);
-}
-
-.extract-action-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
 }
 
 .extract-run-btn {
@@ -192,6 +159,7 @@
   align-items: center;
   gap: 8px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .extract-run-btn:disabled {
@@ -205,7 +173,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 40px 24px;
   text-align: center;
   background: #ffffff;
   border: 1px solid var(--line, #dfe4eb);
@@ -213,13 +181,13 @@
 }
 
 .extract-loading-spinner {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 4px solid var(--violet-soft, #efe8ff);
   border-top-color: var(--violet, #7657d5);
   border-radius: 50%;
   animation: extract-spin 1s linear infinite;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 @keyframes extract-spin {
@@ -228,106 +196,18 @@
 }
 
 .extract-loading-box strong {
-  font-size: 1.05rem;
+  font-size: 1rem;
   color: var(--ink, #101928);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .extract-loading-box p {
-  font-size: .85rem;
-  color: var(--muted, #758097);
-}
-
-/* 預覽表單欄位 */
-.preview-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-
-@media (max-width: 720px) {
-  .preview-form-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.preview-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.preview-form-group.full-width {
-  grid-column: 1 / -1;
-}
-
-.preview-form-group label {
-  font-size: .78rem;
-  font-weight: 800;
-  color: var(--muted, #758097);
-}
-
-.preview-form-group input,
-.preview-form-group textarea {
-  padding: 8px 12px;
-  border: 1px solid var(--line, #dfe4eb);
-  border-radius: 6px;
-  background: var(--canvas, #f3f5f8);
-  color: var(--ink, #101928);
-  font-size: .88rem;
-  font-family: inherit;
-}
-
-.preview-form-group input:focus,
-.preview-form-group textarea:focus {
-  outline: none;
-  border-color: var(--violet, #7657d5);
-  background: #ffffff;
-}
-
-/* 決策與待辦列表項目卡片 */
-.extract-items-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.extract-sub-card {
-  padding: 14px 16px;
-  border: 1px solid var(--line, #dfe4eb);
-  border-radius: 8px;
-  background: var(--canvas, #f3f5f8);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.extract-sub-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.extract-sub-card-num {
-  font-size: .75rem;
-  font-weight: 900;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--navy, #111b2e);
-  color: #ffffff;
-}
-
-.extract-item-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--line, #dfe4eb);
-  border-radius: 6px;
-  background: #ffffff;
-  color: var(--ink, #101928);
   font-size: .84rem;
+  color: var(--muted, #758097);
+  margin: 0;
 }
 
-/* 提交成功提示卡片 */
+/* 成功寫入橫條 */
 .extract-success-banner {
   display: flex;
   align-items: center;
@@ -347,7 +227,129 @@
   gap: 10px;
 }
 
-/* 底部操作固定欄 */
+/* 表格包覆容器 */
+.standard-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 8px;
+}
+
+/* 會議基本摘要表格 */
+.standard-meeting-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+}
+
+.standard-meeting-table th {
+  width: 110px;
+  background: var(--canvas, #f3f5f8);
+  color: var(--ink-soft, #43506a);
+  font-weight: 800;
+  padding: 10px 14px;
+  border: 1px solid var(--line, #dfe4eb);
+  text-align: left;
+}
+
+.standard-meeting-table td {
+  padding: 10px 14px;
+  border: 1px solid var(--line, #dfe4eb);
+  color: var(--ink, #101928);
+}
+
+.standard-meeting-table .content-cell {
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* 決策與待辦通用資料表格 */
+.standard-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .86rem;
+  text-align: left;
+}
+
+.standard-data-table thead th {
+  background: var(--canvas, #f3f5f8);
+  color: var(--ink-soft, #43506a);
+  font-weight: 800;
+  padding: 10px 12px;
+  border-bottom: 1.5px solid var(--line, #dfe4eb);
+  border-right: 1px solid var(--line, #dfe4eb);
+}
+
+.standard-data-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line, #dfe4eb);
+  border-right: 1px solid var(--line, #dfe4eb);
+  color: var(--ink, #101928);
+}
+
+.standard-data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.index-cell {
+  text-align: center;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.topic-cell {
+  font-weight: 700;
+}
+
+.decision-cell {
+  font-weight: 700;
+  color: var(--violet, #7657d5);
+}
+
+.reason-cell {
+  color: var(--ink-soft);
+}
+
+.person-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.priority-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.priority-tag.high {
+  background: var(--danger-soft, #ffece8);
+  color: var(--danger, #d93829);
+}
+
+.priority-tag.mid {
+  background: var(--warning-soft, #fff3db);
+  color: var(--warning, #d97706);
+}
+
+.priority-tag.low {
+  background: var(--cyan-soft, #e8efff);
+  color: var(--cyan, #4776e6);
+}
+
+.no-data-note {
+  font-size: .85rem;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+/* 底部確認寫入操作欄 */
 .extract-bottom-dock {
   flex-shrink: 0;
   padding: 14px 28px;

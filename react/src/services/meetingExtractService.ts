@@ -101,22 +101,35 @@ export async function fetchActivities(): Promise<BackendActivity[]> {
 }
 
 /**
- * 依指定文件 ID 發起 AI 會議結構化抽取
- * @param docId 託管文件 ID
+ * 依指定文件 ID 或路徑發起 AI 會議結構化抽取
+ * 對應後端 main.py:470 之 @app.post("/extract_summary") 端點
+ * 透過 System Prompt 將整份會議文本 1-shot 提煉為 meeting, decisions, tasks
+ * @param docId 託管文件 ID (可選)
+ * @param filePath 託管文件路徑 (可選)
  */
 export async function extractMeetingSummary(
-  docId: number
+  docId?: number,
+  filePath?: string
 ): Promise<ExtractSummaryResponse> {
-  return await apiClient.post<ExtractSummaryResponse>('/extract_summary', {
-    doc_id: docId,
-  });
+  const payload: { doc_id?: number; file_path?: string } = {};
+  if (docId !== undefined && docId !== null) {
+    payload.doc_id = docId;
+  }
+  if (filePath) {
+    payload.file_path = filePath;
+  }
+
+  return await apiClient.post<ExtractSummaryResponse>('/extract_summary', payload);
 }
 
 /**
- * 將使用者確認後的結構化會議、決策與待辦寫入指定活動資料庫
+ * 將使用者確認後的結構化會議、決策與待辦寫入活動資料庫
+ * 對應後端 main.py:498 之 @app.post("/commit_summary") 端點
+ * 依序寫入 SQLite 的 meetings, decisions, tasks 資料表
  */
 export async function commitMeetingSummary(
   payload: CommitSummaryRequest
 ): Promise<CommitSummaryResponse> {
   return await apiClient.post<CommitSummaryResponse>('/commit_summary', payload);
 }
+

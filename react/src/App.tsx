@@ -327,7 +327,7 @@ export default function App() {
             </div>
           </section>
 
-          <section className="page activity-workspace" id="activity-workspace" hidden={currentView === 'activities' || currentView === 'chat'}>
+          <section className="page activity-workspace" id="activity-workspace" hidden={['activities', 'chat', 'extract'].includes(currentView)}>
             <div className="activity-heading">
               <div className="title-lockup">
                 {/* 1. 動態顏色與圖示 */}
@@ -436,14 +436,7 @@ export default function App() {
           {currentView === 'chat' && <ChatPanel />}
 
           {/* 10. AI 會議紀錄整理視圖 */}
-          {currentView === 'extract' && (
-            <MeetingExtractPanel
-              onNavigateToActivity={(actId) => {
-                // 跳轉至活動頁面檢視
-                handleSetView('activities');
-              }}
-            />
-          )}
+          {currentView === 'extract' && <MeetingExtractPanel />}
         </main>
       </div>
 

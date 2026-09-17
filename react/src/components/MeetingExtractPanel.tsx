@@ -9,172 +9,103 @@ import {
   Users,
   ListTodo,
   AlertCircle,
-  ArrowRight,
   RefreshCw,
   Check,
-  Layers,
+  RotateCcw,
 } from 'lucide-react';
 import { fetchDocuments } from '../services/documentService';
 import { BackendDocument } from '../services/apiTypes';
 import {
-  fetchActivities,
   extractMeetingSummary,
   commitMeetingSummary,
-  BackendActivity,
   MeetingPreviewData,
-  ExtractedMeeting,
-  ExtractedDecision,
-  ExtractedTask,
 } from '../services/meetingExtractService';
 import './MeetingExtractPanel.css';
 
-interface MeetingExtractPanelProps {
-  // 可選：完成提交後若欲切換至該活動頁面
-  onNavigateToActivity?: (activityId: number) => void;
-}
-
 /**
- * AI 會議紀錄結構化整理主面板 (Meeting Extract Panel)
- * 整合後端 Preview-Commit 雙階段工作流程：
- * 1. 選擇文件與目標活動
- * 2. 呼叫 LLM 進行 1-shot 會議資訊、決策與待辦結構化萃取 (Extract)
- * 3. 預覽與微調編輯 (Preview)
- * 4. 寫入活動 SQLite 資料庫 (Commit)
+ * AI 會議紀錄整理面板 (Meeting Extract Panel)
+ * 核心功能：
+ * 1. 從已上傳的文件挑選一份會議紀錄
+ * 2. 呼叫 LLM 依據 System Prompt 提煉成標準化結構（會議摘要、決策、待辦）
+ * 3. 呈現結構化標準表格並提供使用者確認
+ * 4. 確認後一鍵寫入資料庫
  */
-export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
-  onNavigateToActivity,
-}) => {
+export const MeetingExtractPanel: React.FC = () => {
   // 已入庫文檔清單
   const [documents, setDocuments] = useState<BackendDocument[]>([]);
-  // 現有活動清單
-  const [activities, setActivities] = useState<BackendActivity[]>([]);
-
-  // 使用者選擇之文件 ID 與目標活動 ID
+  // 當前選中的文檔 ID
   const [selectedDocId, setSelectedDocId] = useState<number | ''>('');
-  const [selectedActivityId, setSelectedActivityId] = useState<number | ''>('');
 
-  // 狀態旗標
-  const [loadingInitial, setLoadingInitial] = useState(false);
+  // 後端既有活動 ID (背後連結用，不干擾前端簡潔介面)
+  const [defaultActivityId, setDefaultActivityId] = useState<number>(1);
+
+  // 狀態管理
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isCommitted, setIsCommitted] = useState(false);
 
   // 提示與錯誤訊息
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // 結構化預覽資料 (若為 null 則代表處於選擇階段)
+  // LLM 返回之標準化預覽資料
   const [previewData, setPreviewData] = useState<MeetingPreviewData | null>(null);
 
   /**
-   * 初始化載入文件清單與活動清單
+   * 載入已上傳文件清單
    */
-  const loadPrerequisites = useCallback(async () => {
-    setLoadingInitial(true);
+  const loadDocumentsList = useCallback(async () => {
+    setIsLoadingDocs(true);
     setErrorMessage(null);
     try {
-      const [docs, acts] = await Promise.all([
-        fetchDocuments(),
-        fetchActivities(),
-      ]);
+      const docs = await fetchDocuments();
       setDocuments(docs);
-      setActivities(acts);
-
       if (docs.length > 0 && selectedDocId === '') {
         setSelectedDocId(docs[0].id);
       }
-      if (acts.length > 0 && selectedActivityId === '') {
-        setSelectedActivityId(acts[0].id);
-      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setErrorMessage(`無法載入基礎資料：${msg}`);
+      setErrorMessage(`無法載入文檔清單：${msg}`);
     } finally {
-      setLoadingInitial(false);
+      setIsLoadingDocs(false);
     }
-  }, [selectedDocId, selectedActivityId]);
+  }, [selectedDocId]);
 
   useEffect(() => {
-    loadPrerequisites();
-  }, [loadPrerequisites]);
+    loadDocumentsList();
+  }, [loadDocumentsList]);
 
   /**
-   * 階段 1：觸發 AI 結構化萃取 (POST /extract_summary)
+   * 步驟 1：觸發 LLM 根據 system prompt 整理會議紀錄 (POST /extract_summary)
    */
-  const handleStartExtract = async () => {
+  const handleExtract = async () => {
     if (!selectedDocId) {
-      setErrorMessage('請先選擇欲分析的會議紀錄文件');
+      setErrorMessage('請先從下拉選單選擇欲整理的會議文件');
       return;
     }
 
     setIsExtracting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setIsCommitted(false);
 
     try {
       const res = await extractMeetingSummary(Number(selectedDocId));
       setPreviewData(res.preview_data);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setErrorMessage(`AI 結構化萃取失敗：${msg}`);
+      setErrorMessage(`會議整理失敗：${msg}`);
     } finally {
       setIsExtracting(false);
     }
   };
 
   /**
-   * 會議基本資訊欄位異動
-   */
-  const handleMeetingChange = (
-    field: keyof ExtractedMeeting,
-    value: string
-  ) => {
-    if (!previewData) return;
-    setPreviewData({
-      ...previewData,
-      meeting: {
-        ...previewData.meeting,
-        [field]: value,
-      },
-    });
-  };
-
-  /**
-   * 決策紀錄欄位異動
-   */
-  const handleDecisionChange = (
-    index: number,
-    field: keyof ExtractedDecision,
-    value: string
-  ) => {
-    if (!previewData) return;
-    const updated = [...previewData.decisions];
-    updated[index] = { ...updated[index], [field]: value };
-    setPreviewData({ ...previewData, decisions: updated });
-  };
-
-  /**
-   * 待辦事項欄位異動
-   */
-  const handleTaskChange = (
-    index: number,
-    field: keyof ExtractedTask,
-    value: string
-  ) => {
-    if (!previewData) return;
-    const updated = [...previewData.tasks];
-    updated[index] = { ...updated[index], [field]: value };
-    setPreviewData({ ...previewData, tasks: updated });
-  };
-
-  /**
-   * 階段 2：確認並寫入活動資料庫 (POST /commit_summary)
+   * 步驟 2：使用者確認後，寫入資料庫 (POST /commit_summary)
    */
   const handleCommit = async () => {
     if (!previewData) return;
-    if (!selectedActivityId) {
-      setErrorMessage('請指定欲歸屬的活動目標');
-      return;
-    }
 
     setIsCommitting(true);
     setErrorMessage(null);
@@ -182,14 +113,15 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
 
     try {
       const res = await commitMeetingSummary({
-        activity_id: Number(selectedActivityId),
+        activity_id: defaultActivityId,
         meeting: previewData.meeting,
         decisions: previewData.decisions,
         tasks: previewData.tasks,
       });
 
+      setIsCommitted(true);
       setSuccessMessage(
-        `${res.message}（包含 1 筆會議、${res.decisions.length} 筆決策與 ${res.tasks.length} 項待辦事項）`
+        `${res.message}（包含 1 筆會議紀錄、${res.decisions.length} 項關鍵決策、${res.tasks.length} 項待辦事項）`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -200,16 +132,14 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
   };
 
   /**
-   * 重設並重新選擇
+   * 重新整理或挑選其他文件
    */
   const handleReset = () => {
     setPreviewData(null);
+    setIsCommitted(false);
     setSuccessMessage(null);
     setErrorMessage(null);
   };
-
-  const selectedActivityName =
-    activities.find((a) => a.id === selectedActivityId)?.name || '未選擇活動';
 
   return (
     <div className="extract-panel-layout">
@@ -218,23 +148,20 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
         <div className="extract-header-title">
           <Sparkles size={20} className="extract-sparkle-icon" />
           <h2>AI 會議紀錄整理</h2>
-          <span className="extract-header-tag">1-Shot 結構化萃取</span>
         </div>
-        <div>
-          <button
-            type="button"
-            className="button secondary sm-btn"
-            onClick={loadPrerequisites}
-            disabled={loadingInitial || isExtracting || isCommitting}
-            title="重新讀取文件與活動清單"
-          >
-            <RefreshCw size={14} className={loadingInitial ? 'spinning' : ''} />
-            <span>重新整理</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          className="button secondary sm-btn"
+          onClick={loadDocumentsList}
+          disabled={isLoadingDocs || isExtracting || isCommitting}
+          title="重新整理文件清單"
+        >
+          <RefreshCw size={14} className={isLoadingDocs ? 'spinning' : ''} />
+          <span>重新整理</span>
+        </button>
       </header>
 
-      {/* 異常提示列 */}
+      {/* 錯誤警示列 */}
       {errorMessage && (
         <div className="extract-api-error-banner" role="alert">
           <div className="extract-api-error-info">
@@ -251,50 +178,28 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
         </div>
       )}
 
-      {/* 內容獨立可滾動區 */}
+      {/* 主內容獨立滾動區 */}
       <div className="extract-content-scroll">
-        {/* 成功提交提示 */}
-        {successMessage && (
-          <div className="extract-success-banner" role="status">
-            <div className="extract-success-info">
-              <CheckCircle2 size={20} />
-              <span>{successMessage}</span>
-            </div>
-            {onNavigateToActivity && selectedActivityId && (
-              <button
-                type="button"
-                className="button primary sm-btn"
-                onClick={() => onNavigateToActivity(Number(selectedActivityId))}
-              >
-                <span>前往檢視活動</span>
-                <ArrowRight size={14} />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* 1. 設定與來源選擇卡片 */}
+        {/* 1. 選擇已上傳文件區塊 */}
         <section className="extract-card">
           <div className="extract-card-head">
             <div className="extract-card-title">
               <FileText size={18} />
-              <span>步驟一：選擇會議文件與目標活動</span>
+              <span>選擇會議紀錄文件</span>
             </div>
-            <span className="extract-card-badge">來源設定</span>
+            <span className="extract-card-badge">已導入文檔</span>
           </div>
 
-          <div className="extract-selector-grid">
-            {/* 選擇文件 */}
-            <div className="selector-field">
-              <label htmlFor="extract-doc-select">會議紀錄文件</label>
+          <div className="doc-pick-row">
+            <div className="doc-select-wrap">
               <select
-                id="extract-doc-select"
+                id="meeting-doc-picker"
                 value={selectedDocId}
                 onChange={(e) => setSelectedDocId(e.target.value ? Number(e.target.value) : '')}
                 disabled={isExtracting || isCommitting}
               >
                 {documents.length === 0 ? (
-                  <option value="">暫無已入庫文件（請先於對話面板上傳）</option>
+                  <option value="">尚未有已入庫之文件（可於對話面板的文檔抽屜上傳）</option>
                 ) : (
                   documents.map((doc) => (
                     <option key={doc.id} value={doc.id}>
@@ -303,248 +208,180 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
                   ))
                 )}
               </select>
-              <small>系統將直接讀取該文檔全文進行 1-shot 結構化抽取</small>
             </div>
 
-            {/* 選擇目標活動 */}
-            <div className="selector-field">
-              <label htmlFor="extract-act-select">關聯活動</label>
-              <select
-                id="extract-act-select"
-                value={selectedActivityId}
-                onChange={(e) =>
-                  setSelectedActivityId(e.target.value ? Number(e.target.value) : '')
-                }
-                disabled={isExtracting || isCommitting}
-              >
-                {activities.length === 0 ? (
-                  <option value="">暫無可用活動</option>
-                ) : (
-                  activities.map((act) => (
-                    <option key={act.id} value={act.id}>
-                      {act.name} ({act.year} 年・{act.status || '進行中'})
-                    </option>
-                  ))
-                )}
-              </select>
-              <small>萃取後的會議、決策與待辦將自動綁定至此活動</small>
-            </div>
-          </div>
-
-          <div className="extract-action-row">
             <button
               type="button"
               className="button extract-run-btn"
-              onClick={handleStartExtract}
+              onClick={handleExtract}
               disabled={isExtracting || !selectedDocId || documents.length === 0}
             >
               <Sparkles size={16} />
-              <span>{isExtracting ? 'AI 深度整理中…' : '開始 AI 結構化整理'}</span>
+              <span>{isExtracting ? 'LLM 整理分析中…' : '開始整理會議紀錄'}</span>
             </button>
           </div>
         </section>
 
-        {/* 分析中骨架與載入狀態 */}
+        {/* 分析處理中狀態 */}
         {isExtracting && (
           <div className="extract-loading-box">
             <div className="extract-loading-spinner" />
-            <strong>大語言模型正在深度分析會議全文…</strong>
-            <p>正在自動萃取會議時間、地點、討論摘要、核心決策結論與後續待辦事項，請稍候。</p>
+            <strong>LLM 正在閱讀全文並整理標準會議架構…</strong>
+            <p>依據專業秘書 System Prompt 自動提煉會議摘要、關鍵決策與待辦清單，請稍候。</p>
           </div>
         )}
 
-        {/* 2. 結構化預覽卡片 (Preview Phase) */}
+        {/* 成功寫入提示 */}
+        {successMessage && (
+          <div className="extract-success-banner" role="status">
+            <div className="extract-success-info">
+              <CheckCircle2 size={20} />
+              <span>{successMessage}</span>
+            </div>
+            <button
+              type="button"
+              className="button secondary sm-btn"
+              onClick={handleReset}
+            >
+              <RotateCcw size={14} />
+              <span>整理下一份會議</span>
+            </button>
+          </div>
+        )}
+
+        {/* 2. 呈現 LLM 返回的標準化架構表格 (供確認) */}
         {previewData && !isExtracting && (
           <>
-            {/* 會議主體資訊 */}
+            {/* 會議基本資訊表格 */}
             <section className="extract-card">
               <div className="extract-card-head">
                 <div className="extract-card-title">
                   <Calendar size={18} />
-                  <span>步驟二：會議基本資料核對</span>
+                  <span>會議基本摘要</span>
                 </div>
-                <span className="extract-card-badge">即時編輯</span>
+                <span className="extract-card-badge">會議概況</span>
               </div>
 
-              <div className="preview-form-grid">
-                <div className="preview-form-group">
-                  <label>會議名稱</label>
-                  <input
-                    type="text"
-                    value={previewData.meeting.name || ''}
-                    onChange={(e) => handleMeetingChange('name', e.target.value)}
-                    placeholder="例：第一次籌備協調會"
-                  />
-                </div>
-
-                <div className="preview-form-group">
-                  <label>開會日期</label>
-                  <input
-                    type="text"
-                    value={previewData.meeting.date || ''}
-                    onChange={(e) => handleMeetingChange('date', e.target.value)}
-                    placeholder="例：2026-09-20"
-                  />
-                </div>
-
-                <div className="preview-form-group">
-                  <label>時間範圍</label>
-                  <input
-                    type="text"
-                    value={`${previewData.meeting.start_time || ''}${
-                      previewData.meeting.end_time ? ' - ' + previewData.meeting.end_time : ''
-                    }`}
-                    onChange={(e) => {
-                      const parts = e.target.value.split('-');
-                      handleMeetingChange('start_time', parts[0]?.trim() || '');
-                      handleMeetingChange('end_time', parts[1]?.trim() || '');
-                    }}
-                    placeholder="例：14:00 - 16:30"
-                  />
-                </div>
-
-                <div className="preview-form-group">
-                  <label>會議地點</label>
-                  <input
-                    type="text"
-                    value={previewData.meeting.location || ''}
-                    onChange={(e) => handleMeetingChange('location', e.target.value)}
-                    placeholder="例：系辦大樓 201 會議室"
-                  />
-                </div>
-
-                <div className="preview-form-group full-width">
-                  <label>出席成員</label>
-                  <input
-                    type="text"
-                    value={previewData.meeting.participants || ''}
-                    onChange={(e) => handleMeetingChange('participants', e.target.value)}
-                    placeholder="例：王小明, 李大華, 林同學"
-                  />
-                </div>
-
-                <div className="preview-form-group full-width">
-                  <label>會議討論大綱與內容</label>
-                  <textarea
-                    rows={3}
-                    value={previewData.meeting.content || ''}
-                    onChange={(e) => handleMeetingChange('content', e.target.value)}
-                    placeholder="會議核心討論議題與記錄"
-                  />
-                </div>
+              <div className="standard-table-wrap">
+                <table className="standard-meeting-table">
+                  <tbody>
+                    <tr>
+                      <th>會議名稱</th>
+                      <td colSpan={3}>
+                        <strong>{previewData.meeting.name || '未提及'}</strong>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>開會日期</th>
+                      <td>{previewData.meeting.date || '未提及'}</td>
+                      <th>時間範圍</th>
+                      <td>
+                        {previewData.meeting.start_time || ''}
+                        {previewData.meeting.end_time ? ` - ${previewData.meeting.end_time}` : ''}
+                        {!previewData.meeting.start_time && !previewData.meeting.end_time && '未提及'}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>會議地點</th>
+                      <td>{previewData.meeting.location || '未提及'}</td>
+                      <th>參與成員</th>
+                      <td>{previewData.meeting.participants || '未提及'}</td>
+                    </tr>
+                    <tr>
+                      <th>討論摘要</th>
+                      <td colSpan={3} className="content-cell">
+                        {previewData.meeting.content || '無詳細摘要'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </section>
 
-            {/* 萃取的關鍵決策 (Decisions) */}
+            {/* 關鍵決策事項 (Decisions) 表格 */}
             <section className="extract-card">
               <div className="extract-card-head">
                 <div className="extract-card-title">
                   <CheckCircle2 size={18} />
-                  <span>已萃取決策紀錄 ({previewData.decisions.length} 項)</span>
+                  <span>關鍵決策事項 ({previewData.decisions.length} 項)</span>
                 </div>
                 <span className="extract-card-badge">Decisions</span>
               </div>
 
               {previewData.decisions.length === 0 ? (
-                <p className="no-items-text">未在此會議中識別出明確決策項目</p>
+                <p className="no-data-note">此份會議紀錄中未識別出明確決策項目。</p>
               ) : (
-                <div className="extract-items-stack">
-                  {previewData.decisions.map((dec, idx) => (
-                    <div key={idx} className="extract-sub-card">
-                      <div className="extract-sub-card-header">
-                        <span className="extract-sub-card-num">決策 #{idx + 1}</span>
-                        <input
-                          type="text"
-                          className="extract-item-input"
-                          style={{ maxWidth: '280px', fontWeight: 700 }}
-                          value={dec.problem}
-                          onChange={(e) => handleDecisionChange(idx, 'problem', e.target.value)}
-                          placeholder="議題/問題"
-                        />
-                      </div>
-                      <div className="preview-form-grid">
-                        <div className="preview-form-group full-width">
-                          <label>最終決策結論</label>
-                          <input
-                            type="text"
-                            value={dec.final_decision}
-                            onChange={(e) =>
-                              handleDecisionChange(idx, 'final_decision', e.target.value)
-                            }
-                          />
-                        </div>
-                        <div className="preview-form-group">
-                          <label>考量理由</label>
-                          <input
-                            type="text"
-                            value={dec.reason}
-                            onChange={(e) => handleDecisionChange(idx, 'reason', e.target.value)}
-                          />
-                        </div>
-                        <div className="preview-form-group">
-                          <label>來源段落依據</label>
-                          <input
-                            type="text"
-                            value={dec.source}
-                            onChange={(e) => handleDecisionChange(idx, 'source', e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="standard-table-wrap">
+                  <table className="standard-data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '60px' }}>編號</th>
+                        <th>討論議題 / 問題</th>
+                        <th>最終決策結論</th>
+                        <th>考量理由</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewData.decisions.map((dec, idx) => (
+                        <tr key={idx}>
+                          <td className="index-cell">{idx + 1}</td>
+                          <td className="topic-cell">{dec.problem}</td>
+                          <td className="decision-cell">{dec.final_decision}</td>
+                          <td className="reason-cell">{dec.reason || '無'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </section>
 
-            {/* 萃取的待辦事項 (Tasks) */}
+            {/* 行動待辦清單 (Tasks) 表格 */}
             <section className="extract-card">
               <div className="extract-card-head">
                 <div className="extract-card-title">
                   <ListTodo size={18} />
-                  <span>已萃取待辦事項 ({previewData.tasks.length} 項)</span>
+                  <span>行動待辦清單 ({previewData.tasks.length} 項)</span>
                 </div>
                 <span className="extract-card-badge">Tasks</span>
               </div>
 
               {previewData.tasks.length === 0 ? (
-                <p className="no-items-text">未在此會議中識別出待辦執行事項</p>
+                <p className="no-data-note">此份會議紀錄中未識別出待辦執行項目。</p>
               ) : (
-                <div className="extract-items-stack">
-                  {previewData.tasks.map((tsk, idx) => (
-                    <div key={idx} className="extract-sub-card">
-                      <div className="extract-sub-card-header">
-                        <span className="extract-sub-card-num">待辦 #{idx + 1}</span>
-                        <input
-                          type="text"
-                          className="extract-item-input"
-                          style={{ flex: 1, marginLeft: '10px' }}
-                          value={tsk.content}
-                          onChange={(e) => handleTaskChange(idx, 'content', e.target.value)}
-                          placeholder="待辦事項內容"
-                        />
-                      </div>
-                      <div className="preview-form-grid">
-                        <div className="preview-form-group">
-                          <label>指派負責人</label>
-                          <input
-                            type="text"
-                            value={tsk.assignee || ''}
-                            onChange={(e) => handleTaskChange(idx, 'assignee', e.target.value)}
-                            placeholder="例：林同學"
-                          />
-                        </div>
-                        <div className="preview-form-group">
-                          <label>預計完成期限</label>
-                          <input
-                            type="text"
-                            value={tsk.due_date || ''}
-                            onChange={(e) => handleTaskChange(idx, 'due_date', e.target.value)}
-                            placeholder="例：2026-09-25"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="standard-table-wrap">
+                  <table className="standard-data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '60px' }}>編號</th>
+                        <th>待辦執行項目</th>
+                        <th style={{ width: '120px' }}>指派人</th>
+                        <th style={{ width: '130px' }}>完成期限</th>
+                        <th style={{ width: '90px' }}>優先級</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewData.tasks.map((tsk, idx) => (
+                        <tr key={idx}>
+                          <td className="index-cell">{idx + 1}</td>
+                          <td>{tsk.content}</td>
+                          <td>
+                            <span className="person-pill">{tsk.assignee || '未指定'}</span>
+                          </td>
+                          <td>{tsk.due_date || '無期限'}</td>
+                          <td>
+                            <span
+                              className={`priority-tag ${
+                                tsk.priority === '高' ? 'high' : tsk.priority === '低' ? 'low' : 'mid'
+                              }`}
+                            >
+                              {tsk.priority || '中'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </section>
@@ -552,7 +389,7 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
         )}
       </div>
 
-      {/* 3. 底部確認寫入操作欄 (Commit Phase) */}
+      {/* 底部確認寫入操作區 */}
       {previewData && !isExtracting && (
         <div className="extract-bottom-dock">
           <button
@@ -564,20 +401,21 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({
             重新選擇文件
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '.84rem', color: 'var(--muted)' }}>
-              目標活動：<strong>{selectedActivityName}</strong>
+          <button
+            type="button"
+            className="button commit-btn"
+            onClick={handleCommit}
+            disabled={isCommitting || isCommitted}
+          >
+            <Check size={16} />
+            <span>
+              {isCommitted
+                ? '已成功寫入資料庫'
+                : isCommitting
+                ? '寫入資料庫中…'
+                : '確認寫入資料庫'}
             </span>
-            <button
-              type="button"
-              className="button commit-btn"
-              onClick={handleCommit}
-              disabled={isCommitting || !selectedActivityId}
-            >
-              <Check size={16} />
-              <span>{isCommitting ? '寫入資料庫中…' : '確認寫入活動資料庫'}</span>
-            </button>
-          </div>
+          </button>
         </div>
       )}
     </div>
