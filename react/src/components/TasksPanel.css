@@ -11,7 +11,7 @@
 .filter {
   padding: 7px 12px;
   border-radius: 8px;
-  background: #e9edf2;
+  background: var(--canvas);
   color: var(--ink-soft, #43506a);
   font-size: 0.72rem;
   font-weight: 800;
@@ -35,7 +35,7 @@
 .task-column {
   padding: 13px;
   border-radius: var(--radius, 12px);
-  background: #e9edf2;
+  background: var(--canvas);
 }
 
 .column-title {
@@ -54,7 +54,7 @@
   width: 21px;
   height: 21px;
   border-radius: 999px;
-  background: #d9dfe6;
+  background: var(--line);
   font-size: 0.65rem;
   color: var(--ink, #101928);
 }
@@ -94,7 +94,7 @@
   display: block;
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid #edf0f4;
+  border-top: 1px solid var(--line);
   color: var(--muted, #758097);
   font-size: 0.63rem;
 }
@@ -112,16 +112,16 @@
 }
 
 .priority.high {
-  background: #ffebe6;
-  color: #ad3e2b;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .priority.medium {
-  background: #fff1d7;
-  color: #8c5a04;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .priority.low {
-  background: #e7edf6;
-  color: #52637e;
+  background: var(--canvas);
+  color: var(--ink-soft);
 }

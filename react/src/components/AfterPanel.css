@@ -69,7 +69,7 @@
 .plan-actual div {
   padding: 16px;
   border-radius: 9px;
-  background: #f4f6f8;
+  background: var(--canvas);
 }
 
 .plan-actual strong {
@@ -88,13 +88,13 @@
 .issue-callout {
   margin-top: 13px;
   padding: 15px;
-  border-left: 3px solid #df765f;
+  border-left: 3px solid var(--danger);
   border-radius: 7px;
-  background: #fff3f0;
+  background: var(--danger-soft);
 }
 
 .issue-callout span {
-  color: #a54b39;
+  color: var(--danger);
   font-size: 0.64rem;
   font-weight: 900;
 }
@@ -103,12 +103,12 @@
   display: block;
   margin: 5px 0;
   font-size: 0.82rem;
-  color: #a54b39;
+  color: var(--danger);
 }
 
 .issue-callout p {
   margin: 0;
-  color: #8e625a;
+  color: var(--ink-soft);
   font-size: 0.7rem;
 }
 
@@ -142,7 +142,7 @@
   padding: 20px;
   border: 1px solid var(--line, #dfe4eb);
   border-radius: var(--radius, 12px);
-  background: #effcf9;
+  background: var(--cyan-soft);
 }
 
 .handover-card h3,

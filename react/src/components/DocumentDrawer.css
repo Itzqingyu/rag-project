@@ -42,7 +42,7 @@
 
 .doc-upload-box {
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .doc-upload-dropzone {
@@ -59,8 +59,8 @@
 }
 
 .doc-upload-dropzone:hover {
-  background: #e8f0fe;
-  border-color: #2563eb;
+  background: var(--cyan-soft);
+  border-color: var(--cyan);
 }
 
 .upload-icon {
@@ -93,8 +93,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--line);
 }
 
 .doc-list-title {
@@ -190,7 +190,7 @@
 
 .doc-delete-btn {
   background: transparent;
-  color: #9ca3af;
+  color: var(--muted);
   border: 0;
   padding: 4px;
   cursor: pointer;
@@ -198,8 +198,8 @@
 }
 
 .doc-delete-btn:hover {
-  color: #dc2626;
-  background: #fee2e2;
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .drawer-backdrop.active {

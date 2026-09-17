@@ -46,7 +46,7 @@
 }
 
 .sparkle-icon {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .sm-btn {
@@ -180,15 +180,15 @@
 }
 
 .bubble-mode-tag.rag {
-  background: #fef3c7 !important;
-  color: #92400e !important;
-  border-color: #d97706 !important;
+  background: var(--warning-soft) !important;
+  color: var(--warning) !important;
+  border-color: var(--warning) !important;
 }
 
 .bubble-mode-tag.chat {
-  background: #e0f2fe !important;
-  color: #0369a1 !important;
-  border-color: #0284c7 !important;
+  background: var(--cyan-soft) !important;
+  color: var(--cyan) !important;
+  border-color: var(--cyan) !important;
 }
 
 .chat-bubble-body {
@@ -217,7 +217,7 @@
   margin: 10px 0;
   padding: 8px 12px;
   border-left: 3px solid var(--cyan, #4776e6);
-  background: #f4f6fa;
+  background: var(--canvas);
   font-size: .88rem;
 }
 
@@ -226,7 +226,7 @@
   margin-top: 14px;
   border: 1px solid var(--line, #dfe4eb);
   border-radius: 8px;
-  background: #fafbfc;
+  background: var(--panel);
   overflow: hidden;
 }
 
@@ -236,7 +236,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #f1f3f7;
+  background: var(--canvas);
   cursor: pointer;
   border: 0;
   text-align: left;
@@ -262,7 +262,7 @@
 .rag-chunk-item {
   padding: 8px 10px;
   background: #ffffff;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--line);
   border-radius: 6px;
   font-size: .8rem;
 }
@@ -280,7 +280,7 @@
 }
 
 .rag-chunk-text {
-  color: #374151;
+  color: var(--ink-soft);
   line-height: 1.5;
   margin: 0;
 }
@@ -326,7 +326,7 @@
 .mode-toggle-pill {
   display: inline-flex;
   padding: 3px;
-  background: #f1f3f7;
+  background: var(--canvas);
   border: 1.5px solid var(--line, #dfe4eb);
   border-radius: 8px;
   box-shadow: 2px 2px 0 var(--line, #dfe4eb);
@@ -396,8 +396,8 @@
 }
 
 .doc-attach-btn:hover {
-  background: #f1f3f7;
-  border-color: #d1d5db;
+  background: var(--canvas);
+  border-color: var(--line);
 }
 
 .send-btn {

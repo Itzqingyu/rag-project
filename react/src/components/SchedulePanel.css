@@ -7,7 +7,7 @@
   margin-bottom: 17px;
   padding: 4px;
   border-radius: 9px;
-  background: #e8ecf1;
+  background: var(--canvas);
 }
 
 .day-switch button {
@@ -53,7 +53,7 @@
   position: relative;
   width: 1px;
   height: 100%;
-  background: #d9dfe6;
+  background: var(--line);
 }
 
 .timeline article > i::before {
@@ -70,7 +70,7 @@
 
 .timeline article > div {
   padding: 21px 0;
-  border-bottom: 1px solid #edf0f4;
+  border-bottom: 1px solid var(--line);
 }
 
 .timeline article:last-child > div {
@@ -98,18 +98,18 @@
 }
 
 .category.staff {
-  background: #e5eaf4;
-  color: #50617b;
+  background: var(--canvas);
+  color: var(--ink-soft);
 }
 
 .category.checkin {
-  background: #e8e2fa;
-  color: #6550a4;
+  background: var(--violet-soft);
+  color: var(--violet);
 }
 
 .category.ceremony {
-  background: #ffe7f0;
-  color: #a9436a;
+  background: var(--pink-soft);
+  color: var(--pink);
 }
 
 .category.activity {
@@ -118,8 +118,8 @@
 }
 
 .category.meal {
-  background: #fff0dc;
-  color: #9b601b;
+  background: var(--orange-soft);
+  color: var(--orange);
 }
 
 .detail-tags {
@@ -132,7 +132,7 @@
 .detail-tags span {
   padding: 4px 7px;
   border-radius: 5px;
-  background: #f1f3f6;
+  background: var(--canvas);
   color: var(--ink-soft, #43506a);
   font-size: 0.62rem;
 }

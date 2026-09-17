@@ -36,7 +36,7 @@
 .life-step {
   flex: 0 0 82px;
   text-align: center;
-  color: #9aa3b1;
+  color: var(--muted);
   font-size: 0.68rem;
   font-weight: 700;
 }
@@ -47,7 +47,7 @@
   width: 28px;
   height: 28px;
   margin: 0 auto 7px;
-  border: 1px solid #ccd2dc;
+  border: 1px solid var(--line);
   border-radius: 50%;
   background: #ffffff;
   font-style: normal;
@@ -73,7 +73,7 @@
   flex: 1;
   height: 2px;
   margin: 14px -14px 0;
-  background: #dfe3e9;
+  background: var(--line);
 }
 
 .life-line.done {
@@ -163,7 +163,7 @@
   height: 102px;
   margin: 14px auto 8px;
   border-radius: 50%;
-  background: conic-gradient(var(--cyan, #4776e6) calc(var(--progress) * 1%), #e8edf2 0);
+  background: conic-gradient(var(--cyan, #4776e6) calc(var(--progress) * 1%), var(--line) 0);
   position: relative;
 }
 
@@ -213,7 +213,7 @@
 }
 
 .dot.pending {
-  background: #dce2e9;
+  background: var(--line);
 }
 
 .task-preview,
@@ -229,7 +229,7 @@
   align-items: center;
   gap: 10px;
   min-height: 52px;
-  border-top: 1px solid #edf0f4;
+  border-top: 1px solid var(--line);
 }
 
 .task-preview li:first-child,
@@ -266,7 +266,7 @@
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  border: 1px solid #cbd2db;
+  border: 1px solid var(--line);
   border-radius: 5px;
   background: #ffffff;
   cursor: pointer;
@@ -300,7 +300,7 @@
   align-items: flex-start;
   gap: 10px;
   padding: 13px 0;
-  border-top: 1px solid #edf0f4;
+  border-top: 1px solid var(--line);
 }
 
 .decision-preview strong,
@@ -334,6 +334,6 @@
 }
 
 .decision-state.review {
-  background: #fff1d7;
-  color: #8c5a04;
+  background: var(--warning-soft);
+  color: var(--warning);
 }

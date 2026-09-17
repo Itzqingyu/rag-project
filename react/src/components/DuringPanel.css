@@ -14,7 +14,7 @@
 }
 
 .live-heading p:last-child {
-  color: #9ca9bc;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .live-clock {
@@ -27,7 +27,7 @@
 }
 
 .live-clock span {
-  color: #a7b2c2;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 0.65rem;
 }
 
@@ -139,10 +139,10 @@
   align-items: center;
   gap: 4px 13px;
   padding: 19px;
-  border: 1px dashed #b44b3b;
+  border: 1px dashed var(--danger);
   border-radius: var(--radius, 12px);
-  background: #fff7f5;
-  color: #8d3427;
+  background: var(--danger-soft);
+  color: var(--danger);
   text-align: left;
   cursor: pointer;
 }
@@ -154,7 +154,7 @@
   width: 35px;
   height: 35px;
   border-radius: 50%;
-  background: #e46a57;
+  background: var(--danger);
   color: #ffffff;
   font-size: 1.15rem;
 }
@@ -164,7 +164,7 @@
 }
 
 .incident-button small {
-  color: #a96357;
+  color: var(--danger);
   font-size: 0.67rem;
 }
 

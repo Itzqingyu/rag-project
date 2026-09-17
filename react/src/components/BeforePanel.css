@@ -39,7 +39,7 @@
 .bar {
   height: 6px;
   border-radius: 6px;
-  background: #e6ebf0;
+  background: var(--line);
   overflow: hidden;
 }
 
@@ -93,7 +93,7 @@
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: #eef2f6;
+  background: var(--canvas);
   color: var(--muted, #758097);
   font-size: 0.68rem;
   font-weight: 900;
@@ -129,7 +129,7 @@
 
 .module-card.featured p,
 .module-card.featured small {
-  color: #aeb9ca;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .module-card.featured h3 {
@@ -148,9 +148,9 @@
   align-items: center;
   margin-top: 16px;
   padding: 17px 18px;
-  border: 1px solid #efd8a7;
+  border: 1px solid var(--warning);
   border-radius: var(--radius, 12px);
-  background: #fffaf0;
+  background: var(--warning-soft);
 }
 
 .alert-panel > span {
@@ -159,8 +159,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #f2b84b;
-  color: #5f3c00;
+  background: var(--warning);
+  color: #ffffff;
   font-weight: 900;
 }
 
@@ -171,11 +171,11 @@
 
 .alert-panel strong {
   font-size: 0.82rem;
-  color: #5f3c00;
+  color: var(--warning);
 }
 
 .alert-panel p {
   margin-top: 4px;
-  color: #786746;
+  color: var(--ink-soft);
   font-size: 0.72rem;
 }

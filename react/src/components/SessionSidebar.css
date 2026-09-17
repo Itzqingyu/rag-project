@@ -75,28 +75,28 @@
 }
 
 .chat-session-item:hover {
-  background: #f4f6fa;
-  border-color: #d1d5db;
+  background: var(--canvas);
+  border-color: var(--line);
 }
 
 /* 選中會話：高對比淺藍底 + 藍框 + 深黑字體 */
 .chat-session-item.active {
-  background: #eef4ff !important;
-  border-color: #2563eb !important;
+  background: var(--cyan-soft) !important;
+  border-color: var(--cyan) !important;
   box-shadow: 2px 2px 0 var(--line, #dfe4eb) !important;
 }
 
 .chat-session-item.active .session-item-title {
-  color: #101928 !important;
+  color: var(--ink) !important;
   font-weight: 800 !important;
 }
 
 .chat-session-item.active .session-item-time {
-  color: #4b5563 !important;
+  color: var(--ink-soft) !important;
 }
 
 .chat-session-item.active .session-item-icon {
-  color: #2563eb !important;
+  color: var(--cyan) !important;
 }
 
 .session-item-icon {
@@ -130,7 +130,7 @@
 .session-delete-btn {
   display: none;
   background: transparent;
-  color: #888;
+  color: var(--muted);
   padding: 4px;
   border-radius: 4px;
   cursor: pointer;
@@ -141,8 +141,8 @@
 }
 
 .session-delete-btn:hover {
-  color: #dc2626;
-  background: #fee2e2;
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .chat-session-footer {

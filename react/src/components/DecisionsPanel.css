@@ -25,13 +25,13 @@
 }
 
 .decision-list-item:hover {
-  border-color: #cbd5e1;
+  border-color: var(--line);
 }
 
 .decision-list-item.active {
   border-color: var(--cyan, #4776e6);
   box-shadow: inset 3px 0 var(--cyan, #4776e6);
-  background: #f8fafc;
+  background: var(--canvas);
 }
 
 .decision-list-item strong,
@@ -133,7 +133,7 @@
   padding: 13px;
   border: 1px solid var(--line, #dfe4eb);
   border-radius: 9px;
-  background: #f8fafb;
+  background: var(--canvas);
   text-align: left;
   cursor: pointer;
 }
@@ -169,7 +169,7 @@
   padding: 16px;
   border-left: 3px solid var(--cyan, #4776e6);
   border-radius: 8px;
-  background: #effcf9;
+  background: var(--cyan-soft);
 }
 
 .historical-match > strong {

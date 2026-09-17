@@ -15,8 +15,16 @@
   --cyan: #4776e6;
   --cyan-soft: #e8efff;
   --violet: #7657d5;
+  --violet-soft: #efe8ff;
   --orange: #dd7b27;
+  --orange-soft: #ffe8d2;
   --pink: #c74f7d;
+  --pink-soft: #ffe4ee;
+  /* 業務狀態語意色 (Alert & Status Tokens) */
+  --danger: #d93829;
+  --danger-soft: #ffece8;
+  --warning: #d97706;
+  --warning-soft: #fff3db;
   --radius: 12px;
   font-family: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   color: var(--ink);
@@ -129,8 +137,8 @@ a {
 }
 
 .status.preparing {
-  background: #fff1d7;
-  color: #8c5a04;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .status.ongoing {
@@ -140,12 +148,12 @@ a {
 
 .status.completed,
 .status.finished {
-  background: #e6ecf5;
-  color: #4b5870;
+  background: var(--canvas);
+  color: var(--ink-soft);
 }
 
 .status.pending {
-  background: #f1f3f6;
+  background: var(--canvas);
   color: var(--muted);
 }
 
@@ -162,9 +170,9 @@ a {
 }
 
 .activity-glyph.cyan { background: var(--cyan-soft); color: var(--cyan); }
-.activity-glyph.orange { background: #ffe8d2; color: var(--orange); }
-.activity-glyph.violet { background: #efe8ff; color: var(--violet); }
-.activity-glyph.pink { background: #ffe4ee; color: var(--pink); }
+.activity-glyph.orange { background: var(--orange-soft); color: var(--orange); }
+.activity-glyph.violet { background: var(--violet-soft); color: var(--violet); }
+.activity-glyph.pink { background: var(--pink-soft); color: var(--pink); }
 
 /* ==========================================
    應用程式外框與側欄 (App Shell & Navigation)
@@ -183,7 +191,7 @@ a {
   padding: 26px 18px 18px;
   border-right: 1px solid var(--line);
   background: var(--navy);
-  color: #d8e0ed;
+  color: var(--cyan-soft);
   display: flex;
   flex-direction: column;
   z-index: 10;
@@ -222,7 +230,7 @@ a {
 
 .brand small {
   margin-top: 2px;
-  color: #8c9cb6;
+  color: var(--muted);
   font-size: 0.75rem;
 }
 
@@ -257,7 +265,7 @@ a {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: #b0c0d8;
+  color: var(--line);
   text-align: left;
   font-size: 0.9rem;
   font-weight: 700;
@@ -287,7 +295,7 @@ a {
   margin-top: auto;
   padding: 16px;
   border-radius: 10px;
-  background: #19263f;
+  background: var(--navy-soft);
 }
 
 .sidebar-note strong {
@@ -297,7 +305,7 @@ a {
 }
 
 .sidebar-note span:last-child {
-  color: #8c9cb6;
+  color: var(--muted);
   font-size: 0.75rem;
 }
 
@@ -316,7 +324,7 @@ a {
 
 .profile small {
   display: block;
-  color: #8c9cb6;
+  color: var(--muted);
   font-size: 0.72rem;
   margin-top: 2px;
 }
@@ -339,8 +347,8 @@ a {
   width: 27px;
   height: 27px;
   margin-right: 8px;
-  background: #e9edf3;
-  color: #566177;
+  background: var(--canvas);
+  color: var(--ink-soft);
   font-size: 0.75rem;
 }
 
@@ -373,7 +381,7 @@ a {
 }
 
 .breadcrumbs b {
-  color: #c0c6d0;
+  color: var(--line);
 }
 
 .breadcrumbs strong {
@@ -394,7 +402,7 @@ a {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: #f1f3f6;
+  background: var(--canvas);
   color: var(--ink);
   cursor: pointer;
   margin-right: 8px;
@@ -420,8 +428,8 @@ a {
 
 .global-prototype-notice {
   padding: 8px clamp(22px, 4vw, 56px);
-  background: #fff1d7;
-  color: #744c08;
+  background: var(--warning-soft);
+  color: var(--warning);
   font-size: 0.75rem;
   display: flex;
   align-items: center;
@@ -586,12 +594,12 @@ a {
 }
 
 .activity-row:hover {
-  background: #f8fafc;
+  background: var(--canvas);
 }
 
 .activity-row td {
   padding: 16px 20px;
-  border-bottom: 1px solid #edf0f4;
+  border-bottom: 1px solid var(--line);
   font-size: 0.85rem;
 }
 
@@ -667,7 +675,7 @@ a {
   font-size: 0.72rem;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #edf0f4;
+  background: var(--canvas);
 }
 
 .stage-tab.active {
@@ -768,7 +776,7 @@ a {
   font-size: 0.7rem;
   padding: 1px 6px;
   border-radius: 10px;
-  background: #edf0f4;
+  background: var(--canvas);
 }
 
 /* ==========================================
@@ -817,7 +825,7 @@ a {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: #edf0f4;
+  background: var(--canvas);
   color: var(--ink);
   cursor: pointer;
 }
