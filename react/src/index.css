@@ -1819,6 +1819,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   grid-template-columns: 280px minmax(0, 1fr);
   height: calc(100vh - 72px);
   background: var(--canvas);
+  color: var(--ink, #101928);
   overflow: hidden;
 }
 
@@ -1829,6 +1830,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   background: #ffffff;
   border-right: 2px solid var(--line);
   height: 100%;
+  color: var(--ink, #101928);
 }
 
 .chat-session-header {
@@ -1873,7 +1875,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
 .chat-session-empty p {
   font-size: .88rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink, #101928);
   margin-bottom: 4px;
 }
 
@@ -1899,16 +1901,30 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   border-color: #d1d5db;
 }
 
+/* 選中會話：高對比淺藍底 + 鮮明藍框 + 深黑字體，徹底告別黑底看不清 */
 .chat-session-item.active {
-  background: var(--navy-soft);
-  border-color: var(--line);
-  box-shadow: 2px 2px 0 var(--line);
+  background: #eef4ff !important;
+  border-color: #2563eb !important;
+  box-shadow: 2px 2px 0 var(--line) !important;
+}
+
+.chat-session-item.active .session-item-title {
+  color: #101928 !important;
+  font-weight: 800 !important;
+}
+
+.chat-session-item.active .session-item-time {
+  color: #4b5563 !important;
+}
+
+.chat-session-item.active .session-item-icon {
+  color: #2563eb !important;
 }
 
 .session-item-icon {
   display: grid;
   place-items: center;
-  color: var(--ink);
+  color: var(--ink, #101928);
 }
 
 .session-item-info {
@@ -1920,7 +1936,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
 
 .session-item-title {
   font-size: .85rem;
-  color: var(--ink);
+  color: var(--ink, #101928);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2009,6 +2025,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
   background: #ffffff;
+  color: var(--ink, #101928);
 }
 
 .chat-header-title {
@@ -2021,6 +2038,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   font-size: 1.05rem;
   font-weight: 800;
   margin: 0;
+  color: #101928 !important; /* 強制深黑字體，確保在白底上鮮明清晰 */
 }
 
 .sparkle-icon {
@@ -2072,6 +2090,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   font-weight: 900;
   margin-bottom: 8px;
   letter-spacing: -.02em;
+  color: #101928 !important;
 }
 
 .chat-empty-state p {
@@ -2156,11 +2175,15 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
 }
 
 .bubble-mode-tag.rag {
-  background: var(--navy-soft);
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #d97706 !important;
 }
 
 .bubble-mode-tag.chat {
-  background: var(--cyan);
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #0284c7 !important;
 }
 
 .chat-bubble-body {
@@ -2396,6 +2419,7 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   width: 380px;
   height: 100vh;
   background: #ffffff;
+  color: var(--ink, #101928);
   border-left: 2px solid var(--line);
   z-index: 100;
   display: flex;
@@ -2416,12 +2440,14 @@ html::-webkit-scrollbar-thumb:hover { background: #b9c4d3; }
   justify-content: space-between;
   border-bottom: 2px solid var(--line);
   background: #ffffff;
+  color: var(--ink, #101928);
 }
 
 .doc-drawer-head h2 {
   font-size: 1.15rem;
   font-weight: 900;
   margin: 4px 0 0;
+  color: #101928 !important; /* 強制深黑字體，消除白底白字 */
 }
 
 .doc-upload-box {
