@@ -13,7 +13,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  FileSpreadsheet,
+  File,
   MessageSquare,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -179,10 +179,10 @@ export default function App() {
             <span><strong>Archive</strong><small>組織記憶工作台</small></span>
           </a>
           {/* 側邊欄邊緣小半圓箭頭收合/展開按鈕 */}
-          <button 
-            className="sidebar-tab-toggle" 
-            id="sidebar-toggle" 
-            type="button" 
+          <button
+            className="sidebar-tab-toggle"
+            id="sidebar-toggle"
+            type="button"
             aria-label={isSidebarOpen ? "收合側邊欄" : "展開側邊欄"}
             title={isSidebarOpen ? "收合側邊欄" : "展開側邊欄"}
             onClick={() => setIsSidebarOpen(prev => !prev)}
@@ -240,7 +240,7 @@ export default function App() {
                     className={`nav-sub-item ${currentView === 'extract' ? 'active' : ''}`}
                     onClick={() => handleSetView('extract')}
                   >
-                    <FileSpreadsheet size={14} />
+                    <File size={14} />
                     <span>會議紀錄整理</span>
                   </button>
                 </div>
