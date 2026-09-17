@@ -3,6 +3,7 @@ import { Send, Paperclip, Bot, User, MessageSquare, Sparkles, ChevronDown, Chevr
 import ReactMarkdown from 'react-markdown';
 import SessionSidebar, { SessionItem } from './SessionSidebar';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
+import './ChatPanel.css';
 
 /**
  * 訊息氣泡介面定義

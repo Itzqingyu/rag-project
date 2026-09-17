@@ -1,4 +1,5 @@
 import React from 'react';
+import './AfterPanel.css';
 
 export default function AfterPanel({ currentView }: any) {
   return (

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Plus, MessageSquare, Files, Trash2 } from 'lucide-react';
+import './SessionSidebar.css';
 
 /**
  * 會話項目資料介面 (本機狀態使用)

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import './SchedulePanel.css';
 
 export default function SchedulePanel({ currentActivity, currentView }: any) {
   // 🌟 魔法狀態：用來控制目前顯示的是 Day 1 還是 Day 2 (預設為 1)

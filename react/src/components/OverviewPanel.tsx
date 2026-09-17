@@ -1,4 +1,5 @@
 import React from 'react';
+import './OverviewPanel.css';
 
 // 定義這個元件需要接收的資料
 export default function OverviewPanel({ currentActivity, currentView, setCurrentView }: any) {

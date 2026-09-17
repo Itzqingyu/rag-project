@@ -1,4 +1,5 @@
 import React from 'react';
+import './DuringPanel.css';
 
 export default function DuringPanel({ currentView, setCurrentView }: any) {
   return (

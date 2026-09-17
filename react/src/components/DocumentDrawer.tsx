@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { X, UploadCloud, FileText, Trash2, AlertCircle } from 'lucide-react';
+import './DocumentDrawer.css';
 
 /**
  * 知識庫文件資料介面 (本機狀態使用)
