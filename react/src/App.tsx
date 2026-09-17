@@ -11,6 +11,8 @@ import MeetingPanel from './components/MeetingPanel';
 import DuringPanel from './components/DuringPanel';
 import AfterPanel from './components/AfterPanel';
 import SourceRecordPanel from './components/SourceRecordPanel';
+// 引入 LLM 聊天面板組件
+import ChatPanel from './components/ChatPanel';
 
 interface Message {
   id: string;
@@ -45,10 +47,10 @@ export default function App() {
   // ==========================================
   // 控制目前顯示的畫面，預設為 'activities' (活動列表)
   const [currentView, setCurrentView] = useState('activities');
-  
+
   // 控制左側主選單是否開啟 (手機版用)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+
   // 控制右側 AI 歷史參考抽屜是否開啟
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
 
@@ -147,9 +149,9 @@ export default function App() {
   // ==========================================
   // 2. 原型 UI 結構 (已轉換 className、閉合標籤與 inline style)
   // ==========================================
-return (
+  return (
     <>
-      // 注意這裡的反引號 ` 和 ${} 語法
+      // 注意這裡的反引號 ` 和 ${ } 語法
       <div className={`app-shell ${isSidebarOpen ? 'nav-open' : ''}`}>
         <aside className="sidebar" id="primary-sidebar" aria-label="主選單" aria-hidden={!isSidebarOpen}>
           <a className="brand" href="#activities" data-route="activities" aria-label="回到活動首頁" onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
@@ -159,8 +161,12 @@ return (
           <button className="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="關閉選單" onClick={() => setIsSidebarOpen(false)}>✕</button>
 
           <nav className="main-nav">
-            <a className={`nav-item ${currentView === 'activities' ? 'active' : ''}`} href="#activities" data-route="activities" aria-current="page" onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
+            <a className={`nav-item ${currentView === 'activities' ? 'active' : ''}`} href="#activities" data-route="activities" aria-current={currentView === 'activities' ? 'page' : undefined} onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
               <span className="nav-icon" aria-hidden="true">▦</span>活動
+            </a>
+            {/* 新增：AI 對話 (LLM 聊天面板入口) */}
+            <a className={`nav-item ${currentView === 'chat' ? 'active' : ''}`} href="#chat" data-route="chat" aria-current={currentView === 'chat' ? 'page' : undefined} onClick={(e) => { e.preventDefault(); handleSetView('chat'); }}>
+              <span className="nav-icon" aria-hidden="true">✦</span>AI 對話
             </a>
           </nav>
 
@@ -179,8 +185,12 @@ return (
         <main className="main" id="main-content">
           <header className="topbar">
             <button className="menu-button" type="button" aria-label="開啟選單" aria-controls="primary-sidebar" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(true)}>☰</button>
-            <button className="page-back-button" id="page-back" type="button" aria-label="回到上一頁" hidden={currentView === 'activities'} onClick={() => handleSetView('activities')}>←</button>
-            <div className="breadcrumbs"><span>工作台</span><b>/</b><strong>活動</strong></div>
+            <button className="page-back-button" id="page-back" type="button" aria-label="回到上一頁" hidden={currentView === 'activities' || currentView === 'chat'} onClick={() => handleSetView('activities')}>←</button>
+            <div className="breadcrumbs">
+              <span>工作台</span>
+              <b>/</b>
+              <strong>{currentView === 'chat' ? 'AI 對話' : '活動'}</strong>
+            </div>
             <button className="ai-button" id="open-ai" type="button" aria-controls="ai-drawer" aria-expanded={isAiDrawerOpen} onClick={() => setIsAiDrawerOpen(true)}><span aria-hidden="true">✦</span>歷史參考</button>
           </header>
 
@@ -227,10 +237,10 @@ return (
                   <thead><tr><th>活動</th><th>日期</th><th>狀態</th><th>下一步行動</th><th>負責人</th><th><span className="sr-only">操作</span></th></tr></thead>
                   <tbody>
                     {activityList.map((activity) => (
-                      <tr 
-                        key={activity.id} 
-                        className="activity-row" 
-                        tabIndex={0} 
+                      <tr
+                        key={activity.id}
+                        className="activity-row"
+                        tabIndex={0}
                         // 🌟 魔法在這裡：點擊時，設定選擇的活動 ID，並切換到工作台畫面！
                         onClick={() => {
                           setCurrentActivityId(activity.id);
@@ -254,7 +264,7 @@ return (
             </div>
           </section>
 
-          <section className="page activity-workspace" id="activity-workspace" hidden={currentView === 'activities'}>
+          <section className="page activity-workspace" id="activity-workspace" hidden={currentView === 'activities' || currentView === 'chat'}>
             <div className="activity-heading">
               <div className="title-lockup">
                 {/* 1. 動態顏色與圖示 */}
@@ -278,43 +288,43 @@ return (
               <button className="button secondary open-record" type="button">＋ 新增紀錄</button>
             </div>
 
-              <nav className="stage-tabs" aria-label="活動階段">
-              <button 
-                className={`stage-tab ${currentView === 'overview' ? 'active' : ''}`} 
-                type="button" 
+            <nav className="stage-tabs" aria-label="活動階段">
+              <button
+                className={`stage-tab ${currentView === 'overview' ? 'active' : ''}`}
+                type="button"
                 onClick={() => setCurrentView('overview')}
               >
                 <span>01</span>總覽
               </button>
-              <button 
-                className={`stage-tab ${currentView === 'before' ? 'active' : ''}`} 
-                type="button" 
+              <button
+                className={`stage-tab ${currentView === 'before' ? 'active' : ''}`}
+                type="button"
                 onClick={() => setCurrentView('before')}
               >
                 <span>02</span>活動前
               </button>
-              <button 
-                className={`stage-tab ${currentView === 'during' ? 'active' : ''}`} 
-                type="button" 
+              <button
+                className={`stage-tab ${currentView === 'during' ? 'active' : ''}`}
+                type="button"
                 onClick={() => setCurrentView('during')}
               >
                 <span>03</span>活動中
               </button>
-              <button 
-                className={`stage-tab ${currentView === 'after' ? 'active' : ''}`} 
-                type="button" 
+              <button
+                className={`stage-tab ${currentView === 'after' ? 'active' : ''}`}
+                type="button"
                 onClick={() => setCurrentView('after')}
               >
                 <span>04</span>活動後
               </button>
             </nav>
-              <div className="workspace-main">
-                <div className="workspace-content">
+            <div className="workspace-main">
+              <div className="workspace-content">
                 <OverviewPanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
 
                 {/* --- 這裡略過部分靜態結構，確保你原本的活動前/中/後等區塊不受影響 --- */}
                 {/* 所有的 section 保持原樣，因為它們的顯示邏輯在之後掛上 mockData 後會由狀態驅動 */}
-                
+
                 <BeforePanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
 
                 <MeetingPanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
@@ -326,13 +336,13 @@ return (
                 <SchedulePanel currentActivity={currentActivity} currentView={currentView} />
 
                 <DuringPanel currentView={currentView} setCurrentView={setCurrentView} />
-                
+
                 <AfterPanel currentView={currentView} />
-                
+
                 <SourceRecordPanel currentView={currentView} setCurrentView={setCurrentView} />
               </div>
 
-                <aside className="module-nav" id="activity-module-nav">
+              <aside className="module-nav" id="activity-module-nav">
                 <div className="module-nav-head">
                   <p>活動內容</p>
                   <button className="module-nav-toggle" id="module-nav-toggle" type="button">›</button>
@@ -358,17 +368,20 @@ return (
               </aside>
             </div>
           </section>
+
+          {/* 9. LLM 聊天大面板視圖 */}
+          {currentView === 'chat' && <ChatPanel />}
         </main>
       </div>
 
       {/* 7. 綁定 Drawer 半透明背景關閉事件 */}
       <div className="drawer-backdrop" id="drawer-backdrop" hidden={!isAiDrawerOpen} onClick={() => setIsAiDrawerOpen(false)}></div>
-      
+
       {/* 8. AI 抽屜狀態綁定 */}
       <aside className={`ai-drawer ${isAiDrawerOpen ? 'open' : ''}`} id="ai-drawer" aria-label="AI 歷史參考" aria-hidden={!isAiDrawerOpen}>
         <div className="drawer-head"><div><p className="eyebrow">HISTORY MEMORY</p><h2>歷史參考</h2></div>
-        <button className="close-button" type="button" id="close-ai" aria-label="關閉歷史參考" onClick={() => setIsAiDrawerOpen(false)}>×</button></div>
-        
+          <button className="close-button" type="button" id="close-ai" aria-label="關閉歷史參考" onClick={() => setIsAiDrawerOpen(false)}>×</button></div>
+
         {/* 對話訊息顯示區 */}
         <div className="messages-container" style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {messages.map(msg => (
@@ -396,16 +409,16 @@ return (
         {/* 底部輸入框與上傳按鈕 */}
         <div className="input-area" style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'white' }}>
           <div className="input-box" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button 
-              className="action-btn upload-btn" 
-              onClick={handleUpload} 
+            <button
+              className="action-btn upload-btn"
+              onClick={handleUpload}
               disabled={uploading}
               title="Upload Markdown File"
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
             >
               {uploading ? <Loader2 className="spinner" size={20} /> : <Paperclip size={20} />}
             </button>
-            
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -415,9 +428,9 @@ return (
               disabled={loading}
               style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid var(--border)' }}
             />
-            
-            <button 
-              className="action-btn send-btn" 
+
+            <button
+              className="action-btn send-btn"
               onClick={handleSend}
               disabled={!input.trim() || loading}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}

@@ -39,19 +39,16 @@
 ## 3. 專案結構
 ```
 rag-project/
-├── src/                          # Electron 前端
-│   ├── main/                     # 主進程 (Node.js)
-│   │   ├── index.ts, app.ts
-│   │   └── ipc-handlers/
-│   │       ├── file-handler.ts
-│   │       └── chat-handler.ts
-│   └── renderer/                 # 渲染進程 (React)
-│       ├── App.tsx
-│       ├── components/
-│       │   ├── Chat.tsx
-│   │   ├── FileUploader.tsx
-│   │   └── FileManager.tsx  # 管理已導入的 Markdown 文件
-│       └── types/
+├── react/                        # Electron + Vite + React 前端
+│   ├── src/
+│   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話)
+│   │   ├── components/
+│   │   │   ├── chat-panel.tsx    # LLM 聊天大面板主組件 (雙欄佈局、模式切換、空狀態)
+│   │   │   ├── session-sidebar.tsx # 對話會話側邊欄 (新對話、切換、刪除)
+│   │   │   ├── document-drawer.tsx # 知識庫文檔抽屜 (文件清單、上傳區塊)
+│   │   │   ├── MeetingPanel.tsx  # 會議管理面板
+│   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等)
+│   │   └── index.css             # 全域 Neo-brutalism 設計系統樣式
 │
 ├── python/                       # Python 後端 (FastAPI)
 │   ├── src/
@@ -141,6 +138,8 @@ npm run dev                                      # 啟動 Electron 前端
 - ✅ 文件管理 (查看、刪除已導入之 Markdown 文件，同步物理刪除託管 `.md` 與向量庫)
 - ✅ AI 結構化會議分析 (1-shot 摘要抽取與 Preview-Commit 寫入流程)
 - ✅ 活動管理 Python／SQLite 核心 CRUD 與關聯驗證
+- ✅ 前端 LLM 聊天大面板 UI 框架 (雙欄佈局、會話管理側欄、模式切換 Toggle Pill、極簡空狀態、知識庫文檔抽屜)
+- ⏳ 前後端 API 串接與端對端整合 (進行中)
 - ❌ 高級權限與團隊協作 (後續)
 - ❌ 版本控制與複雜自訂設定 (後續)
 
