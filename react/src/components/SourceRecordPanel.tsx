@@ -1,4 +1,5 @@
 import React from 'react';
+import './SourceRecordPanel.css';
 
 export default function SourceRecordPanel({ currentView, setCurrentView }: any) {
   return (

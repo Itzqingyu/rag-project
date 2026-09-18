@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import './MeetingPanel.css';
 
 export default function MeetingPanel({ currentActivity, currentView, setCurrentView }: any) {
   // 🌟 魔法狀態：用來記錄「原文」是否為展開狀態 (預設為 false 隱藏)

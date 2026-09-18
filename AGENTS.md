@@ -15,3 +15,15 @@
 ## python 後端架構規範
 
 有"測試相關"文檔、腳本，一律必須放在 `專案目錄/python/tests/`
+
+---
+## css 原則
+
+**繼承和配色統一**: 若非硬性需求，或是不用不行，配色一律從 `index.css` root 中挑選，以此統一視覺效果。
+**一個 component 一個 css**: 不要把所有 component 的 css 都寫在 `index.css`，會很難維護。應該落實 `index.css` 僅寫全域通用的樣式，各 component 的樣式排版要分開寫。
+
+---
+## 全域禁止 emojis !!!!!!!!!!
+
+- 後端 python 若需要有 CLI 小圖示，或訊息活潑呈現，一律只能用文字。
+- 前端 react ui 需要展現圖示，一律使用 lucide icon。

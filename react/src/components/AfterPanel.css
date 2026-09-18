@@ -1,0 +1,161 @@
+/* ==========================================
+   AfterPanel.css - 活動後檢討與交接面板樣式
+   ========================================== */
+
+.after-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 16px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: var(--radius, 12px);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.after-summary article {
+  padding: 18px;
+  border-right: 1px solid var(--line, #dfe4eb);
+}
+
+.after-summary article:last-child {
+  border: 0;
+}
+
+.after-summary span,
+.after-summary small,
+.after-summary strong {
+  display: block;
+}
+
+.after-summary span,
+.after-summary small {
+  color: var(--muted, #758097);
+  font-size: 0.67rem;
+}
+
+.after-summary strong {
+  margin: 5px 0;
+  font-size: 1.25rem;
+  color: var(--ink, #101928);
+}
+
+.review-card {
+  padding: 22px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: var(--radius, 12px);
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(16, 25, 40, 0.04);
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.review-head h3 {
+  margin: 6px 0 0;
+  font-size: 1.02rem;
+  color: var(--ink, #101928);
+}
+
+.plan-actual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.plan-actual div {
+  padding: 16px;
+  border-radius: 9px;
+  background: var(--canvas);
+}
+
+.plan-actual strong {
+  display: block;
+  margin: 6px 0 3px;
+  font-size: 0.85rem;
+  color: var(--ink, #101928);
+}
+
+.plan-actual p {
+  margin: 0;
+  color: var(--muted, #758097);
+  font-size: 0.69rem;
+}
+
+.issue-callout {
+  margin-top: 13px;
+  padding: 15px;
+  border-left: 3px solid var(--danger);
+  border-radius: 7px;
+  background: var(--danger-soft);
+}
+
+.issue-callout span {
+  color: var(--danger);
+  font-size: 0.64rem;
+  font-weight: 900;
+}
+
+.issue-callout strong {
+  display: block;
+  margin: 5px 0;
+  font-size: 0.82rem;
+  color: var(--danger);
+}
+
+.issue-callout p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 13px;
+}
+
+.review-grid div {
+  padding: 16px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.review-grid p {
+  margin: 7px 0 0;
+  color: var(--ink-soft, #43506a);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.handover-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: var(--radius, 12px);
+  background: var(--cyan-soft);
+}
+
+.handover-card h3,
+.handover-card p {
+  margin: 5px 0;
+}
+
+.handover-card h3 {
+  font-size: 0.94rem;
+  color: var(--ink, #101928);
+}
+
+.handover-card p:last-child {
+  color: var(--ink-soft, #43506a);
+  font-size: 0.73rem;
+}

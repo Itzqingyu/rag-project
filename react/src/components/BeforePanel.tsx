@@ -1,4 +1,5 @@
 import React from 'react';
+import './BeforePanel.css';
 
 export default function BeforePanel({ currentActivity, currentView, setCurrentView }: any) {
   // 自動幫我們算好「未完成的待辦」有幾筆

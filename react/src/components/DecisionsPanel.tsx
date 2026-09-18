@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './DecisionsPanel.css';
 
 export default function DecisionsPanel({ currentActivity, currentView }: any) {
   // 取得這個活動的所有決策 (如果沒有就給空陣列)
