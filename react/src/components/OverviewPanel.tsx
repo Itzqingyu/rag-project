@@ -1,150 +1,92 @@
 import React from 'react';
+import type { Activity } from '../types/activity';
 import './OverviewPanel.css';
 
-// 定義這個元件需要接收的資料
-export default function OverviewPanel({ currentActivity, currentView, setCurrentView }: any) {
+interface OverviewPanelProps {
+  currentActivity: Activity;
+  currentView: string;
+  setCurrentView: (view: string) => void;
+  onEdit: () => void;
+  onDelete: () => Promise<void>;
+  deleting: boolean;
+  deleteError: string | null;
+}
+
+const STATUS_ORDER = ['未開始', '準備中', '進行中', '已完成'];
+
+function formatBudget(value: number | null): string {
+  return value == null ? '尚未填寫' : `NT$ ${new Intl.NumberFormat('zh-TW').format(value)}`;
+}
+
+function formatDateRange(activity: Activity): string {
+  if (!activity.start_date && !activity.end_date) return '日期未定';
+  if (activity.start_date === activity.end_date || !activity.end_date) return activity.start_date || activity.end_date || '日期未定';
+  return `${activity.start_date || '未定'} ～ ${activity.end_date}`;
+}
+
+export default function OverviewPanel({
+  currentActivity,
+  currentView,
+  setCurrentView,
+  onEdit,
+  onDelete,
+  deleting,
+  deleteError,
+}: OverviewPanelProps) {
+  const currentStep = Math.max(0, STATUS_ORDER.indexOf(currentActivity.status));
+
   return (
     <section className={`view-panel ${currentView === 'overview' ? 'active' : ''}`} data-panel="overview">
       <div className="section-heading compact">
         <div><p className="eyebrow">OVERVIEW</p><h2>活動總覽</h2></div>
-        <span className="updated">最後更新：今天 14:20</span>
+        <div className="heading-actions">
+          <button className="button secondary" type="button" onClick={onEdit}>編輯活動</button>
+          <button className="button danger" type="button" onClick={() => void onDelete()} disabled={deleting}>
+            {deleting ? '刪除中…' : '刪除活動'}
+          </button>
+        </div>
       </div>
 
-      {/* 活動進度 */}
+      {deleteError && <div className="api-message error" role="alert">{deleteError}</div>}
+
       <div className="lifecycle-card">
-        <div className="lifecycle-head">
-          <strong>活動進度</strong>
-          <span>準備完成度 {currentActivity.progress}%</span>
-        </div>
+        <div className="lifecycle-head"><strong>活動進度</strong><span>{currentActivity.status}</span></div>
         <div className="lifecycle-track" aria-label={`活動進度：${currentActivity.status}`}>
-          <div className={`life-step ${currentActivity.status !== '未開始' ? 'done' : 'current'}`}>
-            <i>{currentActivity.status !== '未開始' ? '✓' : '1'}</i><span>建立活動</span>
-          </div>
-          <div className={`life-line ${currentActivity.status !== '未開始' ? 'done' : ''}`}></div>
-          <div className={`life-step ${['進行中', '已完成'].includes(currentActivity.status) ? 'done' : currentActivity.status === '準備中' ? 'current' : ''}`}>
-            <i>{['進行中', '已完成'].includes(currentActivity.status) ? '✓' : '2'}</i><span>準備中</span>
-          </div>
-          <div className={`life-line ${['進行中', '已完成'].includes(currentActivity.status) ? 'done' : ''}`}></div>
-          <div className={`life-step ${currentActivity.status === '已完成' ? 'done' : currentActivity.status === '進行中' ? 'current' : ''}`}>
-            <i>{currentActivity.status === '已完成' ? '✓' : '3'}</i><span>活動執行</span>
-          </div>
-          <div className={`life-line ${currentActivity.status === '已完成' ? 'done' : ''}`}></div>
-          <div className={`life-step ${currentActivity.status === '已完成' ? 'current' : ''}`}>
-            <i>4</i><span>成果檢討</span>
-          </div>
+          {['建立活動', '準備中', '活動執行', '成果檢討'].map((label, index) => (
+            <React.Fragment key={label}>
+              {index > 0 && <div className={`life-line ${index <= currentStep ? 'done' : ''}`}></div>}
+              <div className={`life-step ${index < currentStep ? 'done' : index === currentStep ? 'current' : ''}`}>
+                <i>{index < currentStep ? '✓' : index + 1}</i><span>{label}</span>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       </div>
 
       <div className="info-grid">
-        {/* 基本資訊 */}
         <article className="info-card wide">
-          <div className="card-title">
-            <h3>基本資訊</h3>
-            <button className="text-button" type="button">編輯</button>
-          </div>
+          <div className="card-title"><h3>基本資訊</h3><button className="text-button" type="button" onClick={onEdit}>編輯</button></div>
           <dl className="facts">
-            <div><dt>活動日期</dt><dd>{currentActivity.fullDate}</dd></div>
-            <div><dt>地點</dt><dd>{currentActivity.location}</dd></div>
-            <div><dt>總召</dt><dd>{currentActivity.lead}</dd></div>
-            <div><dt>預計人數</dt><dd>{currentActivity.people}</dd></div>
-            <div><dt>目前預算</dt><dd>{currentActivity.budget}</dd></div>
-            <div>
-              <dt>下一場會議</dt>
-              <dd>
-                <button className="inline-link" type="button" onClick={() => setCurrentView('meeting')}>
-                  {currentActivity.nextMeetingDate || '無'}
-                </button>
-              </dd>
-            </div>
-            <div><dt>下一步行動</dt><dd>{currentActivity.nextAction}</dd></div>
+            <div><dt>年度</dt><dd>{currentActivity.year}</dd></div>
+            <div><dt>活動日期</dt><dd>{formatDateRange(currentActivity)}</dd></div>
+            <div><dt>地點</dt><dd>{currentActivity.venue || '尚未填寫'}</dd></div>
+            <div><dt>活動類型</dt><dd>{currentActivity.activity_type || '尚未填寫'}</dd></div>
+            <div><dt>總召</dt><dd>{currentActivity.coordinator || '尚未填寫'}</dd></div>
+            <div><dt>預計人數</dt><dd>{currentActivity.expected_attendees == null ? '尚未填寫' : `${currentActivity.expected_attendees} 人`}</dd></div>
+            <div><dt>預算</dt><dd>{formatBudget(currentActivity.budget)}</dd></div>
+            <div><dt>最後更新</dt><dd>{new Date(currentActivity.updated_at).toLocaleString('zh-TW')}</dd></div>
           </dl>
         </article>
 
-        {/* 待辦狀況圓環 */}
         <article className="info-card progress-card">
-          <div className="card-title">
-            <h3>待辦狀況</h3>
-            <button className="text-button" type="button" onClick={() => setCurrentView('tasks')}>查看全部</button>
+          <div className="card-title"><h3>快速操作</h3></div>
+          <div className="overview-actions">
+            <button className="button secondary" type="button" onClick={() => setCurrentView('meeting')}>管理會議</button>
+            <button className="button secondary" type="button" onClick={() => setCurrentView('tasks')}>管理待辦</button>
           </div>
-          <div className="ring" style={{ "--progress": currentActivity.taskTotals?.total ? Math.round((currentActivity.taskTotals.done / currentActivity.taskTotals.total) * 100) : 0 } as React.CSSProperties}>
-            <span>
-              <b>{currentActivity.taskTotals?.done || 0}</b>
-              <small>/ {currentActivity.taskTotals?.total || 0} 完成</small>
-            </span>
-          </div>
-          <div className="mini-legend">
-            <span><i className="dot done"></i>已完成 {currentActivity.taskTotals?.done || 0}</span>
-            <span><i className="dot pending"></i>未完成 {(currentActivity.taskTotals?.total || 0) - (currentActivity.taskTotals?.done || 0)}</span>
-          </div>
+          <p className="muted-copy">本階段已連接 Activity、Meeting 與 Task；其他模組仍保留原型畫面。</p>
         </article>
       </div>
-
-      <div className="info-grid equal">
-        {/* 最近待辦 */}
-        <article className="info-card">
-          <div className="card-title">
-            <h3>最近待辦</h3>
-            <button className="text-button" type="button" onClick={() => setCurrentView('tasks')}>
-              {currentActivity.tasks ? currentActivity.tasks.filter((t:any) => t.status !== 'done').length : 0} 筆未完成
-            </button>
-          </div>
-          <ul className="task-preview">
-            {currentActivity.tasks && currentActivity.tasks.filter((t:any) => t.status !== 'done').length > 0 ? (
-              currentActivity.tasks.filter((t:any) => t.status !== 'done').slice(0, 3).map((task:any) => (
-                <li key={task.id}>
-                  <button className="check" type="button"></button>
-                  <span>
-                    <strong>{task.title}</strong>
-                    <small>{task.owner}・{task.due} 到期</small>
-                  </span>
-                  {task.priority === '高' && <em className="urgent">優先處理</em>}
-                </li>
-              ))
-            ) : (
-              <li className="empty-inline">
-                <span><strong>目前沒有未完成待辦</strong><small>太棒了！所有事情都在軌道上</small></span>
-              </li>
-            )}
-          </ul>
-        </article>
-
-        {/* 重要決策 */}
-        <article className="info-card">
-          <div className="card-title">
-            <h3>重要決策</h3>
-            <button className="text-button" type="button" onClick={() => setCurrentView('decisions')}>查看全部</button>
-          </div>
-          <ul className="decision-preview">
-            {currentActivity.decisions && currentActivity.decisions.length > 0 ? (
-              currentActivity.decisions.slice(0, 3).map((decision:any) => (
-                <li key={decision.id}>
-                  <span className={`decision-state ${decision.state === '已確認' ? 'confirmed' : 'review'}`}>
-                    {decision.state}
-                  </span>
-                  <div>
-                    <strong>{decision.title}</strong>
-                    <small>來源：{decision.source}</small>
-                  </div>
-                </li>
-              ))
-            ) : (
-              <li className="empty-inline">
-                <span><strong>目前沒有重要決策</strong><small>會議中的重大決議將會整理在這裡</small></span>
-              </li>
-            )}
-          </ul>
-        </article>
-      </div>
-
-      <article className="memory-banner">
-        <div className="memory-icon">✦</div>
-        <div>
-          <p className="eyebrow">AI 歷史提醒・假資料</p>
-          <h3>過去三年最常發生的問題是交通延誤</h3>
-          <p>2025 年遊覽車晚到 25 分鐘；2024 年因集合資訊不清，延後 15 分鐘出發。</p>
-        </div>
-        <button className="button memory-open" type="button">查看歷史案例</button>
-      </article>
     </section>
   );
 }

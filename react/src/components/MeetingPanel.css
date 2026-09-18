@@ -206,3 +206,33 @@
   padding: 3px;
   background: var(--cyan-soft);
 }
+
+.meeting-detail-card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.meeting-detail-card .card-title {
+  align-items: flex-start;
+}
+
+.meeting-content {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.meeting-content span {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.meeting-content p {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
