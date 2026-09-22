@@ -1,198 +1,180 @@
 # DASH (Decision, Activity, Schedule, History)
 
-> **智能活動管理與知識庫決策助手**  
-> 專為組織與團隊打造的現代化工作台，深度整合活動籌備看板、LLM 全文檢索問答（RAG），以及非結構化會議紀錄的一鍵 AI 萃取與資料庫寫入。
+> **Event Management and Knowledge Base Decision Support System**  
+> Integrates event preparation dashboards, LLM-based document retrieval-augmented generation (RAG), and structured meeting minutes extraction with database storage.
+
+[English](README.md) | [繁體中文](README.zh-TW.md)
 
 ---
 
-## 核心功能介紹 (User Guide)
+## Key Features (User Guide)
 
-DASH 以三大核心支柱為基礎，協助團隊將繁瑣的活動歷程、雜亂的會議對話轉化為有條理且隨時可調用的結構化資產。
+DASH consists of three core functional modules to assist teams in managing event workflows, meeting records, and associated documentation.
 
-```
-+-------------------------------------------------------------------------------+
-|                                  DASH 工作台                                  |
-+------------------------------------+------------------------------------------+
-|  1. 活動管理控制面板               |  2. AI 智能對話與知識檢索 (RAG)           |
-|  - 活動總覽、籌備進度與基本資訊    |  - 雙模式對話 (普通聊天 / 知識庫檢索)    |
-|  - 籌備會議、待辦事項、決策、日程  |  - 來源切片溯源、歷史記憶上下文隔離      |
-|  - 活動階段流程 (活動前/中/後)     |  - 託管文檔庫 (MD/TXT/PDF/DOCX)          |
-+------------------------------------+------------------------------------------+
-|  3. AI 結構化會議紀錄整理 (Preview & Commit)                                  |
-|  - 挑選入庫會議全文 -> LLM 1-Shot 結構化提煉                                  |
-|  - 預覽會議基本資訊、關鍵決策、行動待辦事項                                   |
-|  - 支援使用者即時線上微調編輯，一鍵同步寫入資料庫與活動看板                   |
-+-------------------------------------------------------------------------------+
-```
+### Core Architecture
+
+- **1. Event Management Dashboard**: Event overview, preparation progress, meeting logs, action items, key decisions, schedule timeline, and incident logs.
+- **2. AI Chat & Knowledge Retrieval (RAG)**: Dual conversation modes (General Chat / Knowledge Retrieval), source citation, context isolation, and centralized multi-format document management.
+- **3. AI Structured Meeting Minutes Extraction (Preview & Commit)**: Full-text structured extraction, inline field editing, and database persistence linked with the event dashboard.
 
 ---
 
-### 1. 活動、會議、決策、事件與待辦事項控制面板
+### 1. Control Dashboard: Activities, Meetings, Decisions, Schedules & Tasks
 
-針對活動籌辦全生命週期設計的結構化管理中心，解決團隊分工混亂與資訊斷層問題：
+Provides a management interface for the event lifecycle, organizing information and records across all stages:
 
-- **活動總覽與進度追蹤 (Overview)**：
-  - 即時顯示活動準備完成度、生命週期軌跡（建立活動 -> 準備中 -> 活動執行 -> 成果檢討）。
-  - 整合基本資訊卡片（日期、地點、總召負責人、預算與預計人數）與下一步關鍵行動。
-- **籌備會議管理 (Meetings)**：
-  - 記錄歷次籌備會議的時間、地點、出席人員與討論詳情。
-  - 與上傳之來源文件（`source_document_id`）具備可選外鍵綁定，方便追溯原始紀錄。
-- **關鍵決策紀錄 (Decisions)**：
-  - 記錄「討論議題（Problem）」、「討論解方（Options）」、「最終決策（Final Decision）」與「考量理由（Reason）」。
-  - 支援決策確認狀態（待確認 / 已確認）與資料來源標註，確保歷史決策脈絡永不遺失。
-- **行動待辦清單 (Tasks)**：
-  - 支援按狀態分類（全部 / 未完成 / 已完成），並具備三段優先級色彩標籤（高 / 中 / 低）。
-  - 每一筆待辦事項皆可指定負責人、預計完成期限，並明確關聯所屬活動與會議。
-- **日程規劃與突發事件 (Schedule & Incidents)**：
-  - 流程時間表規劃（Owner、類別、備註），並支援活動執行期間的突發狀況記錄與應對建議。
-
----
-
-### 2. LLM + RAG 全歷史紀錄與知識庫檢索
-
-打破傳統資料庫與文件的查詢限制，讓團隊能直接用自然語言回顧所有歷史檔案：
-
-- **文件轉換與集中託管**：
-  - 支援上傳 `.md`、`.txt`、`.pdf`、`.docx` 等常見文件格式。
-  - 系統自動解析並標準化轉碼為 Markdown 文本集中保存，上傳完成後與原始檔案完全獨立，不受本機檔案移動或刪除影響。
-- **高效向量化檢索**：
-  - 文件自動進行語意切塊（Chunking），並利用輕量高效的中文向量模型（`bge-small-zh-v1.5`）生成特徵向量，持久化儲存於 Chroma 向量資料庫。
-- **靈活的雙對話模式**：
-  - **知識庫問答模式 (`RAG`)**：針對使用者的提問，即時檢索最相關之文件切片，並將精準來源注入 Context 給 LLM 總結回答，提供可展開的「參考來源（切片溯源）」卡片。
-  - **普通對話模式 (`Chat`)**：無需檢索文件庫，由 LLM 基於一般知識與對話脈絡直接回答。
-- **乾淨上下文隔離 (Clean Context Isolation)**：
-  - 對話資料庫僅儲存使用者的提問與 AI 的回答，檢索切片獨立留存於元資料中。
-  - 多輪對話時不會重複堆疊大量歷史檢索切片，徹底杜絕 Token 爆炸與檢索污染。
-- **全域防手殘保護**：
-  - 刪除對話會話或移除知識庫檔案時，強制彈出全螢幕背景毛玻璃模糊（Blur）二次確認視窗，避免誤刪關鍵資料。
+- **Event Overview & Progress Tracking (Overview)**:
+  - Displays preparation completion status and lifecycle stages (`Created` -> `In Preparation` -> `In Progress` -> `Post-Event Review`).
+  - Consolidates key details (dates, venues, coordinators, budget, expected attendance) and next steps.
+- **Preparation Meeting Management (Meetings)**:
+  - Records time, venue, attendees, and discussion notes across preparation meetings.
+  - Supports linking to uploaded source documents (`source_document_id`) to view original files.
+- **Key Decision Records (Decisions)**:
+  - Captures problem statements, considered options, final decisions, and reasons.
+  - Tracks confirmation status (`Pending` / `Confirmed`) and document sources.
+- **Action Task List (Tasks)**:
+  - Supports status filtering (`All` / `Pending` / `Completed`) with priority markers (`High` / `Medium` / `Low`).
+  - Tasks can be assigned to owners, set with deadlines, and linked to corresponding events and meetings.
+- **Schedule Timeline & Incident Logs (Schedule & Incidents)**:
+  - Detailed agenda schedules (owners, categories, remarks), along with incident tracking and response recommendations during event execution.
 
 ---
 
-### 3. AI 會議紀錄結構化整理與看板聯動 (Preview & Commit)
+### 2. LLM + RAG Historical Records & Knowledge Retrieval
 
-專為會議後快速歸檔打造的自動化管線，告別人工謄寫整理的痛苦：
+Provides document-based search and question-answering capabilities:
 
-- **單一文件 1-Shot 結構化提煉**：
-  - 從已上傳的文件清單中挑選一份會議紀錄文本。
-  - 後端以專業秘書 System Prompt 引導 LLM 閱讀全文，一步到位提煉出「會議基本摘要」、「關鍵決策清單」與「行動待辦事項」。
-- **雙階段預覽與確認機制 (Preview-Commit)**：
-  1. **預覽階段 (Preview)**：LLM 提煉結果以標準化表格即時呈現於介面上，絕不直接盲目寫入。
-  2. **自由微調編輯**：使用者可直接在畫面上修改會議名稱、日期、時間、地點，或對決策結論、待辦事項負責人、完成期限進行增刪修訂。
-  3. **寫入資料庫 (Commit)**：確認無誤後點擊「確認寫入資料庫」，系統自動對齊後端資料規範（如決策選項 JSON 序列化、來源檔名關聯、外鍵 ID 等），一鍵寫入 SQLite 並同步反映於活動管理控制面板中。
+- **Document Conversion & Centralized Storage**:
+  - Supports `.md`, `.txt`, `.pdf`, and `.docx` file formats.
+  - Automatically parses and standardizes documents into Markdown files, decoupled from original local files once uploaded.
+- **Vector Retrieval**:
+  - Documents are chunked semantically, vectorized through an embedding model, and stored in a Chroma vector database.
+- **Dual Chat Modes**:
+  - **Knowledge Q&A Mode (`RAG`)**: Retrieves relevant document chunks based on user queries and injects them into the context for LLM responses, with collapsible source citation cards.
+  - **General Chat Mode (`Chat`)**: Interacts directly with the LLM using conversational context without querying the document repository.
+- **Context Isolation Mechanism (Clean Context Isolation)**:
+  - The chat database stores only user questions and model replies, keeping retrieved document chunks in isolated metadata.
+  - Multi-turn conversations avoid re-injecting historical document chunks, preventing context length inflation.
+- **Confirmation Safeguard**:
+  - Prompts a confirmation dialog when deleting chat sessions or removing knowledge base files to prevent accidental deletion.
 
 ---
 
-## 技術架構與開發指南 (Developer Guide)
+### 3. AI Structured Meeting Minutes Extraction (Preview & Commit)
 
-### 系統架構圖
+Provides structured extraction and database persistence workflows for meeting minutes:
 
-```
-+-------------------------------------------------------------------------------+
-| 前端層 (Desktop Client)                                                        |
-| React 19 + TypeScript + Vite + Electron Forge                                 |
-| - 獨立 CSS 模組化排版 (嚴格 Design Tokens 配色繼承、零 Emoji)                  |
-| - 服務通訊層: apiClient (統一 REST 封裝、錯誤攔截)                             |
-+---------------------------------------+---------------------------------------+
-                                        | HTTP RESTful API (Port: 8000)
-+---------------------------------------v---------------------------------------+
-| 後端微服務層 (Python / FastAPI)                                               |
-| - 應用入口: python/src/rag_project/main.py (或 python/run.py)                 |
-| - 模組劃分:                                                                   |
-|   * activity_services/: Activity / Meeting / Task / Decision / Schedule CRUD  |
-|   * document_processing/: converter (文件轉碼), rag_engine (切塊/向量化)       |
-|   * llm_service: litellm 統一介面呼叫 + prompts/ 結構化提煉                    |
-+---------------------------------------+---------------------------------------+
-                                        | 資料持久化
-+---------------------------------------v---------------------------------------+
-| 儲存層 (Local Data Storage: python/data/)                                     |
-| - SQLite (rag_database.sqlite): documents, sessions, chat_messages, 活動業務表 |
-| - ChromaDB (chroma_db/): persistent 向量資料庫                               |
-| - Markdown 託管庫 (markdown/): 轉碼後集中管理的純文字文件庫                   |
-+-------------------------------------------------------------------------------+
-```
+- **Document Structured Extraction**:
+  - Select uploaded meeting minutes from the document repository.
+  - Utilizes a System Prompt to guide the LLM in analyzing the text and extracting meeting summaries, key decisions, and action items.
+- **Preview and Confirmation Workflow (Preview-Commit)**:
+  1. **Preview Stage**: Extracted results are presented in structured tables for inspection.
+  2. **Field Editing**: Users can edit meeting titles, dates, venues, decisions, and task details directly in the interface.
+  3. **Commit to Database**: After verification, clicking "Commit to Database" writes data to SQLite and updates the event management dashboard.
 
-### 技術選型
+---
 
-| 領域 | 技術棧 / 套件 | 說明 |
+## Technical Architecture & Developer Guide
+
+### System Layered Architecture
+
+- **Frontend Layer (Desktop Client)**
+  - **Core Technologies**: React 19 + TypeScript + Vite + Electron Forge.
+  - **Design Conventions**: Component-isolated CSS styles, strict Design Tokens (`:root`) inheritance, strictly zero Emojis.
+  - **Service Communication**: Centralized HTTP REST wrapper via `apiClient` with unified error handling.
+- **Backend Service Layer (Python / FastAPI)**
+  - **Interface**: Local HTTP RESTful API (defaulting to `http://127.0.0.1:8000`).
+  - **Entrypoint**: `python/src/rag_project/main.py`.
+  - **Core Modules**:
+    - `activity_services/`: Implements SQLite CRUD operations for Activity, Meeting, Task, Decision, Schedule, and Incident.
+    - `document_processing/`: File format conversion (`converter`) and semantic chunking with vectorization (`rag_engine`).
+    - `llm_service`: Connects to LLMs via LiteLLM and loads System Prompts from `prompts/` for structured extraction.
+- **Local Storage Layer (`python/data/`)**
+  - **SQLite Database (`rag_database.sqlite`)** : Stores document metadata, chat sessions, message logs, and event records.
+  - **ChromaDB Vector Store (`chroma_db/`)**: Stores document chunks and feature vectors for semantic search.
+  - **Hosted Markdown Store (`markdown/`)**: Central storage for converted standard Markdown texts.
+
+### Technology Stack
+
+| Domain | Technology / Package | Description |
 | :--- | :--- | :--- |
-| **前端應用** | React 19, TypeScript, Electron, Vite | 跨平台桌面應用程式架構 |
-| **圖標與視覺** | Lucide React | 統一圖示系統（全域禁止 Emoji） |
-| **Markdown 渲染** | react-markdown | 支援對話訊息排版與清單階層渲染 |
-| **後端框架** | Python 3.10+, FastAPI, Uvicorn | 現代化非同步高效 RESTful API |
-| **套件管理** | uv | 快速、現代化的 Python 依賴管理工具 |
-| **RAG 與檢索** | LangChain, FastEmbed, ChromaDB | 使用 `BAAI/bge-small-zh-v1.5` 於 CPU 上進行極速向量嵌入 |
-| **LLM 呼叫** | LiteLLM | 統一多模型接口（支援 OpenAI、Claude 等供應商） |
-| **文件轉換** | PyPDF, python-docx, markdown | 自動轉碼為乾淨的 Markdown 格式 |
-| **資料庫** | SQLite3, ChromaDB Persistent | 本地輕量關聯式與向量資料庫儲存 |
+| **Frontend App** | React, TypeScript, Electron, Vite | Cross-platform desktop application framework |
+| **Icons & Aesthetics** | Lucide React | Unified icon system (strictly zero Emojis) |
+| **Markdown Rendering** | react-markdown | Message formatting and list hierarchy rendering |
+| **Backend Framework** | Python 3.10+, FastAPI, Uvicorn | Asynchronous RESTful API service |
+| **Package Manager** | uv | Python package and dependency manager |
+| **RAG & Retrieval** | LangChain, FastEmbed, ChromaDB | Text chunking, vectorization, and semantic search supporting CPU execution |
+| **LLM Interface** | LiteLLM | Unified calling interface for large language models |
+| **Document Conversion** | PyPDF, python-docx, markdown | Parses common formats and converts them to Markdown text |
+| **Database** | SQLite3, ChromaDB Persistent | Local relational and vector database storage |
 
 ---
 
-### 本地環境安裝與部署
+### Local Installation & Deployment
 
-#### 1. 前置需求
-- **Node.js**: v18+ 與 npm
-- **Python**: 3.10+ (建議安裝 [uv](https://github.com/astral-sh/uv))
-- **LLM API Key (.env)**: 如 OpenAI API Key 或相容介面金鑰
+#### 1. Prerequisites
+- **Node.js**: v18+ and npm
+- **Python**: 3.10+ (recommended: install [uv](https://github.com/astral-sh/uv))
+- **LLM API Key (.env)**: API key for the corresponding model service
 
-#### 2. 環境變數設定
-在 `python/` 目錄或專案根目錄下建立 `.env` 檔案：
+#### 2. Environment Configuration
+Create a `.env` file in the `python/` directory or project root:
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
-# 或自訂模型名稱 (預設使用 gpt-4o)
-MODEL_NAME=gpt-4o
+# Set the corresponding API key and model name according to LiteLLM specifications
+API_KEY=your_api_key_here
+MODEL_NAME=your_model_name_here
 ```
 
-#### 3. 後端安裝與啟動
+#### 3. Backend Setup & Startup
 
-優先使用 `uv` 進行依賴同步與執行：
+Use `uv` for dependency synchronization and execution:
 
 ```powershell
-# 進入後端目錄
+# Navigate to the backend directory
 cd python
 
-# 安裝依賴環境
+# Install dependencies
 uv sync
 
-# 啟動 FastAPI 後端伺服器 (預設運行於 http://127.0.0.1:8000)
-python run.py
+# Launch FastAPI backend server (default: http://127.0.0.1:8000)
+uv run python src/rag_project/main.py
 ```
-> 後端服務啟動後，可於瀏覽器造訪 `http://127.0.0.1:8000/docs` 查看 Swagger 介面測試所有 API。
+> After starting, visit `http://127.0.0.1:8000/docs` in your browser to test all APIs via the Swagger UI.
 
-#### 4. 前端安裝與啟動
+#### 4. Frontend Setup & Startup
 
-另開一個終端機視窗，進入 `react/` 目錄：
+Open another terminal window and navigate to the `react/` directory:
 
 ```powershell
-# 進入前端目錄
+# Navigate to the frontend directory
 cd react
 
-# 安裝 Node 套件
+# Install dependencies
 npm install
 
-# 執行測試確認程式碼正確性
+# Run tests to verify code integrity
 npm run test
 
-# 啟動 Electron 開發環境
+# Start Electron development environment
 npm run start
 ```
 
 ---
 
-### 測試規範與目錄約定
+### Testing Conventions & Project Guidelines
 
-- **Python 後端測試**：
-  - 測試腳本一律集中於 `python/tests/`。
-  - `python/tests/test_main.py`：提供全互動式 CLI 工具，支援端對端測試文件轉換、活動建立、會議提煉與寫入、多輪對話驗證。
-- **React 前端測試**：
-  - 單元與服務整合測試位於 `react/tests/`，使用 Vitest 執行：`npm run test`。
-- **代碼與命名風格**：
-  - 檔案與資料夾：一律英文小寫，連接符號使用 `-`（代碼腳本除外，遵從各語言慣例）。
-  - CSS 規範：配色統一繼承自 `index.css` 的 `:root` 變數；落實「一個 Component 一個 CSS」。
-  - 圖示規範：全域禁止使用 Emoji，圖標一律使用 `lucide-react`。
+- **Python Backend Tests**:
+  - Test scripts must be located in `python/tests/`.
+  - `python/tests/test_main.py`: Interactive CLI tool for end-to-end testing of document conversion, event operations, meeting extraction, and multi-turn conversations.
+- **React Frontend Tests**:
+  - Unit and integration tests are located in `react/tests/`, run with Vitest: `npm run test`.
+- **Code & Naming Style**:
+  - Files and directories: Lowercase letters with hyphens `-` (except code scripts, which follow language conventions).
+  - CSS guidelines: Color schemes strictly inherited from `:root` in `index.css`; one CSS file per component.
+  - Iconography: Strictly zero Emojis; all icons use `lucide-react`.
 
 ---
 
-## 授權條款 (License)
+## License
 
-本專案採用 [MIT License](LICENSE) 授權開源。
-
+This project is licensed under the [MIT License](LICENSE).

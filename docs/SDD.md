@@ -33,8 +33,8 @@ DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以�
 - **檔案與活動管理**: SQLite (追蹤已導入的 Markdown 文件，以及 Activity、Meeting、Task、Decision、Schedule、Incident 等業務資料)
 
 ### 模型
-- **Embedding**: fastembed (`BAAI/bge-small-zh-v1.5`，使用 ONNX Runtime 於 CPU 運行，專為中文優化且極其輕量)
-- **LLM**: GPT-4o (OpenAI) 或 Claude 3.5 Sonnet / DeepSeek / 本地模型 (透過 `litellm`)
+- **Embedding**: fastembed（使用 ONNX Runtime 於 CPU 運行之 Embedding 模型）
+- **LLM**: 透過 `litellm` 統一介面呼叫雲端或本地相容模型
 
 ## 3. 專案結構
 ```
