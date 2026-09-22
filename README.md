@@ -132,7 +132,7 @@ DASH 以三大核心支柱為基礎，協助團隊將繁瑣的活動歷程、雜
 #### 1. 前置需求
 - **Node.js**: v18+ 與 npm
 - **Python**: 3.10+ (建議安裝 [uv](https://github.com/astral-sh/uv))
-- **LLM API Key**: 如 OpenAI API Key 或相容介面金鑰
+- **LLM API Key (.env)**: 如 OpenAI API Key 或相容介面金鑰
 
 #### 2. 環境變數設定
 在 `python/` 目錄或專案根目錄下建立 `.env` 檔案：
