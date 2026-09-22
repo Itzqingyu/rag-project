@@ -87,8 +87,9 @@ DASH 包含三大功能模組，協助團隊管理活動歷程、會議內容與
   - **主程式入口**：`python/src/dash_backend/main.py`。
   - **核心模組劃分**：
     - `activity_services/`：負責 Activity、Meeting、Task、Decision、Schedule、Incident 之 SQLite 業務 CRUD。
-    - `document_processing/`：負責文件格式轉換（`converter`）與 Markdown 語意切塊向量化（`rag_engine`）。
-    - `llm_service`：透過 LiteLLM 串接大語言模型，並由 `prompts/` 載入 System Prompt 進行結構化提煉。
+    - `ai_services/`：負責 RAG 核心引擎（切塊、向量化、重排序、檢索）以及大語言模型對話與結構化提煉（`rag_engine`, `llm_service`）。
+    - `document_processing/`：負責多格式原始文件（PDF, DOCX, TXT）轉換為 Markdown 文本託管（`converter`）。
+    - `database.py`：底層 SQLite 連線池、Schema 管理與 Chroma 向量庫實例。
 - **本地儲存層 (Local Data Storage: `python/data/`)**
   - **SQLite 資料庫 (`dash_database.sqlite`)**：儲存文件元資料、對話會話（Sessions）、訊息紀錄（Chat Messages）以及活動業務表。
   - **ChromaDB 向量資料庫 (`chroma_db/`)**：持久化儲存切片文字與特徵向量，供 RAG 語意搜尋。

@@ -73,10 +73,11 @@ rag-project/
 │   │       │   ├── decision.py       # Decision 決策紀錄 CRUD
 │   │       │   ├── schedule.py       # Schedule 流程日程 CRUD
 │   │       │   └── incident.py       # Incident 突發事件 CRUD
-│   │       └── document_processing/# 文件轉碼、RAG 檢索與 AI 服務套件
-│   │           ├── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
-│   │           ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
-│   │           └── llm_service.py    # LLM 統一呼叫與多輪對話介面 (支援 Clean Context Isolation 與模式切換)
+│   │       ├── ai_services/          # AI 與 RAG 核心服務套件
+│   │       │   ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, 語意檢索)
+│   │       │   └── llm_service.py    # LLM 統一呼叫與對話介面 (Clean Context Isolation 與結構化提煉)
+│   │       └── document_processing/  # 文件格式解析與轉換套件
+│   │           └── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
 │   ├── tests/                    # 測試指令碼與單元測試
 │   │   ├── test_main.py          # 整合 CLI 互動測試工具 (含 Session 多輪對話與模式切換測試)
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試

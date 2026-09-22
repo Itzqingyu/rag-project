@@ -19,8 +19,8 @@ from dash_backend.database import (
     add_chat_message,
     get_chat_messages,
 )
-from dash_backend.document_processing.rag_engine import add_document, search, list_documents, delete_document
-from dash_backend.document_processing.llm_service import (
+from dash_backend.ai_services.rag_engine import add_document, search, list_documents, delete_document
+from dash_backend.ai_services.llm_service import (
     extract_structured_meeting_data,
     chat_with_context,
 )

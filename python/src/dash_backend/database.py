@@ -351,7 +351,7 @@ def delete_doc_record_by_id(doc_id: int, db_path: Optional[str] = None) -> None:
 def get_vectorstore(db_dir: Optional[str] = None) -> Chroma:
     """獲取 Chroma 向量資料庫單例模式 (Singleton) 實例。"""
     global _vectorstore
-    from dash_backend.document_processing.rag_engine import get_embeddings
+    from dash_backend.ai_services.rag_engine import get_embeddings
 
     target_dir = db_dir or CHROMA_DB_DIR
     if _vectorstore is None or db_dir is not None:

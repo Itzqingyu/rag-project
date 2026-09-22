@@ -87,8 +87,9 @@ Provides structured extraction and database persistence workflows for meeting mi
   - **Entrypoint**: `python/src/dash_backend/main.py`.
   - **Core Modules**:
     - `activity_services/`: Implements SQLite CRUD operations for Activity, Meeting, Task, Decision, Schedule, and Incident.
-    - `document_processing/`: File format conversion (`converter`) and semantic chunking with vectorization (`rag_engine`).
-    - `llm_service`: Connects to LLMs via LiteLLM and loads System Prompts from `prompts/` for structured extraction.
+    - `ai_services/`: Core RAG engine (chunking, vectorization, reranking, retrieval) and LLM conversation/structured extraction (`rag_engine`, `llm_service`).
+    - `document_processing/`: Multi-format document conversion (PDF, DOCX, TXT) and Markdown repository storage (`converter`).
+    - `database.py`: Foundational SQLite connection pooling, schema migrations, and ChromaDB vector store instance.
 - **Local Storage Layer (`python/data/`)**
   - **SQLite Database (`dash_database.sqlite`)**: Stores document metadata, chat sessions, message logs, and event records.
   - **ChromaDB Vector Store (`chroma_db/`)**: Stores document chunks and feature vectors for semantic search.
