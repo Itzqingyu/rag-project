@@ -11,8 +11,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
-import rag_project.database as db
-from rag_project.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
+import dash_backend.database as db
+from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
 
 # ==========================================
 # 1. Embedding 與 Reranker 模型載入 (Lazy Singletons)

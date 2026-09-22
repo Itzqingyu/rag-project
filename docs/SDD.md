@@ -59,7 +59,7 @@ rag-project/
 │
 ├── python/                       # Python 後端 (FastAPI)
 │   ├── src/
-│   │   └── rag_project/
+│   │   └── dash_backend/
 │   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
 │   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema、Sessions/Messages 與 ChromaDB 向量庫)
 │   │       ├── prompts/          # System Prompt Markdown 檔案目錄
@@ -82,7 +82,7 @@ rag-project/
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
 │   │   └── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
-│   │   ├── rag_database.sqlite   # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
+│   │   ├── dash_database.sqlite  # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
 │   │   └── markdown/             # 託管之 Markdown 格式文本庫
 │   └── pyproject.toml            # 依賴套件配置
@@ -126,7 +126,7 @@ uv add langchain langchain-chroma langchain-community fastembed litellm chromadb
 
 # 開發
 # 需要同時啟動前端與後端 (可透過 npm script 如 concurrently 整合)
-uv run python/src/rag_project/main.py          # 啟動 FastAPI 後端
+uv run python/src/dash_backend/main.py          # 啟動 FastAPI 後端
 npm run dev                                      # 啟動 Electron 前端
 ```
 

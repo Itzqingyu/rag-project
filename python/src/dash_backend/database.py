@@ -17,11 +17,20 @@ from langchain_chroma import Chroma
 # 路徑定義：資料庫統一存放於專案根目錄的 data/ 底下
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-DB_PATH = os.path.join(DATA_DIR, "rag_database.sqlite")
+OLD_DB_PATH = os.path.join(DATA_DIR, "rag_database.sqlite")
+DB_PATH = os.path.join(DATA_DIR, "dash_database.sqlite")
 CHROMA_DB_DIR = os.path.join(DATA_DIR, "chroma_db")
 
 # 確保 data 目錄存在
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# 若舊版資料庫存在且新版尚未建立，平滑遷移舊資料庫
+if os.path.exists(OLD_DB_PATH) and not os.path.exists(DB_PATH):
+    try:
+        import shutil
+        shutil.copy2(OLD_DB_PATH, DB_PATH)
+    except Exception:
+        pass
 
 # 全域單例：ChromaDB Vectorstore
 _vectorstore = None
@@ -342,7 +351,7 @@ def delete_doc_record_by_id(doc_id: int, db_path: Optional[str] = None) -> None:
 def get_vectorstore(db_dir: Optional[str] = None) -> Chroma:
     """獲取 Chroma 向量資料庫單例模式 (Singleton) 實例。"""
     global _vectorstore
-    from rag_project.document_processing.rag_engine import get_embeddings
+    from dash_backend.document_processing.rag_engine import get_embeddings
 
     target_dir = db_dir or CHROMA_DB_DIR
     if _vectorstore is None or db_dir is not None:

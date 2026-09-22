@@ -1,7 +1,7 @@
 [project]
-name = "rag_project"
+name = "dash_backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "DASH (Decision, Activity, Schedule, History) Backend Service"
 readme = "log.md"
 authors = [
     { name = "qingyu", email = "yoyo8720269@gmail.com" }

@@ -84,13 +84,13 @@ Provides structured extraction and database persistence workflows for meeting mi
   - **Service Communication**: Centralized HTTP REST wrapper via `apiClient` with unified error handling.
 - **Backend Service Layer (Python / FastAPI)**
   - **Interface**: Local HTTP RESTful API (defaulting to `http://127.0.0.1:8000`).
-  - **Entrypoint**: `python/src/rag_project/main.py`.
+  - **Entrypoint**: `python/src/dash_backend/main.py`.
   - **Core Modules**:
     - `activity_services/`: Implements SQLite CRUD operations for Activity, Meeting, Task, Decision, Schedule, and Incident.
     - `document_processing/`: File format conversion (`converter`) and semantic chunking with vectorization (`rag_engine`).
     - `llm_service`: Connects to LLMs via LiteLLM and loads System Prompts from `prompts/` for structured extraction.
 - **Local Storage Layer (`python/data/`)**
-  - **SQLite Database (`rag_database.sqlite`)** : Stores document metadata, chat sessions, message logs, and event records.
+  - **SQLite Database (`dash_database.sqlite`)**: Stores document metadata, chat sessions, message logs, and event records.
   - **ChromaDB Vector Store (`chroma_db/`)**: Stores document chunks and feature vectors for semantic search.
   - **Hosted Markdown Store (`markdown/`)**: Central storage for converted standard Markdown texts.
 
@@ -137,7 +137,7 @@ cd python
 uv sync
 
 # Launch FastAPI backend server (default: http://127.0.0.1:8000)
-uv run python src/rag_project/main.py
+uv run python src/dash_backend/main.py
 ```
 > After starting, visit `http://127.0.0.1:8000/docs` in your browser to test all APIs via the Swagger UI.
 

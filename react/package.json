@@ -1,8 +1,8 @@
 {
-  "name": "src",
-  "productName": "src",
+  "name": "dash-desktop",
+  "productName": "DASH",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "DASH (Decision, Activity, Schedule, History)",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {

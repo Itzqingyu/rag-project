@@ -84,13 +84,13 @@ DASH 包含三大功能模組，協助團隊管理活動歷程、會議內容與
   - **服務通訊**：`apiClient` 統一封裝 HTTP REST 請求並集中處理錯誤與斷線攔截。
 - **後端服務層 (Python / FastAPI)**
   - **通訊介面**：本地 HTTP RESTful API（預設監聽 `http://127.0.0.1:8000`）。
-  - **主程式入口**：`python/src/rag_project/main.py`。
+  - **主程式入口**：`python/src/dash_backend/main.py`。
   - **核心模組劃分**：
     - `activity_services/`：負責 Activity、Meeting、Task、Decision、Schedule、Incident 之 SQLite 業務 CRUD。
     - `document_processing/`：負責文件格式轉換（`converter`）與 Markdown 語意切塊向量化（`rag_engine`）。
     - `llm_service`：透過 LiteLLM 串接大語言模型，並由 `prompts/` 載入 System Prompt 進行結構化提煉。
 - **本地儲存層 (Local Data Storage: `python/data/`)**
-  - **SQLite 資料庫 (`rag_database.sqlite`)**：儲存文件元資料、對話會話（Sessions）、訊息紀錄（Chat Messages）以及活動業務表。
+  - **SQLite 資料庫 (`dash_database.sqlite`)**：儲存文件元資料、對話會話（Sessions）、訊息紀錄（Chat Messages）以及活動業務表。
   - **ChromaDB 向量資料庫 (`chroma_db/`)**：持久化儲存切片文字與特徵向量，供 RAG 語意搜尋。
   - **託管 Markdown 庫 (`markdown/`)**：集中存放轉碼後的標準 Markdown 原始文本。
 
@@ -137,7 +137,7 @@ cd python
 uv sync
 
 # 啟動 FastAPI 後端伺服器 (預設運行於 http://127.0.0.1:8000)
-uv run python src/rag_project/main.py
+uv run python src/dash_backend/main.py
 ```
 > 後端服務啟動後，可於瀏覽器造訪 `http://127.0.0.1:8000/docs` 查看 Swagger 介面測試所有 API。
 

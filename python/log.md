@@ -97,6 +97,9 @@
 - **修復非 Markdown 檔案 (PDF/DOCX) 讀取解碼 Bug**: 修復 `rag_engine.add_document` 在執行 `convert_to_markdown` 之前誤以 utf-8 讀取二進位 PDF/DOCX 導致報錯的問題，現在可直接支援傳入 PDF/DOCX/TXT/MD 進行自動轉碼、切片與向量化。
 - **修復 LLM 失敗訊息污染上下文 Bug**: 修復 `chat_with_context` 在底層拋錯時誤回傳錯誤字串假裝成功、導致錯誤訊息被寫入 SQLite 污染後續對話記憶的問題。改為明確拋出例外、API 回傳 502，且僅在 LLM 成功產生回答後才寫入 SQLite；同時於歷史載入時加入防禦性過濾，杜絕髒資料進入上下文。
 - **單元測試完整化**: 新增 `tests/test_chat_session.py` 單元測試覆蓋率 100%，並在 `tests/test_main.py` 整合 CLI 互動式對話測試選單。
-- **前端對話與知識庫 UI 框架就緒**: 前端已完成專屬 LLM 聊天面板（`chat-panel.tsx`）、會話側邊欄（`session-sidebar.tsx`）與知識庫文件抽屜（`document-drawer.tsx`），介面完整預留普通/RAG雙模式（`mode='chat'`/`mode='rag'`）與會話管理接口，為後續接入後端 RESTful API 奠定純淨框架基礎。
+- **後端套件與資料庫全面更名為 `dash_backend` 與 `dash_database.sqlite`**:
+  - 將後端核心 Package 目錄由 `rag_project/` 重新命名為 `dash_backend/`，同步更新 `pyproject.toml` 中的 `name = "dash_backend"`。
+  - 將 SQLite 資料庫檔案更名為 `dash_database.sqlite`，並加入對既有 `rag_database.sqlite` 的自動平滑相容遷移機制。
+  - 全面更新所有後端模組與 10 個測試腳本中所有 import 與 `@patch` 路徑，全套 49 個單元測試 100% 通過。
 
 
