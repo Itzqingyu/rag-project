@@ -13,7 +13,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  File,
+  FileScan,
   MessageSquare,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -240,7 +240,7 @@ export default function App() {
                     className={`nav-sub-item ${currentView === 'extract' ? 'active' : ''}`}
                     onClick={() => handleSetView('extract')}
                   >
-                    <File size={14} />
+                    <FileScan size={14} />
                     <span>會議紀錄整理</span>
                   </button>
                 </div>

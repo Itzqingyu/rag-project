@@ -1,7 +1,7 @@
-# SDD: 智能客製化意見助手
+# SDD: DASH (Decision, Activity, Schedule, History)
 
 ## 1. 專案概述
-基於 RAG 技術的 AI 助手，使用者上傳文件後可基於文件內容進行對話查詢。
+DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以及 AI 結構化會議紀錄整理（Preview & Commit）的現代化智能工作台。使用者可上傳多格式會議紀錄進行問答與提煉，並與活動控制面板聯動。
 
 ## 2. 技術選型
 

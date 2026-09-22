@@ -27,3 +27,4 @@
 
 - 後端 python 若需要有 CLI 小圖示，或訊息活潑呈現，一律只能用文字。
 - 前端 react ui 需要展現圖示，一律使用 lucide icon。
+- 包括註解也不能用 emojis。
