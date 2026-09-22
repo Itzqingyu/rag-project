@@ -2,7 +2,7 @@
 name = "rag_project"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
+readme = "log.md"
 authors = [
     { name = "qingyu", email = "yoyo8720269@gmail.com" }
 ]
