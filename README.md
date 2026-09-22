@@ -189,3 +189,10 @@ npm run start
   - 檔案與資料夾：一律英文小寫，連接符號使用 `-`（代碼腳本除外，遵從各語言慣例）。
   - CSS 規範：配色統一繼承自 `index.css` 的 `:root` 變數；落實「一個 Component 一個 CSS」。
   - 圖示規範：全域禁止使用 Emoji，圖標一律使用 `lucide-react`。
+
+---
+
+## 授權條款 (License)
+
+本專案採用 [MIT License](LICENSE) 授權開源。
+
