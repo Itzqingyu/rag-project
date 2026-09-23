@@ -1,7 +1,7 @@
-# SDD: 智能客製化意見助手
+# SDD: DASH (Decision, Activity, Schedule, History)
 
 ## 1. 專案概述
-基於 RAG 技術的 AI 助手，使用者上傳文件後可基於文件內容進行對話查詢。
+DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以及 AI 結構化會議紀錄整理（Preview & Commit）的現代化智能工作台。使用者可上傳多格式會議紀錄進行問答與提煉，並與活動控制面板聯動。
 
 ## 2. 技術選型
 
@@ -33,8 +33,8 @@
 - **檔案與活動管理**: SQLite (追蹤已導入的 Markdown 文件，以及 Activity、Meeting、Task、Decision、Schedule、Incident 等業務資料)
 
 ### 模型
-- **Embedding**: fastembed (`BAAI/bge-small-zh-v1.5`，使用 ONNX Runtime 於 CPU 運行，專為中文優化且極其輕量)
-- **LLM**: GPT-4o (OpenAI) 或 Claude 3.5 Sonnet / DeepSeek / 本地模型 (透過 `litellm`)
+- **Embedding**: fastembed（使用 ONNX Runtime 於 CPU 運行之 Embedding 模型）
+- **LLM**: 透過 `litellm` 統一介面呼叫雲端或本地相容模型
 
 ## 3. 專案結構
 ```
@@ -59,7 +59,7 @@ rag-project/
 │
 ├── python/                       # Python 後端 (FastAPI)
 │   ├── src/
-│   │   └── rag_project/
+│   │   └── dash_backend/
 │   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
 │   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema、Sessions/Messages 與 ChromaDB 向量庫)
 │   │       ├── prompts/          # System Prompt Markdown 檔案目錄
@@ -73,16 +73,17 @@ rag-project/
 │   │       │   ├── decision.py       # Decision 決策紀錄 CRUD
 │   │       │   ├── schedule.py       # Schedule 流程日程 CRUD
 │   │       │   └── incident.py       # Incident 突發事件 CRUD
-│   │       └── document_processing/# 文件轉碼、RAG 檢索與 AI 服務套件
-│   │           ├── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
-│   │           ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, Retriever)
-│   │           └── llm_service.py    # LLM 統一呼叫與多輪對話介面 (支援 Clean Context Isolation 與模式切換)
+│   │       ├── ai_services/          # AI 與 RAG 核心服務套件
+│   │       │   ├── rag_engine.py     # RAG 核心引擎 (Markdown 切塊, Embedding, Reranker, 語意檢索)
+│   │       │   └── llm_service.py    # LLM 統一呼叫與對話介面 (Clean Context Isolation 與結構化提煉)
+│   │       └── document_processing/  # 文件格式解析與轉換套件
+│   │           └── converter.py      # 多格式文件轉換模組 (MD, TXT, PDF, DOCX -> python/data/markdown/)
 │   ├── tests/                    # 測試指令碼與單元測試
 │   │   ├── test_main.py          # 整合 CLI 互動測試工具 (含 Session 多輪對話與模式切換測試)
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
 │   │   └── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
-│   │   ├── rag_database.sqlite   # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
+│   │   ├── dash_database.sqlite  # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
 │   │   └── markdown/             # 託管之 Markdown 格式文本庫
 │   └── pyproject.toml            # 依賴套件配置
@@ -126,7 +127,7 @@ uv add langchain langchain-chroma langchain-community fastembed litellm chromadb
 
 # 開發
 # 需要同時啟動前端與後端 (可透過 npm script 如 concurrently 整合)
-uv run python/src/rag_project/main.py          # 啟動 FastAPI 後端
+uv run python/src/dash_backend/main.py          # 啟動 FastAPI 後端
 npm run dev                                      # 啟動 Electron 前端
 ```
 

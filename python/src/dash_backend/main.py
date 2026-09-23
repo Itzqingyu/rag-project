@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from rag_project.document_processing.converter import convert_to_markdown
-from rag_project.database import (
+from dash_backend.document_processing.converter import convert_to_markdown
+from dash_backend.database import (
     get_doc_by_id,
     get_doc_by_path,
     get_all_docs,
@@ -19,19 +19,19 @@ from rag_project.database import (
     add_chat_message,
     get_chat_messages,
 )
-from rag_project.document_processing.rag_engine import add_document, search, list_documents, delete_document
-from rag_project.document_processing.llm_service import (
+from dash_backend.ai_services.rag_engine import add_document, search, list_documents, delete_document
+from dash_backend.ai_services.llm_service import (
     extract_structured_meeting_data,
     chat_with_context,
 )
-from rag_project.activity_services.activity import (
+from dash_backend.activity_services.activity import (
     create_activity,
     get_activity,
     list_activities,
     update_activity,
     delete_activity,
 )
-from rag_project.activity_services.meeting_task import (
+from dash_backend.activity_services.meeting_task import (
     add_meeting,
     get_meetings,
     get_meeting_by_id,
@@ -43,21 +43,21 @@ from rag_project.activity_services.meeting_task import (
     update_task,
     delete_task,
 )
-from rag_project.activity_services.decision import (
+from dash_backend.activity_services.decision import (
     create_decision,
     get_decision,
     list_decisions,
     update_decision,
     delete_decision,
 )
-from rag_project.activity_services.schedule import (
+from dash_backend.activity_services.schedule import (
     create_schedule,
     get_schedule,
     list_schedules,
     update_schedule,
     delete_schedule,
 )
-from rag_project.activity_services.incident import (
+from dash_backend.activity_services.incident import (
     create_incident,
     get_incident,
     list_incidents,
@@ -66,8 +66,8 @@ from rag_project.activity_services.incident import (
 )
 
 app = FastAPI(
-    title="RAG Project Backend API",
-    description="智能客製化意見助手 - RAG 檢索、轉檔與 AI 結構化會議解析 REST API",
+    title="DASH Backend API",
+    description="DASH (Decision, Activity, Schedule, History) RESTful API",
     version="1.1.0"
 )
 

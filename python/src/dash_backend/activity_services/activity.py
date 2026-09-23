@@ -7,7 +7,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from rag_project.database import get_connection, init_db
+from dash_backend.database import get_connection, init_db
 
 # 允許輸入與更新的合法 Activity 欄位集合
 ACTIVITY_FIELDS = {

@@ -31,16 +31,18 @@
 - `activity_services/incident.py`: 負責臨時紀錄 (Incident) CRUD，並驗證可選 Schedule 與 Activity 的一致性。
 - `activity_services/activity_common.py`: 提供活動管理模組共用的正整數 ID、必填文字、ISO 8601 時間及跨模組關聯驗證工具。
 
-### 文件處理與 AI 服務套件 (`document_processing/`)
-- `document_processing/converter.py`: 負責文件格式轉碼。支援 `.md`, `.txt`, `.pdf`, `.docx` 格式，自動建立並輸出至 `python/data/markdown/` 目錄。若為 MD 檔案則直接複製，其餘格式提取內文後包裝為標準 Markdown。
-- `document_processing/rag_engine.py`: 整合 `chunker`, `embedding`, `reranker`, `retriever` 模組。
+### AI 與檢索核心服務套件 (`ai_services/`)
+- `ai_services/rag_engine.py`: 整合 `chunker`, `embedding`, `reranker`, `retriever` 模組。
   - **split_markdown**: 讀取 Markdown 並以 `RecursiveCharacterTextSplitter` 切片 (預設 500 字，50 重疊)。
-  - **get_embeddings / get_reranker**: 採用 Lazy Singletons 載入 Jina AI 模型 (`jina-embeddings-v2-base-zh` 與 `jina-reranker-v2-base-multilingual`)。
+  - **get_embeddings / get_reranker**: 採用 Lazy Singletons 載入 Embedding 模型與重排序模型。
   - **add_document / search / delete_document / list_documents**: 協調文件向量化、ChromaDB 寫入、物理 `.md` 檔案清理與 SQLite 紀錄。
-- `document_processing/llm_service.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
+- `ai_services/llm_service.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
   - 提供 `chat_with_context` 函數處理對話與 RAG 問答生成，支援多輪對話上下文記憶、Clean Context Isolation 隔離過往檢索資料、以及普通對話與 RAG 模式動態切換。
   - 提供 `extract_structured_meeting_data` 函數，實現單檔 1-shot 全文 Prompt 結構化提取。
-  - 透過 `.env` 中的 `ACTIVE_MODEL` 變數支援切換雲端模型 (OpenAI, Gemini, DeepSeek) 及本地 llama.cpp。
+  - 透過 `.env` 中的 `ACTIVE_MODEL` 變數支援切換多供應商相容之大語言模型介面。
+
+### 文件處理與格式轉碼套件 (`document_processing/`)
+- `document_processing/converter.py`: 負責多格式文件轉碼與集中託管。支援 `.md`, `.txt`, `.pdf`, `.docx` 格式，自動建立並輸出至 `python/data/markdown/` 目錄。若為 MD 檔案則直接複製，其餘格式提取內文後包裝為標準 Markdown。
 
 ### Prompt 範本庫 (`prompts/`)
 - `prompts/meeting_extraction.md`: 定義 AI 會議紀錄 1-shot 結構化抽取的 System Prompt 範本（規範會議日期、討論問題、解決方案、最終決策與待辦事項 JSON 格式）。
@@ -97,6 +99,13 @@
 - **修復非 Markdown 檔案 (PDF/DOCX) 讀取解碼 Bug**: 修復 `rag_engine.add_document` 在執行 `convert_to_markdown` 之前誤以 utf-8 讀取二進位 PDF/DOCX 導致報錯的問題，現在可直接支援傳入 PDF/DOCX/TXT/MD 進行自動轉碼、切片與向量化。
 - **修復 LLM 失敗訊息污染上下文 Bug**: 修復 `chat_with_context` 在底層拋錯時誤回傳錯誤字串假裝成功、導致錯誤訊息被寫入 SQLite 污染後續對話記憶的問題。改為明確拋出例外、API 回傳 502，且僅在 LLM 成功產生回答後才寫入 SQLite；同時於歷史載入時加入防禦性過濾，杜絕髒資料進入上下文。
 - **單元測試完整化**: 新增 `tests/test_chat_session.py` 單元測試覆蓋率 100%，並在 `tests/test_main.py` 整合 CLI 互動式對話測試選單。
-- **前端對話與知識庫 UI 框架就緒**: 前端已完成專屬 LLM 聊天面板（`chat-panel.tsx`）、會話側邊欄（`session-sidebar.tsx`）與知識庫文件抽屜（`document-drawer.tsx`），介面完整預留普通/RAG雙模式（`mode='chat'`/`mode='rag'`）與會話管理接口，為後續接入後端 RESTful API 奠定純淨框架基礎。
+- **後端套件與資料庫全面更名為 `dash_backend` 與 `dash_database.sqlite`**:
+  - 將後端核心 Package 目錄由 `rag_project/` 重新命名為 `dash_backend/`，同步更新 `pyproject.toml` 中的 `name = "dash_backend"`。
+  - 將 SQLite 資料庫檔案更名為 `dash_database.sqlite`，並加入對既有 `rag_database.sqlite` 的自動平滑相容遷移機制。
+  - 全面更新所有後端模組與 10 個測試腳本中所有 import 與 `@patch` 路徑，全套 49 個單元測試 100% 通過。
+- **拆分 `ai_services/` 達成單一職責原則**:
+  - 新建 `ai_services/` 專門放置 `rag_engine.py`（向量切塊、Embedding、Reranker、檢索）與 `llm_service.py`（Prompt 載入、LiteLLM 調用、多輪對話、結構化提煉）。
+  - `document_processing/` 僅保留 `converter.py`，專注於檔案格式解析與轉碼。
+  - `database.py` 與各測試調用端更新為 `dash_backend.ai_services...`，全套 49 個單元測試 100% 通過。
 
 

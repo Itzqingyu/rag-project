@@ -5,12 +5,12 @@
 """
 
 from typing import List, Dict, Any, Optional
-from rag_project.activity_services.activity_common import (
+from dash_backend.activity_services.activity_common import (
     ensure_activity_exists,
     ensure_meeting_matches_activity,
     optional_positive_id,
 )
-from rag_project.database import get_connection, init_db
+from dash_backend.database import get_connection, init_db
 
 
 _UNSET = object()
