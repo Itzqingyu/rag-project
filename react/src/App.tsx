@@ -13,7 +13,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  File,
+  FileScan,
   MessageSquare,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -274,8 +274,8 @@ export default function App() {
       <div className={`app-shell ${!isSidebarOpen ? 'sidebar-closed' : ''}`}>
         <aside className="sidebar" id="primary-sidebar" aria-label="主選單">
           <a className="brand" href="#activities" data-route="activities" aria-label="回到活動首頁" onClick={(e) => { e.preventDefault(); handleSetView('activities'); }}>
-            <span className="brand-mark" aria-hidden="true">A</span>
-            <span><strong>Archive</strong><small>組織記憶工作台</small></span>
+            <span className="brand-mark" aria-hidden="true">D</span>
+            <span><strong>DASH</strong><small>活動管理與決策工作台</small></span>
           </a>
           {/* 側邊欄邊緣小半圓箭頭收合/展開按鈕 */}
           <button
@@ -339,7 +339,7 @@ export default function App() {
                     className={`nav-sub-item ${currentView === 'extract' ? 'active' : ''}`}
                     onClick={() => handleSetView('extract')}
                   >
-                    <File size={14} />
+                    <FileScan size={14} />
                     <span>會議紀錄整理</span>
                   </button>
                 </div>

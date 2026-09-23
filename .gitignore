@@ -49,3 +49,10 @@ chroma_db/
 
 # settings
 .vscode/
+
+# Local Dev & Testing (團員本地自備，不納入版本追蹤)
+tests/
+python/run.py
+python/README.md
+AGENTS.md
+docs/py-log.md

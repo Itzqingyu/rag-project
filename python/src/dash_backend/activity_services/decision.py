@@ -7,7 +7,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from rag_project.activity_services.activity_common import (
+from dash_backend.activity_services.activity_common import (
     ensure_activity_exists,
     ensure_meeting_matches_activity,
     optional_positive_id,
@@ -15,7 +15,7 @@ from rag_project.activity_services.activity_common import (
     required_text,
     utc_now,
 )
-from rag_project.database import get_connection, init_db
+from dash_backend.database import get_connection, init_db
 
 # 允許更新的欄位集合
 DECISION_FIELDS = {

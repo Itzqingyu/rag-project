@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from rag_project.activity_services.activity_common import (
+from dash_backend.activity_services.activity_common import (
     ensure_activity_exists,
     ensure_meeting_matches_activity,
     iso_datetime,
@@ -12,7 +12,7 @@ from rag_project.activity_services.activity_common import (
     utc_now,
     validate_time_range,
 )
-from rag_project.database import get_connection, init_db
+from dash_backend.database import get_connection, init_db
 
 
 SCHEDULE_FIELDS = {
