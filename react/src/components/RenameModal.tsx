@@ -24,6 +24,8 @@ export const RenameModal: React.FC<RenameModalProps> = ({
 }) => {
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
+  // 追蹤滑鼠按下時是否為遮罩層本身，防止在 modal 內選字或拖曳到外面放開時誤觸關閉
+  const isMouseDownOnOverlay = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -36,8 +38,6 @@ export const RenameModal: React.FC<RenameModalProps> = ({
       return () => clearTimeout(timer);
     }
   }, [isOpen, initialValue]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -59,15 +59,30 @@ export const RenameModal: React.FC<RenameModalProps> = ({
     }
   };
 
+  const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    isMouseDownOnOverlay.current = e.target === e.currentTarget;
+  };
+
+  const handleOverlayMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isMouseDownOnOverlay.current && e.target === e.currentTarget) {
+      onCancel();
+    }
+    isMouseDownOnOverlay.current = false;
+  };
+
+  // 確保在所有 Hooks 宣告完成後才進行條件提前返回，嚴格遵守 Rules of Hooks
+  if (!isOpen) return null;
+
   return (
     <div
       className="rename-modal-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby="rename-modal-title"
-      onClick={onCancel}
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
     >
-      <div className="rename-modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className="rename-modal-card">
         <div className="rename-modal-header">
           <div className="rename-modal-icon">
             <Pencil size={20} />
