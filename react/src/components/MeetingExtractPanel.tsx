@@ -64,7 +64,7 @@ export const MeetingExtractPanel: React.FC = () => {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   /**
@@ -301,7 +301,7 @@ export const MeetingExtractPanel: React.FC = () => {
       {/* 頂部標題列 */}
       <header className="extract-top-header">
         <div className="extract-header-title">
-          <h2>AI 會議紀錄整理</h2>
+          <h2>DASH 會議紀錄整理</h2>
         </div>
         <button
           type="button"
@@ -705,13 +705,12 @@ export const MeetingExtractPanel: React.FC = () => {
                           </td>
                           <td>
                             <select
-                              className={`priority-select ${
-                                tsk.priority === '高'
+                              className={`priority-select ${tsk.priority === '高'
                                   ? 'high'
                                   : tsk.priority === '低'
-                                  ? 'low'
-                                  : 'mid'
-                              }`}
+                                    ? 'low'
+                                    : 'mid'
+                                }`}
                               value={tsk.priority || '中'}
                               onChange={(e) =>
                                 handleUpdateTaskField(idx, 'priority', e.target.value)
@@ -766,8 +765,8 @@ export const MeetingExtractPanel: React.FC = () => {
               {isCommitted
                 ? '已成功寫入資料庫'
                 : isCommitting
-                ? '寫入資料庫中…'
-                : '確認寫入資料庫'}
+                  ? '寫入資料庫中…'
+                  : '確認寫入資料庫'}
             </span>
           </button>
         </div>

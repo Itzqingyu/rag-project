@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, MessageSquare, Files, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, Trash2 } from 'lucide-react';
 import './SessionSidebar.css';
 
 /**
@@ -22,15 +22,11 @@ interface SessionSidebarProps {
   onCreateSession: () => void;
   // 刪除會話的回呼函式
   onDeleteSession: (id: string, e: React.MouseEvent) => void;
-  // 開啟歷史紀錄文檔抽屜的回呼函式
-  onOpenDocDrawer: () => void;
-  // 已導入的文檔數量 (供底部按鈕計數標籤顯示)
-  docCount?: number;
 }
 
 /**
  * 會話側邊欄組件 (Session Sidebar)
- * 負責展示使用者歷史會話、提供新增會話入口，以及底部歷史紀錄文檔抽屜入口
+ * 負責展示使用者歷史會話、提供新增與切換會話功能
  */
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   sessions,
@@ -38,8 +34,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onSelectSession,
   onCreateSession,
   onDeleteSession,
-  onOpenDocDrawer,
-  docCount = 0,
 }) => {
   return (
     <aside className="chat-session-sidebar" aria-label="會話列表">
@@ -102,21 +96,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             );
           })
         )}
-      </div>
-
-      {/* 底部功能區：歷史紀錄文檔抽屜快捷鍵 */}
-      <div className="chat-session-footer">
-        <button
-          type="button"
-          className="doc-drawer-trigger-btn"
-          onClick={onOpenDocDrawer}
-        >
-          <div className="trigger-left">
-            <Files size={16} />
-            <span>歷史紀錄文檔</span>
-          </div>
-          <span className="badge-counter">{docCount}</span>
-        </button>
       </div>
     </aside>
   );

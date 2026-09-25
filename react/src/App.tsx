@@ -215,7 +215,7 @@ export default function App() {
               >
                 <div className="nav-group-left">
                   <span className="nav-icon" aria-hidden="true"><Bot size={16} /></span>
-                  <span>AI 功能</span>
+                  <span>DASH Agent</span>
                 </div>
                 <span className="nav-group-arrow">
                   {isAiNavOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -231,7 +231,7 @@ export default function App() {
                     onClick={() => handleSetView('chat')}
                   >
                     <MessageSquare size={14} />
-                    <span>AI 對話</span>
+                    <span>對話</span>
                   </button>
 
                   {/* 子選項 2：會議紀錄整理 */}

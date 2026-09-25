@@ -114,7 +114,7 @@ export const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
           >
             <UploadCloud size={28} className={`upload-icon ${isUploading ? 'spinning' : ''}`} />
             <strong>{isUploading ? '文件上傳與向量化處理中…' : '點擊或拖曳檔案至此上傳'}</strong>
-            <small>支援 Markdown (.md)、純文字 (.txt)、PDF (.pdf)、Word (.docx)</small>
+            <small>支援 .md、.txt、.pdf、.docx</small>
           </div>
           {errorMessage ? (
             <div className="doc-error-banner" role="alert">

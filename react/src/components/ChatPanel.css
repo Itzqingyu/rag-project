@@ -502,10 +502,6 @@
   transition: all .15s ease;
 }
 
-.doc-attach-btn:hover {
-  background: var(--canvas);
-  border-color: var(--line);
-}
 
 .send-btn {
   background: var(--cyan, #4776e6);

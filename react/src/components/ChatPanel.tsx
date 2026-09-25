@@ -115,7 +115,7 @@ export const ChatPanel: React.FC = () => {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -505,8 +505,6 @@ export const ChatPanel: React.FC = () => {
         onSelectSession={setActiveSessionId}
         onCreateSession={handleCreateSession}
         onDeleteSession={handleDeleteSession}
-        onOpenDocDrawer={() => setIsDocDrawerOpen(true)}
-        docCount={documents.length}
       />
 
       {/* 2. 右側：聊天主區域 */}
@@ -514,7 +512,7 @@ export const ChatPanel: React.FC = () => {
         {/* 頂部資訊列 */}
         <header className="chat-top-header">
           <div className="chat-header-title">
-            <h2>{activeSessionId ? activeSessionTitle : 'AI 智庫對話'}</h2>
+            <h2>{activeSessionId ? activeSessionTitle : 'DASH Agent'}</h2>
           </div>
           <div className="chat-header-actions">
             <button
@@ -551,7 +549,7 @@ export const ChatPanel: React.FC = () => {
             // 極簡空狀態：簡潔文字與操作提示
             <div className="chat-empty-state">
               <h3>尚無訊息</h3>
-              <p>在下方輸入開始對話，或切換至歷史紀錄問答查詢入庫文件</p>
+              <p>在下方輸入訊息開始對話</p>
             </div>
           ) : (
             // 渲染訊息氣泡列表
@@ -569,13 +567,12 @@ export const ChatPanel: React.FC = () => {
                   >
                     {/* 頭像 */}
                     <div
-                      className={`chat-avatar ${
-                        isUser
-                          ? 'user-avatar'
-                          : isErrorBubble
+                      className={`chat-avatar ${isUser
+                        ? 'user-avatar'
+                        : isErrorBubble
                           ? 'assistant-avatar error-avatar'
                           : 'assistant-avatar'
-                      }`}
+                        }`}
                     >
                       {isUser ? (
                         <User size={18} />
@@ -601,13 +598,12 @@ export const ChatPanel: React.FC = () => {
                       </div>
 
                       <div
-                        className={`chat-bubble-body ${
-                          isUser
-                            ? 'user-body'
-                            : isErrorBubble
+                        className={`chat-bubble-body ${isUser
+                          ? 'user-body'
+                          : isErrorBubble
                             ? 'assistant-body error-body'
                             : 'assistant-body'
-                        }`}
+                          }`}
                       >
                         <div className="chat-markdown-content">
                           <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -691,30 +687,21 @@ export const ChatPanel: React.FC = () => {
                 <strong>歷史紀錄問答</strong>
               </button>
             </div>
-            <span className="mode-tip-text">
+            {/* <span className="mode-tip-text">
               {currentMode === 'rag'
                 ? '檢索已導入之文件向量切片輔助回答'
                 : '無需檢索文件，由 AI 自由推理與歷史上下文記憶對話'}
-            </span>
+            </span> */}
           </div>
 
           {/* 輸入框與發送按鈕組 */}
           <div className="chat-input-wrapper">
-            <button
-              type="button"
-              className="chat-input-btn doc-attach-btn"
-              title="管理歷史紀錄文件"
-              onClick={() => setIsDocDrawerOpen(true)}
-            >
-              <Paperclip size={18} />
-            </button>
-
             <textarea
               className="chat-textarea"
               placeholder={
                 currentMode === 'rag'
-                  ? '輸入想從歷史紀錄查詢的問題… (Enter 發送，Shift+Enter 換行)'
-                  : '與 AI 助手開始對話… (Enter 發送，Shift+Enter 換行)'
+                  ? '輸入想從歷史紀錄查詢的問題…'
+                  : '與 DASH Agent 對話…'
               }
               value={input}
               onChange={(e) => setInput(e.target.value)}
