@@ -22,7 +22,7 @@ interface SessionSidebarProps {
   onCreateSession: () => void;
   // 刪除會話的回呼函式
   onDeleteSession: (id: string, e: React.MouseEvent) => void;
-  // 開啟知識庫文檔抽屜的回呼函式
+  // 開啟歷史紀錄文檔抽屜的回呼函式
   onOpenDocDrawer: () => void;
   // 已導入的文檔數量 (供底部按鈕計數標籤顯示)
   docCount?: number;
@@ -30,7 +30,7 @@ interface SessionSidebarProps {
 
 /**
  * 會話側邊欄組件 (Session Sidebar)
- * 負責展示使用者歷史會話、提供新增會話入口，以及底部知識庫文檔抽屜入口
+ * 負責展示使用者歷史會話、提供新增會話入口，以及底部歷史紀錄文檔抽屜入口
  */
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   sessions,
@@ -104,7 +104,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         )}
       </div>
 
-      {/* 底部功能區：知識庫文檔抽屜快捷鍵 */}
+      {/* 底部功能區：歷史紀錄文檔抽屜快捷鍵 */}
       <div className="chat-session-footer">
         <button
           type="button"
@@ -113,7 +113,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         >
           <div className="trigger-left">
             <Files size={16} />
-            <span>知識庫文檔</span>
+            <span>歷史紀錄文檔</span>
           </div>
           <span className="badge-counter">{docCount}</span>
         </button>

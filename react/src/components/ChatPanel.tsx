@@ -68,10 +68,10 @@ function formatTimeString(isoString?: string): string {
  * LLM 聊天面板主組件 (Chat Panel)
  * 整合：
  * 1. 雙欄佈局 (會話清單邊欄 + 聊天串流主區)
- * 2. 模式切換 Toggle Pill (普通對話 vs 知識庫問答)
+ * 2. 模式切換 Toggle Pill (普通對話 vs 歷史紀錄問答)
  * 3. 完整接入 Python FastAPI 後端端點，無任何假資料或模擬回覆
  * 4. 後端連線異常或處理失敗時即時返回真實錯誤狀態
- * 5. 浮動知識庫文檔抽屜 (支援真實上傳切片與刪除)
+ * 5. 浮動歷史紀錄文檔抽屜 (支援真實上傳切片與刪除)
  */
 export const ChatPanel: React.FC = () => {
   // 會話列表狀態 (來源為後端 /sessions)
@@ -79,7 +79,7 @@ export const ChatPanel: React.FC = () => {
   // 當前選中的會話 ID (以 string 儲存對齊組件 props)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
-  // 當前對話模式：'chat' (普通對話) 或 'rag' (知識庫問答)
+  // 當前對話模式：'chat' (普通對話) 或 'rag' (歷史紀錄問答)
   const [currentMode, setCurrentMode] = useState<'chat' | 'rag'>('chat');
 
   // 訊息串流狀態 (各會話的歷史訊息快取)
@@ -93,13 +93,13 @@ export const ChatPanel: React.FC = () => {
   // 全域/頂部 API 連線或操作錯誤訊息
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // 知識庫文檔抽屜開啟狀態
+  // 歷史紀錄文檔抽屜開啟狀態
   const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
-  // 知識庫文件清單狀態 (來源為後端 /documents)
+  // 歷史紀錄文件清單狀態 (來源為後端 /documents)
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  // 知識庫文件上傳中狀態
+  // 歷史紀錄文件上傳中狀態
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
-  // 知識庫抽屜專屬錯誤訊息
+  // 歷史紀錄抽屜專屬錯誤訊息
   const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
 
   // 參考切片折疊狀態 (key: messageId, value: boolean)
@@ -147,7 +147,7 @@ export const ChatPanel: React.FC = () => {
       setDocuments(mappedDocs);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setDocDrawerError(`無法載入知識庫文檔：${msg}`);
+      setDocDrawerError(`無法載入歷史紀錄文檔：${msg}`);
     }
   }, []);
 
@@ -198,7 +198,7 @@ export const ChatPanel: React.FC = () => {
                 source:
                   (c as { metadata?: { source?: string } }).metadata?.source ||
                   (c as { source?: string }).source ||
-                  '文件知識庫',
+                  '歷史紀錄文件',
               }));
             }
           } catch {
@@ -368,7 +368,7 @@ export const ChatPanel: React.FC = () => {
       const rawChunks = response.retrieved_chunks || [];
       const parsedChunks = rawChunks.map((c) => ({
         content: c.content,
-        source: c.metadata?.source || '文件知識庫',
+        source: c.metadata?.source || '歷史紀錄文件',
       }));
 
       // 構建後端真實回傳之助手訊息
@@ -451,7 +451,7 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
-   * 知識庫文件真實上傳 (呼叫 POST /upload)
+   * 歷史紀錄文件真實上傳 (呼叫 POST /upload)
    */
   const handleUploadFile = async (file: File) => {
     setIsUploadingDoc(true);
@@ -469,7 +469,7 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
-   * 知識庫文件真實刪除 (先跳出全螢幕模糊確認視窗，確認後呼叫後端 DELETE /documents/{id})
+   * 歷史紀錄文件真實刪除 (先跳出全螢幕模糊確認視窗，確認後呼叫後端 DELETE /documents/{id})
    */
   const handleDeleteDocument = (id: string) => {
     const targetDoc = documents.find((d) => d.id === id);
@@ -477,8 +477,8 @@ export const ChatPanel: React.FC = () => {
 
     setConfirmDialog({
       isOpen: true,
-      title: '確定要刪除知識庫文檔？',
-      message: `確定要自知識庫中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
+      title: '確定要刪除歷史紀錄文檔？',
+      message: `確定要自歷史紀錄中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
       onConfirm: async () => {
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         try {
@@ -523,7 +523,7 @@ export const ChatPanel: React.FC = () => {
               onClick={() => setIsDocDrawerOpen(true)}
             >
               <FileText size={15} />
-              <span>知識庫 ({documents.length})</span>
+              <span>歷史紀錄 ({documents.length})</span>
             </button>
           </div>
         </header>
@@ -551,7 +551,7 @@ export const ChatPanel: React.FC = () => {
             // 極簡空狀態：簡潔文字與操作提示
             <div className="chat-empty-state">
               <h3>尚無訊息</h3>
-              <p>在下方輸入開始對話，或切換至知識庫問答查詢入庫文件</p>
+              <p>在下方輸入開始對話，或切換至歷史紀錄問答查詢入庫文件</p>
             </div>
           ) : (
             // 渲染訊息氣泡列表
@@ -595,7 +595,7 @@ export const ChatPanel: React.FC = () => {
                         <span className="bubble-time">{msg.createdAt}</span>
                         {msg.mode && (
                           <span className={`bubble-mode-tag ${msg.mode}`}>
-                            {msg.mode === 'rag' ? '知識庫問答' : '普通對話'}
+                            {msg.mode === 'rag' ? '歷史紀錄問答' : '普通對話'}
                           </span>
                         )}
                       </div>
@@ -688,7 +688,7 @@ export const ChatPanel: React.FC = () => {
                 onClick={() => setCurrentMode('rag')}
               >
                 <BookOpen size={14} />
-                <strong>知識庫問答</strong>
+                <strong>歷史紀錄問答</strong>
               </button>
             </div>
             <span className="mode-tip-text">
@@ -703,7 +703,7 @@ export const ChatPanel: React.FC = () => {
             <button
               type="button"
               className="chat-input-btn doc-attach-btn"
-              title="管理知識庫文件"
+              title="管理歷史紀錄文件"
               onClick={() => setIsDocDrawerOpen(true)}
             >
               <Paperclip size={18} />
@@ -713,7 +713,7 @@ export const ChatPanel: React.FC = () => {
               className="chat-textarea"
               placeholder={
                 currentMode === 'rag'
-                  ? '輸入想從知識庫查詢的問題… (Enter 發送，Shift+Enter 換行)'
+                  ? '輸入想從歷史紀錄查詢的問題… (Enter 發送，Shift+Enter 換行)'
                   : '與 AI 助手開始對話… (Enter 發送，Shift+Enter 換行)'
               }
               value={input}
@@ -735,7 +735,7 @@ export const ChatPanel: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. 浮動/抽屜式知識庫文檔管理 */}
+      {/* 3. 浮動/抽屜式歷史紀錄文檔管理 */}
       <DocumentDrawer
         isOpen={isDocDrawerOpen}
         onClose={() => setIsDocDrawerOpen(false)}

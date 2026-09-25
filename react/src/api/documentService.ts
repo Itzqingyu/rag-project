@@ -1,5 +1,5 @@
 /**
- * 知識庫文件管理服務模組 (documentService.ts)
+ * 歷史紀錄文件管理服務模組 (documentService.ts)
  * 負責串接 Python FastAPI 之 RAG Document 相關端點 (文檔列表、檔案上傳與檔案刪除)
  */
 
@@ -7,7 +7,7 @@ import { apiClient } from './apiClient';
 import { BackendDocument, UploadDocumentResponse } from './apiTypes';
 
 /**
- * 取得已入庫的知識庫文件列表
+ * 取得已入庫的歷史紀錄文件列表
  */
 export async function fetchDocuments(): Promise<BackendDocument[]> {
   return await apiClient.get<BackendDocument[]>('/documents');

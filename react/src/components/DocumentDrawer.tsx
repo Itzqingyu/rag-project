@@ -3,7 +3,7 @@ import { X, UploadCloud, FileText, Trash2, AlertCircle } from 'lucide-react';
 import './DocumentDrawer.css';
 
 /**
- * 知識庫文件資料介面 (本機狀態使用)
+ * 歷史紀錄文件資料介面 (本機狀態使用)
  */
 export interface DocumentItem {
   id: string;
@@ -33,7 +33,7 @@ interface DocumentDrawerProps {
 }
 
 /**
- * 知識庫文檔管理抽屜組件 (Document Drawer)
+ * 歷史紀錄文檔管理抽屜組件 (Document Drawer)
  * 負責檢視已入庫的文檔清單，並提供上傳新文件的介面與極簡空狀態
  */
 export const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
@@ -78,20 +78,20 @@ export const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
       {/* 抽屜主體 */}
       <aside
         className={`doc-drawer ${isOpen ? 'open' : ''}`}
-        aria-label="知識庫文檔管理"
+        aria-label="歷史紀錄文檔管理"
         aria-hidden={!isOpen}
       >
         {/* 抽屜頂部 */}
         <div className="doc-drawer-head">
           <div>
-            <p className="eyebrow">KNOWLEDGE BASE</p>
-            <h2>知識庫文檔</h2>
+            <p className="eyebrow">HISTORY RECORDS</p>
+            <h2>歷史紀錄文檔</h2>
           </div>
           <button
             type="button"
             className="close-button"
             onClick={onClose}
-            aria-label="關閉知識庫抽屜"
+            aria-label="關閉歷史紀錄抽屜"
           >
             <X size={18} />
           </button>

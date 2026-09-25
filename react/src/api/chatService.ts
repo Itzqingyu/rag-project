@@ -60,7 +60,7 @@ export async function deleteSessionById(sessionId: number): Promise<void> {
 
 /**
  * 發送訊息至指定會話並獲取 AI 回應
- * 支援普通對話模式 ('chat') 與知識庫問答模式 ('rag')
+ * 支援普通對話模式 ('chat') 與歷史紀錄問答模式 ('rag')
  */
 export async function sendChatMessage(
   sessionId: number,
