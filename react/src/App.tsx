@@ -253,10 +253,6 @@ export default function App() {
             <strong>資管系學會</strong>
             <span>4 個活動・2 個正在處理</span>
           </div>
-          <div className="profile">
-            <span className="avatar">林</span>
-            <span><strong>林同學</strong><small>活動組</small></span>
-          </div>
         </aside>
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
