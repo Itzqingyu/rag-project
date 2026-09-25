@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FileText,
   CheckCircle2,
@@ -13,30 +13,63 @@ import {
   RotateCcw,
   Plus,
   Trash2,
+  Upload,
 } from 'lucide-react';
-import { fetchDocuments } from '../api/documentService';
+import {
+  fetchDocuments,
+  uploadDocument,
+  deleteDocumentByIdentifier,
+} from '../api/documentService';
 import { BackendDocument } from '../api/apiTypes';
 import {
   extractMeetingSummary,
   commitMeetingSummary,
   MeetingPreviewData,
 } from '../api/meetingExtractService';
+import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
 import ConfirmModal from './ConfirmModal';
 import './MeetingExtractPanel.css';
 
 /**
+ * 格式化 ISO 時間字串為簡短展示文字
+ */
+const formatTimeString = (isoString?: string): string => {
+  if (!isoString) {
+    const now = new Date();
+    return `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  }
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } catch {
+    return isoString;
+  }
+};
+
+/**
  * AI 會議紀錄整理面板 (Meeting Extract Panel)
  * 核心功能：
- * 1. 從已上傳的文件挑選一份會議紀錄
+ * 1. 從已上傳的文件挑選一份會議紀錄 (支援快捷上傳與歷史紀錄抽屜管理)
  * 2. 呼叫 LLM 依據 System Prompt 提煉成標準化結構（會議摘要、決策、待辦）
  * 3. 呈現結構化標準表格並提供使用者確認
  * 4. 確認後一鍵寫入資料庫
  */
 export const MeetingExtractPanel: React.FC = () => {
+  // 原生檔案選擇器參照 (快捷直上使用)
+  const quickFileInputRef = useRef<HTMLInputElement>(null);
+
   // 已入庫文檔清單
   const [documents, setDocuments] = useState<BackendDocument[]>([]);
   // 當前選中的文檔 ID
   const [selectedDocId, setSelectedDocId] = useState<number | ''>('');
+
+  // 歷史紀錄文檔抽屜開啟狀態
+  const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
+  // 文檔上傳中狀態
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  // 抽屜專屬錯誤訊息
+  const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
 
   // 後端既有活動 ID (背後連結用，不干擾前端簡潔介面)
   const [defaultActivityId, setDefaultActivityId] = useState<number>(1);
@@ -68,6 +101,17 @@ export const MeetingExtractPanel: React.FC = () => {
   });
 
   /**
+   * 將 BackendDocument[] 轉換為 DocumentDrawer 所需的 DocumentItem[] 介面
+   */
+  const drawerDocuments: DocumentItem[] = documents.map((doc) => ({
+    id: String(doc.id),
+    name: doc.filename,
+    size: `${doc.chunk_count} 個切片`,
+    uploadedAt: formatTimeString(doc.upload_date),
+    chunkCount: doc.chunk_count,
+  }));
+
+  /**
    * 載入已上傳文件清單
    */
   const loadDocumentsList = useCallback(async () => {
@@ -90,6 +134,83 @@ export const MeetingExtractPanel: React.FC = () => {
   useEffect(() => {
     loadDocumentsList();
   }, [loadDocumentsList]);
+
+  /**
+   * 文檔真實上傳處理 (支援快捷按鈕與側邊抽屜上傳)
+   * 上傳並向量化成功後，自動更新列表並自動選中該新上傳之文件
+   */
+  const handleUploadFile = async (file: File) => {
+    setIsUploadingDoc(true);
+    setDocDrawerError(null);
+    setErrorMessage(null);
+    try {
+      const res = await uploadDocument(file);
+      const freshDocs = await fetchDocuments();
+      setDocuments(freshDocs);
+
+      // 若後端有回傳 doc_id 則直接選中，否則比對檔名選中
+      if (res.doc_id) {
+        setSelectedDocId(res.doc_id);
+      } else if (freshDocs.length > 0) {
+        const matched = freshDocs.find((d) => d.filename === file.name);
+        if (matched) {
+          setSelectedDocId(matched.id);
+        }
+      }
+      setSuccessMessage(`文檔「${file.name}」上傳成功，已自動載入並選中！`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDocDrawerError(`上傳檔案失敗：${msg}`);
+      setErrorMessage(`上傳檔案失敗：${msg}`);
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  /**
+   * 快捷檔案選擇器 Change 事件處理
+   */
+  const handleQuickFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      handleUploadFile(file);
+      e.target.value = '';
+    }
+  };
+
+  /**
+   * 刪除指定文件 (呼叫 DELETE /documents/{id})
+   * 若刪除之文件為當前選中項，自動重設選中狀態並清空預覽
+   */
+  const handleDeleteDocument = (id: string) => {
+    const targetDoc = documents.find((d) => String(d.id) === id);
+    const docName = targetDoc ? `「${targetDoc.filename}」` : '此文件';
+
+    setConfirmDialog({
+      isOpen: true,
+      title: '確定要刪除歷史紀錄文檔？',
+      message: `確定要自歷史紀錄中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setDocDrawerError(null);
+          await deleteDocumentByIdentifier(id);
+          const freshDocs = await fetchDocuments();
+          setDocuments(freshDocs);
+
+          // 若刪除的是當前選中項，清空選中項與預覽資料
+          if (String(selectedDocId) === id) {
+            setSelectedDocId(freshDocs.length > 0 ? freshDocs[0].id : '');
+            setPreviewData(null);
+            setIsCommitted(false);
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setDocDrawerError(`刪除文檔失敗：${msg}`);
+        }
+      },
+    });
+  };
 
   /**
    * 步驟 1：觸發 LLM 根據 system prompt 整理會議紀錄 (POST /extract_summary)
@@ -303,16 +424,27 @@ export const MeetingExtractPanel: React.FC = () => {
         <div className="extract-header-title">
           <h2>DASH 會議紀錄整理</h2>
         </div>
-        <button
-          type="button"
-          className="button secondary sm-btn"
-          onClick={loadDocumentsList}
-          disabled={isLoadingDocs || isExtracting || isCommitting}
-          title="重新整理文件清單"
-        >
-          <RefreshCw size={14} className={isLoadingDocs ? 'spinning' : ''} />
-          <span>重新整理</span>
-        </button>
+        <div className="extract-header-actions">
+          <button
+            type="button"
+            className="button secondary sm-btn"
+            onClick={loadDocumentsList}
+            disabled={isLoadingDocs || isExtracting || isCommitting || isUploadingDoc}
+            title="重新整理文件清單"
+          >
+            <RefreshCw size={14} className={isLoadingDocs ? 'spinning' : ''} />
+            <span>重新整理</span>
+          </button>
+          <button
+            type="button"
+            className="button secondary sm-btn"
+            onClick={() => setIsDocDrawerOpen(true)}
+            title="開啟歷史紀錄文檔抽屜"
+          >
+            <FileText size={15} />
+            <span>歷史紀錄 ({documents.length})</span>
+          </button>
+        </div>
       </header>
 
       {/* 錯誤警示列 */}
@@ -350,10 +482,10 @@ export const MeetingExtractPanel: React.FC = () => {
                 id="meeting-doc-picker"
                 value={selectedDocId}
                 onChange={(e) => setSelectedDocId(e.target.value ? Number(e.target.value) : '')}
-                disabled={isExtracting || isCommitting}
+                disabled={isExtracting || isCommitting || isUploadingDoc}
               >
                 {documents.length === 0 ? (
-                  <option value="">尚未有已入庫之文件（可於對話面板的文檔抽屜上傳）</option>
+                  <option value="">尚未有已入庫之文件</option>
                 ) : (
                   documents.map((doc) => (
                     <option key={doc.id} value={doc.id}>
@@ -364,11 +496,30 @@ export const MeetingExtractPanel: React.FC = () => {
               </select>
             </div>
 
+            {/* 快捷上傳按鈕 */}
+            <button
+              type="button"
+              className="button secondary upload-shortcut-btn"
+              onClick={() => quickFileInputRef.current?.click()}
+              disabled={isExtracting || isCommitting || isUploadingDoc}
+              title="上傳新會議文件"
+            >
+              <Upload size={14} className={isUploadingDoc ? 'spinning' : ''} />
+              <span>{isUploadingDoc ? '上傳中…' : '上傳文件'}</span>
+            </button>
+            <input
+              ref={quickFileInputRef}
+              type="file"
+              accept=".md,.txt,.pdf,.docx"
+              style={{ display: 'none' }}
+              onChange={handleQuickFileChange}
+            />
+
             <button
               type="button"
               className="button extract-run-btn"
               onClick={handleExtract}
-              disabled={isExtracting || !selectedDocId || documents.length === 0}
+              disabled={isExtracting || !selectedDocId || documents.length === 0 || isUploadingDoc}
             >
               <span>{isExtracting ? 'LLM 整理分析中…' : '開始整理會議紀錄'}</span>
             </button>
@@ -706,10 +857,10 @@ export const MeetingExtractPanel: React.FC = () => {
                           <td>
                             <select
                               className={`priority-select ${tsk.priority === '高'
-                                  ? 'high'
-                                  : tsk.priority === '低'
-                                    ? 'low'
-                                    : 'mid'
+                                ? 'high'
+                                : tsk.priority === '低'
+                                  ? 'low'
+                                  : 'mid'
                                 }`}
                               value={tsk.priority || '中'}
                               onChange={(e) =>
@@ -771,6 +922,18 @@ export const MeetingExtractPanel: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* 歷史紀錄文檔抽屜 */}
+      <DocumentDrawer
+        isOpen={isDocDrawerOpen}
+        onClose={() => setIsDocDrawerOpen(false)}
+        documents={drawerDocuments}
+        onUploadFile={handleUploadFile}
+        onDeleteDocument={handleDeleteDocument}
+        isUploading={isUploadingDoc}
+        errorMessage={docDrawerError}
+        onClearError={() => setDocDrawerError(null)}
+      />
 
       {/* 全域模糊防手殘確認對話框 */}
       <ConfirmModal

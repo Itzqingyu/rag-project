@@ -148,7 +148,7 @@ npm run dev                                      # 啟動 Electron 前端
 - ✅ 活動管理 Python／SQLite 核心 CRUD 與關聯驗證
 - ✅ 前端 LLM 聊天大面板 UI 框架 (雙欄佈局、會話管理側欄、模式切換 Toggle Pill、極簡空狀態、歷史紀錄文檔抽屜)
 - ✅ 前後端 API 串接與端對端整合 (完整接入 Session、Message 雙模式、Document 上傳與向量化，全面剔除模擬假資料並建立嚴格錯誤反饋機制)
-- ✅ 前端「AI 功能」側欄下拉折疊導航與 AI 會議紀錄整理面板 (接入 /extract_summary 與 /commit_summary，實現 1-shot 萃取、即時預覽與活動資料庫寫入)
+- ✅ 前端「AI 功能」側欄下拉折疊導航與 AI 會議紀錄整理面板 (接入 /extract_summary 與 /commit_summary，實現 1-shot 萃取、即時預覽、歷史紀錄抽屜與快捷文檔上傳)
 - ⏳ Electron 打包與自動化端對端啟動流程整合 (進行中)
 - ❌ 高級權限與團隊協作 (後續)
 - ❌ 版本控制與複雜自訂設定 (後續)
