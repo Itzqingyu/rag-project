@@ -467,12 +467,12 @@
 
 .chat-input-wrapper {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   border: 2px solid var(--line, #dfe4eb);
   border-radius: 10px;
   background: #ffffff;
-  padding: 8px 10px;
+  padding: 6px 10px;
   box-shadow: 3px 3px 0 var(--line, #dfe4eb);
 }
 
@@ -486,7 +486,10 @@
   color: var(--ink, #101928);
   line-height: 1.5;
   max-height: 120px;
-  padding: 4px 0;
+  padding: 6px 0;
+  margin: 0;
+  display: block;
+  box-sizing: border-box;
 }
 
 .chat-input-btn {
