@@ -15,10 +15,12 @@ import ReactMarkdown from 'react-markdown';
 import SessionSidebar, { SessionItem } from './SessionSidebar';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
 import ConfirmModal from './ConfirmModal';
+import RenameModal from './RenameModal';
 import {
   fetchSessions,
   fetchSessionDetail,
   createNewSession,
+  updateSessionTitle,
   deleteSessionById,
   sendChatMessage,
 } from '../api/chatService';
@@ -101,6 +103,17 @@ export const ChatPanel: React.FC = () => {
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   // 歷史紀錄抽屜專屬錯誤訊息
   const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
+
+  // 編輯會話名稱彈窗狀態 (霧化背景彈窗)
+  const [renameModal, setRenameModal] = useState<{
+    isOpen: boolean;
+    sessionId: string;
+    currentTitle: string;
+  }>({
+    isOpen: false,
+    sessionId: '',
+    currentTitle: '',
+  });
 
   // 參考切片折疊狀態 (key: messageId, value: boolean)
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>({});
@@ -306,6 +319,52 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
+   * 編輯/重命名對話會話名稱 (呼叫 PATCH /sessions/{id})
+   * 同步更新後端 SQLite 資料庫與本地會話列表
+   */
+  const handleRenameSession = async (id: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+
+    const numId = Number(id);
+    if (isNaN(numId)) return;
+
+    try {
+      setApiError(null);
+      await updateSessionTitle(numId, trimmed);
+      // 本地狀態同步更新
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, title: trimmed } : s))
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`更新對話名稱失敗：${msg}`);
+    }
+  };
+
+  /**
+   * 開啟重新命名對話框
+   */
+  const handleOpenRenameModal = (id: string, currentTitle: string) => {
+    setRenameModal({
+      isOpen: true,
+      sessionId: id,
+      currentTitle,
+    });
+  };
+
+  /**
+   * 確認並儲存新會話名稱
+   */
+  const handleConfirmRename = async (newTitle: string) => {
+    const targetId = renameModal.sessionId;
+    setRenameModal((prev) => ({ ...prev, isOpen: false }));
+    if (targetId) {
+      await handleRenameSession(targetId, newTitle);
+    }
+  };
+
+  /**
    * 發送訊息至後端 (呼叫 POST /sessions/{id}/messages)
    * 絕不使用假資料模擬，後端異常則顯示真實錯誤
    */
@@ -502,9 +561,10 @@ export const ChatPanel: React.FC = () => {
       <SessionSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onSelectSession={setActiveSessionId}
+        onSelectSession={(id) => setActiveSessionId(id)}
         onCreateSession={handleCreateSession}
         onDeleteSession={handleDeleteSession}
+        onOpenRenameModal={handleOpenRenameModal}
       />
 
       {/* 2. 右側：聊天主區域 */}
@@ -741,6 +801,14 @@ export const ChatPanel: React.FC = () => {
         message={confirmDialog.message}
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* 5. 編輯對話名稱彈窗 (背景霧化) */}
+      <RenameModal
+        isOpen={renameModal.isOpen}
+        initialValue={renameModal.currentTitle}
+        onConfirm={handleConfirmRename}
+        onCancel={() => setRenameModal((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

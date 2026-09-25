@@ -51,7 +51,9 @@ rag-project/
 │   │   ├── components/           # 組件與同名獨立樣式 (.tsx & .css)
 │   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、即時 API 串接與真實錯誤反饋)
 │   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流，提取會議、決策與待辦)
-│   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、刪除)
+│   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、三點選單觸發重命名與刪除)
+│   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景、即時鍵盤快捷支援)
+│   │   │   ├── ConfirmModal.tsx  # 防手殘刪除確認獨立彈窗 (霧化毛玻璃背景)
 │   │   │   ├── DocumentDrawer.tsx # 歷史紀錄文檔抽屜 (文件清單、真實上傳與刪除)
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
 │   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等各自獨立 CSS)

@@ -132,21 +132,93 @@
   margin-top: 2px;
 }
 
-.session-delete-btn {
-  display: none;
+.session-menu-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.session-more-btn {
   background: transparent;
-  color: var(--muted);
+  color: var(--muted, #758097);
   padding: 4px;
   border-radius: 4px;
-  cursor: pointer;
-}
-
-.chat-session-item:hover .session-delete-btn {
+  border: none;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all .15s ease;
 }
 
-.session-delete-btn:hover {
-  color: var(--danger);
-  background: var(--danger-soft);
+.chat-session-item:hover .session-more-btn,
+.session-more-btn.open {
+  opacity: 1;
+}
+
+.session-more-btn:hover,
+.session-more-btn.open {
+  color: var(--ink, #101928);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* 下拉選單樣式 */
+.session-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  background: #ffffff;
+  border: 1px solid var(--line, #dfe4eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.session-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--ink, #101928);
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all .15s ease;
+}
+
+.session-dropdown-item:hover {
+  background: var(--canvas, #f6f8fb);
+  color: var(--ink, #101928);
+}
+
+.session-dropdown-item.danger {
+  color: var(--danger, #ff4d4f);
+}
+
+.session-dropdown-item.danger:hover {
+  background: var(--danger-soft, #fff1f0);
 }
 
