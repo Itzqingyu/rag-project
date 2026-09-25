@@ -14,13 +14,13 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { fetchDocuments } from '../services/documentService';
-import { BackendDocument } from '../services/apiTypes';
+import { fetchDocuments } from '../api/documentService';
+import { BackendDocument } from '../api/apiTypes';
 import {
   extractMeetingSummary,
   commitMeetingSummary,
   MeetingPreviewData,
-} from '../services/meetingExtractService';
+} from '../api/meetingExtractService';
 import ConfirmModal from './ConfirmModal';
 import './MeetingExtractPanel.css';
 

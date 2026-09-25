@@ -42,7 +42,7 @@ rag-project/
 ├── react/                        # Electron + Vite + React 前端
 │   ├── src/
 │   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話)
-│   │   ├── services/             # 後端 API 通訊服務層 (camelCase 命名)
+│   │   ├── api/                  # 後端 API 通訊服務層 (camelCase 命名)
 │   │   │   ├── apiTypes.ts       # 後端資料結構與 TypeScript 介面定義
 │   │   │   ├── apiClient.ts      # HTTP 請求封裝、錯誤攔截與後端斷線處理
 │   │   │   ├── chatService.ts    # 對話會話增刪查改與雙模式訊息發送

@@ -66,7 +66,7 @@ export async function sendChatMessage(
   sessionId: number,
   content: string,
   mode: 'chat' | 'rag',
-  topK: number = 5
+  topK = 5
 ): Promise<SendMessageResponse> {
   return await apiClient.post<SendMessageResponse>(
     `/sessions/${sessionId}/messages`,

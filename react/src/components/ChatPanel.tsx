@@ -21,13 +21,13 @@ import {
   createNewSession,
   deleteSessionById,
   sendChatMessage,
-} from '../services/chatService';
+} from '../api/chatService';
 import {
   fetchDocuments,
   uploadDocument,
   deleteDocumentByIdentifier,
-} from '../services/documentService';
-import { RetrievedChunk } from '../services/apiTypes';
+} from '../api/documentService';
+import { RetrievedChunk } from '../api/apiTypes';
 import './ChatPanel.css';
 
 /**
