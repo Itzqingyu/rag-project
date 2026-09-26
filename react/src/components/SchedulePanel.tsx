@@ -1,71 +1,222 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { activityApi } from '../api/activityApi';
+import type { Meeting, Schedule, ScheduleInput } from '../types/activity';
 import './SchedulePanel.css';
 
-export default function SchedulePanel({ currentActivity, currentView }: any) {
-  // 🌟 魔法狀態：用來控制目前顯示的是 Day 1 還是 Day 2 (預設為 1)
-  const [activeDay, setActiveDay] = useState(1);
+interface SchedulePanelProps {
+  activityId: number;
+  currentView: string;
+  meetingVersion: number;
+  onSchedulesChanged: () => void;
+}
 
-  // 為了展示方便，我們直接在元件內準備兩天的流程陣列，讓程式碼更乾淨
-  const day1Schedule = [
-    { id: 1, time: '08:00', category: 'staff', categoryName: '工作人員', title: '工作人員集合', desc: '大廳・負責人：陳怡安', tags: ['📦 報到物資', '👥 32 位工作人員'] },
-    { id: 2, time: '09:00', category: 'checkin', categoryName: '報到', title: '新生報到', desc: '一樓大廳・負責人：吳品妤', tags: ['📄 報到名單', '📍 動線圖'] },
-    { id: 3, time: '10:00', category: 'ceremony', categoryName: '開幕', title: '開幕式', desc: '大禮堂・主持人：黃冠宇', tags: ['🎤 音響', '📑 主持稿'] },
-    { id: 4, time: '10:30', category: 'activity', categoryName: '活動', title: '團康活動', desc: '大禮堂・關主：活動組', tags: ['📦 遊戲器材', '⏱ 90 分鐘'] },
-    { id: 5, time: '12:00', category: 'meal', categoryName: '用餐', title: '午餐', desc: '餐廳・負責人：總務組', tags: ['🍱 126 份餐盒'] }
-  ];
+interface ScheduleFormState {
+  meeting_id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+  owner: string;
+  notes: string;
+  category: string;
+}
 
-  const day2Schedule = [
-    { id: 6, time: '07:30', category: 'meal', categoryName: '用餐', title: '早餐', desc: '餐廳', tags: [] },
-    { id: 7, time: '09:00', category: 'activity', categoryName: '活動', title: '大地遊戲', desc: '戶外草皮', tags: ['💧 雨備方案確認'] },
-    { id: 8, time: '12:00', category: 'ceremony', categoryName: '閉幕', title: '結業式與頒獎', desc: '大禮堂', tags: ['🏆 獎品'] },
-  ];
+const EMPTY_FORM: ScheduleFormState = {
+  meeting_id: '',
+  name: '',
+  start_time: '',
+  end_time: '',
+  location: '',
+  owner: '',
+  notes: '',
+  category: '',
+};
 
-  // 根據選中的天數，決定要丟給畫面哪個陣列
-  const currentSchedule = activeDay === 1 ? day1Schedule : day2Schedule;
+function toDateTimeInput(value: string | null): string {
+  return value ? value.replace(' ', 'T').slice(0, 16) : '';
+}
+
+function formFromSchedule(schedule: Schedule): ScheduleFormState {
+  return {
+    meeting_id: schedule.meeting_id == null ? '' : String(schedule.meeting_id),
+    name: schedule.name,
+    start_time: toDateTimeInput(schedule.start_time),
+    end_time: toDateTimeInput(schedule.end_time),
+    location: schedule.location,
+    owner: schedule.owner,
+    notes: schedule.notes,
+    category: schedule.category,
+  };
+}
+
+export default function SchedulePanel({ activityId, currentView, meetingVersion, onSchedulesChanged }: SchedulePanelProps) {
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<ScheduleFormState>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setSchedules([]);
+    setMeetings([]);
+    setFormMode(null);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+
+    Promise.all([activityApi.listSchedules(activityId), activityApi.listMeetings(activityId)])
+      .then(([scheduleRows, meetingRows]) => {
+        if (!active) return;
+        setSchedules(scheduleRows);
+        setMeetings(meetingRows);
+      })
+      .catch((requestError: Error) => {
+        if (active) setError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [activityId, meetingVersion]);
+
+  const meetingNames = useMemo(
+    () => new Map(meetings.map((meeting) => [meeting.id, meeting.name])),
+    [meetings],
+  );
+
+  const closeForm = () => {
+    if (saving) return;
+    setFormMode(null);
+    setEditingId(null);
+    setFormError(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setFormError(null);
+    setFormMode('create');
+  };
+
+  const openEdit = (schedule: Schedule) => {
+    setForm(formFromSchedule(schedule));
+    setEditingId(schedule.id);
+    setFormError(null);
+    setFormMode('edit');
+  };
+
+  const setField = (field: keyof ScheduleFormState, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setFormError(null);
+
+    const payload: ScheduleInput = {
+      activity_id: activityId,
+      meeting_id: form.meeting_id ? Number(form.meeting_id) : null,
+      name: form.name.trim(),
+      start_time: form.start_time,
+      end_time: form.end_time || null,
+      location: form.location.trim(),
+      owner: form.owner.trim(),
+      notes: form.notes.trim(),
+      category: form.category.trim(),
+    };
+
+    try {
+      if (formMode === 'edit' && editingId != null) {
+        const updated = await activityApi.updateSchedule(editingId, payload);
+        setSchedules((current) => current.map((schedule) => schedule.id === updated.id ? updated : schedule));
+      } else {
+        const created = await activityApi.createSchedule(payload);
+        setSchedules((current) => [...current, created].sort((a, b) => a.start_time.localeCompare(b.start_time)));
+      }
+      onSchedulesChanged();
+      setFormMode(null);
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+    } catch (requestError) {
+      setFormError(requestError instanceof Error ? requestError.message : '流程儲存失敗');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (schedule: Schedule) => {
+    if (!window.confirm(`確定刪除「${schedule.name}」？相關事件會保留，但 schedule_id 將清空。`)) return;
+    setDeletingId(schedule.id);
+    setError(null);
+    try {
+      await activityApi.deleteSchedule(schedule.id);
+      setSchedules((current) => current.filter((item) => item.id !== schedule.id));
+      onSchedulesChanged();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '流程刪除失敗');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <section className={`view-panel ${currentView === 'schedule' ? 'active' : ''}`} data-panel="schedule">
       <div className="section-heading">
-        <div>
-          <p className="eyebrow">SCHEDULE</p>
-          <h2>活動流程規劃</h2>
-          <p>活動前先完成細節，活動當天直接查看。</p>
-        </div>
-        <button className="button primary" type="button">＋ 新增流程</button>
+        <div><p className="eyebrow">SCHEDULE</p><h2>活動流程規劃</h2><p>只顯示目前 Activity 的流程。</p></div>
+        <button className="button primary" type="button" onClick={openCreate}>＋ 新增流程</button>
       </div>
-      
-      {/* 🔘 天數切換按鈕 */}
-      <div className="day-switch">
-        <button className={activeDay === 1 ? 'active' : ''} type="button" onClick={() => setActiveDay(1)}>
-          Day 1・第一天
-        </button>
-        <button className={activeDay === 2 ? 'active' : ''} type="button" onClick={() => setActiveDay(2)}>
-          Day 2・第二天
-        </button>
-      </div>
-      
-      {/* ⏳ 時間軸 */}
-      <div className="timeline">
-        {currentSchedule.map(item => (
-          <article key={item.id}>
-            <time>{item.time}</time>
+
+      {error && <div className="api-message error" role="alert">{error}</div>}
+      {loading && <div className="api-state">載入流程中…</div>}
+      {!loading && schedules.length === 0 && <div className="api-state empty"><h3>目前沒有活動流程</h3><p>新增流程後會顯示在這裡。</p></div>}
+
+      {schedules.length > 0 && <div className="timeline">
+        {schedules.map((schedule) => (
+          <article key={schedule.id}>
+            <time>{schedule.start_time || '時間未定'}</time>
             <i></i>
             <div>
-              <span className={`category ${item.category}`}>{item.categoryName}</span>
-              <h3>{item.title}</h3>
-              <p>{item.desc}</p>
-              {/* 如果有 tag 才渲染這個 div */}
-              {item.tags.length > 0 && (
-                <div className="detail-tags">
-                  {item.tags.map((tag, idx) => (
-                    <span key={idx}>{tag}</span>
-                  ))}
-                </div>
-              )}
+              <span className="category activity">{schedule.category}</span>
+              <h3>{schedule.name}</h3>
+              <p>{schedule.location}・負責人：{schedule.owner}</p>
+              <div className="detail-tags">
+                {schedule.end_time && <span>結束：{schedule.end_time}</span>}
+                <span>{schedule.meeting_id == null ? '未綁定會議' : meetingNames.get(schedule.meeting_id) || `會議 #${schedule.meeting_id}`}</span>
+                {schedule.notes && <span>{schedule.notes}</span>}
+              </div>
+              <div className="heading-actions">
+                <button className="button secondary" type="button" onClick={() => openEdit(schedule)}>編輯</button>
+                <button className="button danger" type="button" onClick={() => void handleDelete(schedule)} disabled={deletingId === schedule.id}>{deletingId === schedule.id ? '刪除中…' : '刪除'}</button>
+              </div>
             </div>
           </article>
         ))}
-      </div>
+      </div>}
+
+      {formMode && <div className="activity-modal-backdrop" role="presentation" onMouseDown={closeForm}>
+        <section className="activity-data-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-form-title" onMouseDown={(event) => event.stopPropagation()}>
+          <form onSubmit={handleSubmit}>
+            <div className="modal-head"><div><p className="eyebrow">SCHEDULE</p><h2 id="schedule-form-title">{formMode === 'create' ? '新增流程' : '編輯流程'}</h2></div><button className="close-button" type="button" onClick={closeForm}>×</button></div>
+            {formError && <div className="api-message error" role="alert">{formError}</div>}
+            <div className="two-fields"><label className="field"><span>流程名稱</span><input value={form.name} onChange={(event) => setField('name', event.target.value)} required /></label><label className="field"><span>分類</span><input value={form.category} onChange={(event) => setField('category', event.target.value)} required /></label></div>
+            <div className="two-fields"><label className="field"><span>開始時間</span><input type="datetime-local" value={form.start_time} onChange={(event) => setField('start_time', event.target.value)} required /></label><label className="field"><span>結束時間（選填）</span><input type="datetime-local" value={form.end_time} onChange={(event) => setField('end_time', event.target.value)} /></label></div>
+            <div className="two-fields"><label className="field"><span>地點</span><input value={form.location} onChange={(event) => setField('location', event.target.value)} required /></label><label className="field"><span>負責人</span><input value={form.owner} onChange={(event) => setField('owner', event.target.value)} required /></label></div>
+            <label className="field"><span>所屬會議（選填）</span><select value={form.meeting_id} onChange={(event) => setField('meeting_id', event.target.value)}><option value="">不綁定會議</option>{meetings.map((meeting) => <option key={meeting.id} value={meeting.id}>{meeting.name}</option>)}</select></label>
+            <label className="field"><span>備註</span><textarea rows={4} value={form.notes} onChange={(event) => setField('notes', event.target.value)} required /></label>
+            <div className="modal-actions"><button className="button secondary" type="button" onClick={closeForm}>取消</button><button className="button primary" type="submit" disabled={saving}>{saving ? '儲存中…' : '儲存流程'}</button></div>
+          </form>
+        </section>
+      </div>}
     </section>
   );
 }

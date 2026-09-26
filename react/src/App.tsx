@@ -17,8 +17,10 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { activityList, activities } from './mockData';
+import { activityApi } from './api/activityApi';
+import type { Activity, ActivityInput } from './types/activity';
 import OverviewPanel from './components/OverviewPanel';
+import ActivityFormModal from './components/ActivityFormModal';
 import BeforePanel from './components/BeforePanel';
 import TasksPanel from './components/TasksPanel';
 import DecisionsPanel from './components/DecisionsPanel';
@@ -48,10 +50,20 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  // 🌟 新增這個狀態：記住目前點擊的是哪個活動（預設為 camp）
-  const [currentActivityId, setCurrentActivityId] = useState('camp');
-  // 🌟 加上這行：根據目前的 ID，抓出那一包活動資料
-  const currentActivity = activities[currentActivityId as keyof typeof activities];
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
+  const [activityFormOpen, setActivityFormOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [activityFormError, setActivityFormError] = useState<string | null>(null);
+  const [activitySaving, setActivitySaving] = useState(false);
+  const [activityDeleting, setActivityDeleting] = useState(false);
+  const [activityDeleteError, setActivityDeleteError] = useState<string | null>(null);
+  const [activitySearch, setActivitySearch] = useState('');
+  const [meetingVersion, setMeetingVersion] = useState(0);
+  const [scheduleVersion, setScheduleVersion] = useState(0);
+  const currentActivity = activities.find((activity) => activity.id === selectedActivityId) ?? null;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -84,6 +96,93 @@ export default function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    let active = true;
+    setActivitiesLoading(true);
+    setActivitiesError(null);
+    activityApi.listActivities()
+      .then((rows) => {
+        if (!active) return;
+        setActivities(rows);
+        setSelectedActivityId((current) => current != null && rows.some((item) => item.id === current) ? current : null);
+      })
+      .catch((requestError: Error) => {
+        if (active) setActivitiesError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setActivitiesLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const visibleActivities = activities.filter((activity) => {
+    const keyword = activitySearch.trim().toLocaleLowerCase('zh-TW');
+    return !keyword || [activity.name, activity.activity_type, activity.coordinator, activity.venue]
+      .some((value) => value?.toLocaleLowerCase('zh-TW').includes(keyword));
+  });
+  const activeCount = activities.filter((activity) => ['準備中', '進行中'].includes(activity.status)).length;
+  const completedCount = activities.filter((activity) => activity.status === '已完成').length;
+
+  const selectActivity = (activityId: number) => {
+    setSelectedActivityId(activityId);
+    setActivityFormOpen(false);
+    setEditingActivity(null);
+    setActivityFormError(null);
+    setActivityDeleteError(null);
+    handleSetView('overview');
+  };
+
+  const openCreateActivity = () => {
+    setEditingActivity(null);
+    setActivityFormError(null);
+    setActivityFormOpen(true);
+  };
+
+  const openEditActivity = () => {
+    if (!currentActivity) return;
+    setEditingActivity(currentActivity);
+    setActivityFormError(null);
+    setActivityFormOpen(true);
+  };
+
+  const saveActivity = async (payload: ActivityInput) => {
+    setActivitySaving(true);
+    setActivityFormError(null);
+    try {
+      if (editingActivity) {
+        const updated = await activityApi.updateActivity(editingActivity.id, payload);
+        setActivities((current) => current.map((activity) => activity.id === updated.id ? updated : activity));
+      } else {
+        const created = await activityApi.createActivity(payload);
+        setActivities((current) => [created, ...current]);
+        setSelectedActivityId(created.id);
+        setCurrentView('overview');
+      }
+      setActivityFormOpen(false);
+      setEditingActivity(null);
+    } catch (requestError) {
+      setActivityFormError(requestError instanceof Error ? requestError.message : '活動儲存失敗');
+    } finally {
+      setActivitySaving(false);
+    }
+  };
+
+  const deleteCurrentActivity = async () => {
+    if (!currentActivity || !window.confirm(`確定刪除「${currentActivity.name}」？有會議或待辦時後端會拒絕刪除。`)) return;
+    setActivityDeleting(true);
+    setActivityDeleteError(null);
+    try {
+      await activityApi.deleteActivity(currentActivity.id);
+      setActivities((current) => current.filter((activity) => activity.id !== currentActivity.id));
+      setSelectedActivityId(null);
+      setCurrentView('activities');
+    } catch (requestError) {
+      setActivityDeleteError(requestError instanceof Error ? requestError.message : '活動刪除失敗');
+    } finally {
+      setActivityDeleting(false);
+    }
+  };
 
   const handleUpload = () => {
     const fileInput = document.createElement('input');
@@ -249,9 +348,9 @@ export default function App() {
           </nav>
 
           <div className="sidebar-note">
-            <span className="eyebrow">2026 屆</span>
+            <span className="eyebrow">ACTIVITY DATA</span>
             <strong>資管系學會</strong>
-            <span>4 個活動・2 個正在處理</span>
+            <span>{activities.length} 個活動・{activeCount} 個正在處理</span>
           </div>
           <div className="profile">
             <span className="avatar">林</span>
@@ -262,6 +361,10 @@ export default function App() {
 
         <main className={`main ${['chat', 'extract'].includes(currentView) ? 'chat-mode' : ''}`} id="main-content">
           <section className="page" id="activity-list-view" hidden={currentView !== 'activities'}>
+            <div className="global-prototype-notice" role="note">
+              <strong>第一階段串接</strong>
+              <span>Activity、Meeting、Task 已連接資料庫；Decision、Schedule、Incident 仍為操作示意。</span>
+            </div>
             <div className="page-heading">
               <div>
                 <p className="eyebrow">ACTIVITY HUB</p>
@@ -270,53 +373,50 @@ export default function App() {
               </div>
               <div className="heading-actions">
                 <button className="button secondary open-record" type="button">＋ 新增紀錄</button>
-                <button className="button primary" id="open-new-activity" type="button">＋ 新增活動</button>
+                <button className="button primary" id="open-new-activity" type="button" onClick={openCreateActivity}>＋ 新增活動</button>
               </div>
             </div>
 
             <div className="summary-strip" aria-label="活動摘要">
-              <article><span>今年活動</span><strong>4</strong><small>四種狀態各 1 個</small></article>
-              <article><span>正在處理</span><strong>2</strong><small>1 個準備中・1 個進行中</small></article>
-              <article><span>已完成</span><strong>1</strong><small>資管週已進入交接整理</small></article>
-              <article className="accent-card"><span>目前執行中</span><strong>制服趴</strong><small>晚間 18:30 結束</small></article>
+              <article><span>全部活動</span><strong>{activities.length}</strong><small>SQLite 中的真實資料</small></article>
+              <article><span>正在處理</span><strong>{activeCount}</strong><small>準備中或進行中</small></article>
+              <article><span>已完成</span><strong>{completedCount}</strong><small>可進入活動後檢討</small></article>
+              <article className="accent-card"><span>目前選取</span><strong>{currentActivity?.name || '尚未選擇'}</strong><small>{currentActivity?.status || '請從列表進入活動'}</small></article>
             </div>
 
             <div className="surface">
               <div className="toolbar">
-                <div className="year-switch" aria-label="選擇年度">
-                  <button className="icon-button" type="button" aria-label="上一年">‹</button>
-                  <strong>2026 年度</strong>
-                  <button className="icon-button" type="button" aria-label="下一年">›</button>
-                </div>
+                <div className="year-switch" aria-label="資料來源"><strong>全部年度</strong></div>
                 <label className="search-field">
                   <span aria-hidden="true">⌕</span>
-                  <input type="search" placeholder="搜尋活動" aria-label="搜尋活動" />
+                  <input type="search" placeholder="搜尋活動" aria-label="搜尋活動" value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} />
                 </label>
               </div>
 
-              <div className="table-wrap">
+              {activitiesError && <div className="api-message error" role="alert">{activitiesError}</div>}
+              {activitiesLoading && <div className="api-state">載入活動中…</div>}
+              {!activitiesLoading && !activitiesError && visibleActivities.length === 0 && <div className="api-state empty"><h3>沒有活動資料</h3><p>建立第一個活動後即可開始管理會議與待辦。</p><button className="button primary" type="button" onClick={openCreateActivity}>新增活動</button></div>}
+
+              <div className="table-wrap" hidden={activitiesLoading || visibleActivities.length === 0}>
                 <table className="activity-table">
                   <thead><tr><th>活動</th><th>日期</th><th>狀態</th><th>下一步行動</th><th>負責人</th><th><span className="sr-only">操作</span></th></tr></thead>
                   <tbody>
-                    {activityList.map((activity) => (
+                    {visibleActivities.map((activity, index) => (
                       <tr
                         key={activity.id}
                         className="activity-row"
                         tabIndex={0}
-                        // 🌟 魔法在這裡：點擊時，設定選擇的活動 ID，並切換到工作台畫面！
-                        onClick={() => {
-                          setCurrentActivityId(activity.id);
-                          handleSetView('overview');
-                        }}
+                        onClick={() => selectActivity(activity.id)}
+                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') selectActivity(activity.id); }}
                       >
                         <td>
-                          <span className={`activity-glyph ${activity.glyphColor}`}>{activity.glyph}</span>
-                          <span><strong>{activity.name}</strong><small>{activity.type}・{activity.people}</small></span>
+                          <span className={`activity-glyph ${GLYPH_COLORS[index % GLYPH_COLORS.length]}`}>{activity.name.charAt(0)}</span>
+                          <span><strong>{activity.name}</strong><small>{activity.activity_type || '未分類'}・{activity.expected_attendees == null ? '人數未定' : `${activity.expected_attendees} 人`}</small></span>
                         </td>
-                        <td>{activity.date}</td>
-                        <td><span className={`status ${activity.statusClass}`}>{activity.status}</span></td>
-                        <td><strong>{activity.nextAction}</strong><small>{activity.nextMeetingDate}</small></td>
-                        <td><span className="person">{activity.lead.charAt(0)}</span>{activity.lead}</td>
+                        <td>{formatActivityDate(activity)}</td>
+                        <td><span className={`status ${getStatusClass(activity.status)}`}>{activity.status}</span></td>
+                        <td><strong>{activity.venue || '地點未定'}</strong><small>預算 {activity.budget == null ? '未填寫' : new Intl.NumberFormat('zh-TW').format(activity.budget)}</small></td>
+                        <td><span className="person">{(activity.coordinator || '?').charAt(0)}</span>{activity.coordinator || '未指定'}</td>
                         <td>›</td>
                       </tr>
                     ))}
@@ -326,24 +426,18 @@ export default function App() {
             </div>
           </section>
 
+          {currentActivity && (
           <section className="page activity-workspace" id="activity-workspace" hidden={['activities', 'chat', 'extract'].includes(currentView)}>
             <div className="activity-heading">
               <div className="title-lockup">
-                {/* 1. 動態顏色與圖示 */}
-                <span className={`activity-glyph ${currentActivity.glyphColor}`}>
-                  {currentActivity.glyph}
-                </span>
+                <span className={`activity-glyph ${GLYPH_COLORS[currentActivity.id % GLYPH_COLORS.length]}`}>{currentActivity.name.charAt(0)}</span>
                 <div>
-                  <p className="eyebrow">2026 年度</p>
-                  {/* 2. 動態標題 (加上 color: 'var(--ink)' 確保不會變隱形白字) */}
+                  <p className="eyebrow">{currentActivity.year} 年度</p>
                   <h1 style={{ color: 'var(--ink)', margin: '0' }}>{currentActivity.name}</h1>
-                  {/* 3. 動態狀態、日期與地點 */}
                   <div className="activity-meta">
-                    <span className={`status ${currentActivity.statusClass}`}>
-                      {currentActivity.status}
-                    </span>
-                    <span>{currentActivity.fullDate}</span>
-                    <span>{currentActivity.location}</span>
+                    <span className={`status ${getStatusClass(currentActivity.status)}`}>{currentActivity.status}</span>
+                    <span>{formatActivityDate(currentActivity)}</span>
+                    <span>{currentActivity.venue || '地點未定'}</span>
                   </div>
                 </div>
               </div>
@@ -382,22 +476,22 @@ export default function App() {
             </nav>
             <div className="workspace-main">
               <div className="workspace-content">
-                <OverviewPanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
+                <OverviewPanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} onEdit={openEditActivity} onDelete={deleteCurrentActivity} deleting={activityDeleting} deleteError={activityDeleteError} />
 
                 {/* --- 這裡略過部分靜態結構，確保你原本的活動前/中/後等區塊不受影響 --- */}
                 {/* 所有的 section 保持原樣，因為它們的顯示邏輯在之後掛上 mockData 後會由狀態驅動 */}
 
                 <BeforePanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
 
-                <MeetingPanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
+                <MeetingPanel key={`meeting-${currentActivity.id}`} activityId={currentActivity.id} activityName={currentActivity.name} currentView={currentView} setCurrentView={setCurrentView} onMeetingsChanged={() => setMeetingVersion((value) => value + 1)} />
 
-                <TasksPanel currentActivity={currentActivity} currentView={currentView} />
+                <TasksPanel key={`tasks-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} />
 
-                <DecisionsPanel currentActivity={currentActivity} currentView={currentView} />
+                <DecisionsPanel key={`decisions-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} />
 
-                <SchedulePanel currentActivity={currentActivity} currentView={currentView} />
+                <SchedulePanel key={`schedule-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} onSchedulesChanged={() => setScheduleVersion((value) => value + 1)} />
 
-                <DuringPanel currentView={currentView} setCurrentView={setCurrentView} />
+                <DuringPanel key={`during-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} setCurrentView={setCurrentView} scheduleVersion={scheduleVersion} />
 
                 <AfterPanel currentView={currentView} />
 
@@ -417,8 +511,8 @@ export default function App() {
                 </button>
                 <div className="module-subnav" hidden={!['before', 'meeting', 'tasks', 'decisions', 'schedule'].includes(currentView)}>
                   <button className={currentView === 'meeting' ? 'active' : ''} type="button" onClick={() => setCurrentView('meeting')}>籌備會議</button>
-                  <button className={currentView === 'tasks' ? 'active' : ''} type="button" onClick={() => setCurrentView('tasks')}>待辦事項 <b>5</b></button>
-                  <button className={currentView === 'decisions' ? 'active' : ''} type="button" onClick={() => setCurrentView('decisions')}>決策 <b>2</b></button>
+                  <button className={currentView === 'tasks' ? 'active' : ''} type="button" onClick={() => setCurrentView('tasks')}>待辦事項</button>
+                  <button className={currentView === 'decisions' ? 'active' : ''} type="button" onClick={() => setCurrentView('decisions')}>決策</button>
                   <button className={currentView === 'schedule' ? 'active' : ''} type="button" onClick={() => setCurrentView('schedule')}>流程規劃</button>
                 </div>
                 <button className={`module-link ${currentView === 'during' ? 'active' : ''}`} type="button" onClick={() => setCurrentView('during')}>
@@ -430,6 +524,7 @@ export default function App() {
               </aside>
             </div>
           </section>
+          )}
 
           {/* 9. LLM 聊天大面板視圖 */}
           {currentView === 'chat' && <ChatPanel />}
@@ -527,14 +622,15 @@ export default function App() {
         </form>
       </dialog>
 
-      <dialog className="modal small-modal" id="activity-modal">
-        <form method="dialog"><div className="modal-head"><div><p className="eyebrow">NEW ACTIVITY</p><h2>新增活動</h2></div><button className="close-button" value="cancel" aria-label="關閉">×</button></div>
-          <label className="field"><span>活動名稱</span><input type="text" placeholder="例如：新生茶會" /></label>
-          <div className="two-fields"><label className="field"><span>年度</span><select><option>2026</option><option>2027</option></select></label><label className="field"><span>活動類型</span><select><option>大型活動</option><option>校內活動</option><option>聯誼活動</option><option>其他</option></select></label></div>
-          <div className="two-fields"><label className="field"><span>活動日期</span><input type="date" defaultValue="2026-11-01" /></label><label className="field"><span>主要負責人</span><input type="text" placeholder="輸入姓名" /></label></div>
-          <div className="modal-actions"><button className="button secondary" value="cancel">取消</button><button className="button primary" id="save-activity" value="default">建立活動</button></div>
-        </form>
-      </dialog>
+      {activityFormOpen && (
+        <ActivityFormModal
+          activity={editingActivity}
+          submitting={activitySaving}
+          error={activityFormError}
+          onCancel={() => { if (!activitySaving) setActivityFormOpen(false); }}
+          onSubmit={saveActivity}
+        />
+      )}
 
       <dialog className="modal small-modal" id="meeting-upload-modal">
         <form method="dialog" id="meeting-upload-form"><div className="modal-head"><div><p className="eyebrow">MEETING FILE</p><h2>上傳會議紀錄</h2></div><button className="close-button" type="button" aria-label="關閉">×</button></div>
@@ -577,4 +673,19 @@ export default function App() {
       <div className="toast" id="toast" role="status" aria-live="polite"></div>
     </>
   );
+}
+
+const GLYPH_COLORS = ['cyan', 'violet', 'orange', 'pink'];
+
+function getStatusClass(status: string): string {
+  if (status === '已完成') return 'completed';
+  if (status === '進行中') return 'ongoing';
+  if (status === '準備中') return 'preparing';
+  return 'not-started';
+}
+
+function formatActivityDate(activity: Activity): string {
+  if (!activity.start_date && !activity.end_date) return '日期未定';
+  if (!activity.end_date || activity.start_date === activity.end_date) return activity.start_date || activity.end_date || '日期未定';
+  return `${activity.start_date || '未定'} ～ ${activity.end_date}`;
 }

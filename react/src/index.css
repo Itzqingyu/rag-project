@@ -1080,3 +1080,35 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* Activity Management API integration states and forms. */
+.api-message,
+.api-state {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink-soft);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+
+.api-message.error {
+  border-color: #f1b6b6;
+  background: #fff4f4;
+  color: #9f2d2d;
+}
+
+.api-state.empty { padding: 32px; text-align: center; }
+.api-state.empty h3 { margin: 0 0 8px; color: var(--ink); }
+.api-state.empty p { margin: 0 0 16px; color: var(--muted); }
+
+.button.danger {
+  border-color: #e1a6a6;
+  background: #fff4f4;
+  color: #a32626;
+}
+
+.button.danger:hover { background: #ffe5e5; }
+.danger-text { color: #a32626 !important; }
