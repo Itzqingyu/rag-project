@@ -5,7 +5,7 @@
 .filter-row {
   display: flex;
   gap: 7px;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
 }
 
 .filter {
@@ -143,4 +143,13 @@
   .task-board.two-columns {
     grid-template-columns: 1fr;
   }
+}
+
+.task-header-desc {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.task-add-btn {
+  margin-bottom: 16px;
 }

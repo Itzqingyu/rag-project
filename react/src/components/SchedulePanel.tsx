@@ -169,11 +169,47 @@ export default function SchedulePanel({ activityId, currentView, meetingVersion,
     }
   };
 
+  const sortedSchedules = [...schedules].sort((a, b) => {
+    // 第 1 關：比較 start_time
+    const startA = new Date(a.start_time || '').getTime() || Infinity;
+    const startB = new Date(b.start_time || '').getTime() || Infinity;
+
+    if (startA !== startB) {
+      return startA - startB; // 升冪：越早開始的排越上面
+    }
+
+    // 第 2 關：如果開始時間一模一樣，就比較 end_time
+    const endA = new Date(a.end_time || '').getTime() || Infinity;
+    const endB = new Date(b.end_time || '').getTime() || Infinity;
+    
+    return endA - endB; // 升冪：越早結束的排越上面
+  });
+
+  // 處理開始時間：回傳帶有換行標籤 (<br />) 的 React 結構
+  const formatStartTime = (timeStr?: string | null) => {
+    if (!timeStr) return '時間未定';
+    const datePart = timeStr.substring(5, 10); // 擷取 09-24
+    const timePart = timeStr.substring(11, 16); // 擷取 23:30
+    
+    return (
+      <>
+        {datePart}T<br />
+        {timePart}
+      </>
+    );
+  };
+
+  const formatEndTime = (timeStr?: string | null) => {
+    if (!timeStr) return '';
+    // 擷取 09-24T23:30 後，把 'T' 替換成 'T '
+    return timeStr.substring(5, 16).replace('T', 'T ');
+  };
+
   return (
     <section className={`view-panel ${currentView === 'schedule' ? 'active' : ''}`} data-panel="schedule">
       <div className="section-heading">
-        <div><p className="eyebrow">SCHEDULE</p><h2>活動流程規劃</h2><p>只顯示目前 Activity 的流程。</p></div>
-        <button className="button primary" type="button" onClick={openCreate}>＋ 新增流程</button>
+        <div><p className="eyebrow">SCHEDULE</p><h2>活動流程規劃</h2><p style={{ marginTop: '4px', marginBottom: '8px' }}>只顯示目前 Activity 的流程。</p></div>
+        <button className="button primary" type="button" style={{ marginBottom: '16px' }} onClick={openCreate}>＋ 新增流程</button>
       </div>
 
       {error && <div className="api-message error" role="alert">{error}</div>}
@@ -181,16 +217,23 @@ export default function SchedulePanel({ activityId, currentView, meetingVersion,
       {!loading && schedules.length === 0 && <div className="api-state empty"><h3>目前沒有活動流程</h3><p>新增流程後會顯示在這裡。</p></div>}
 
       {schedules.length > 0 && <div className="timeline">
-        {schedules.map((schedule) => (
+        {/* 👇 1. 把 schedules 改成 sortedSchedules */}
+        {sortedSchedules.map((schedule) => (
           <article key={schedule.id}>
-            <time>{schedule.start_time || '時間未定'}</time>
+            
+            {/* 👇 2. 用 formatTime 把落落長的字串變短 */}
+            <time>{formatStartTime(schedule.start_time)}</time>
+            
             <i></i>
             <div>
               <span className="category activity">{schedule.category}</span>
               <h3>{schedule.name}</h3>
               <p>{schedule.location}・負責人：{schedule.owner}</p>
               <div className="detail-tags">
-                {schedule.end_time && <span>結束：{schedule.end_time}</span>}
+                
+                {/* 👇 3. 結束時間順便一起變短 */}
+                {schedule.end_time && <span>結束：{formatEndTime(schedule.end_time)}</span>}
+                
                 <span>{schedule.meeting_id == null ? '未綁定會議' : meetingNames.get(schedule.meeting_id) || `會議 #${schedule.meeting_id}`}</span>
                 {schedule.notes && <span>{schedule.notes}</span>}
               </div>

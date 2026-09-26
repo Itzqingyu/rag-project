@@ -22,7 +22,7 @@ export interface Activity {
 export interface ActivityInput {
   name: string;
   year: number;
-  status: string;
+  status: ActivityStatus;
   start_date: string | null;
   end_date: string | null;
   venue: string | null;
@@ -101,6 +101,7 @@ export interface Decision {
   confirmation_status: ConfirmationStatus;
   created_at: string;
   updated_at: string;
+  state: string;
 }
 
 export interface DecisionInput {
@@ -112,6 +113,7 @@ export interface DecisionInput {
   reason: string;
   source: string;
   confirmation_status: ConfirmationStatus;
+  outcome_note: string;
 }
 
 export type DecisionUpdate = Partial<Omit<DecisionInput, 'activity_id'>> & {
@@ -142,6 +144,7 @@ export interface ScheduleInput {
   location: string;
   owner: string;
   notes: string;
+  outcome_note?: string | null;
   category: string;
 }
 

@@ -63,6 +63,7 @@ export default function App() {
   const [activitySearch, setActivitySearch] = useState('');
   const [meetingVersion, setMeetingVersion] = useState(0);
   const [scheduleVersion, setScheduleVersion] = useState(0);
+  const [currentTab, setCurrentTab] = useState('overview');
   const currentActivity = activities.find((activity) => activity.id === selectedActivityId) ?? null;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -399,7 +400,7 @@ export default function App() {
 
               <div className="table-wrap" hidden={activitiesLoading || visibleActivities.length === 0}>
                 <table className="activity-table">
-                  <thead><tr><th>活動</th><th>日期</th><th>狀態</th><th>下一步行動</th><th>負責人</th><th><span className="sr-only">操作</span></th></tr></thead>
+                  <thead><tr><th>活動</th><th>日期</th><th>狀態</th><th>地點/預算</th><th>負責人</th><th><span className="sr-only">操作</span></th></tr></thead>
                   <tbody>
                     {visibleActivities.map((activity, index) => (
                       <tr
@@ -476,26 +477,57 @@ export default function App() {
             </nav>
             <div className="workspace-main">
               <div className="workspace-content">
-                <OverviewPanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} onEdit={openEditActivity} onDelete={deleteCurrentActivity} deleting={activityDeleting} deleteError={activityDeleteError} />
+                {/* 01 總覽 */}
+                {currentView === 'overview' && (
+                  <OverviewPanel 
+                    currentActivity={currentActivity} 
+                    currentView={currentView} 
+                    setCurrentView={setCurrentView} 
+                    onEdit={openEditActivity} 
+                    onDelete={deleteCurrentActivity} 
+                    deleting={activityDeleting} 
+                    deleteError={activityDeleteError} 
+                  />
+                )}
 
-                {/* --- 這裡略過部分靜態結構，確保你原本的活動前/中/後等區塊不受影響 --- */}
-                {/* 所有的 section 保持原樣，因為它們的顯示邏輯在之後掛上 mockData 後會由狀態驅動 */}
+                {/* 02 活動前 - 主畫面 (點擊頂部標籤時顯示) */}
+                {currentView === 'before' && (
+                  <BeforePanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
+                )}
 
-                <BeforePanel currentActivity={currentActivity} currentView={currentView} setCurrentView={setCurrentView} />
+                {/* 02 活動前 - 籌備會議 */}
+                {currentView === 'meeting' && (
+                  <MeetingPanel key={`meeting-${currentActivity.id}`} activityId={currentActivity.id} activityName={currentActivity.name} currentView={currentView} setCurrentView={setCurrentView} onMeetingsChanged={() => setMeetingVersion((value) => value + 1)} />
+                )}
 
-                <MeetingPanel key={`meeting-${currentActivity.id}`} activityId={currentActivity.id} activityName={currentActivity.name} currentView={currentView} setCurrentView={setCurrentView} onMeetingsChanged={() => setMeetingVersion((value) => value + 1)} />
+                {/* 02 活動前 - 待辦事項 */}
+                {currentView === 'tasks' && (
+                  <TasksPanel key={`tasks-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} />
+                )}
 
-                <TasksPanel key={`tasks-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} />
+                {/* 02 活動前 - 決策 */}
+                {currentView === 'decisions' && (
+                  <DecisionsPanel key={`decisions-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} />
+                )}
 
-                <DecisionsPanel key={`decisions-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} />
+                {/* 02 活動前 - 流程規劃 */}
+                {currentView === 'schedule' && (
+                  <SchedulePanel key={`schedule-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} onSchedulesChanged={() => setScheduleVersion((value) => value + 1)} />
+                )}
 
-                <SchedulePanel key={`schedule-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} meetingVersion={meetingVersion} onSchedulesChanged={() => setScheduleVersion((value) => value + 1)} />
+                {/* 03 活動中 */}
+                {currentView === 'during' && (
+                  <DuringPanel key={`during-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} setCurrentView={setCurrentView} scheduleVersion={scheduleVersion} />
+                )}
 
-                <DuringPanel key={`during-${currentActivity.id}`} activityId={currentActivity.id} currentView={currentView} setCurrentView={setCurrentView} scheduleVersion={scheduleVersion} />
+                {/* 04 活動後 */}
+                {currentView === 'after' && (
+                  <>
+                    <AfterPanel currentView={currentView} activityId={currentActivity.id} scheduleVersion={scheduleVersion}/>
+                    <SourceRecordPanel currentView={currentView} setCurrentView={setCurrentView} />
+                  </>
+                )}
 
-                <AfterPanel currentView={currentView} />
-
-                <SourceRecordPanel currentView={currentView} setCurrentView={setCurrentView} />
               </div>
 
               <aside className="module-nav" id="activity-module-nav">
