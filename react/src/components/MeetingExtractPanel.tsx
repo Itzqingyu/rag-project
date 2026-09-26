@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FileText,
   CheckCircle2,
@@ -13,33 +13,93 @@ import {
   RotateCcw,
   Plus,
   Trash2,
+  Upload,
+  Building2,
+  FolderPlus,
 } from 'lucide-react';
-import { fetchDocuments } from '../services/documentService';
-import { BackendDocument } from '../services/apiTypes';
+import {
+  fetchDocuments,
+  uploadDocument,
+  deleteDocumentByIdentifier,
+  checkDuplicateFileStem,
+} from '../api/documentService';
+import { BackendDocument } from '../api/apiTypes';
 import {
   extractMeetingSummary,
   commitMeetingSummary,
+  fetchActivities,
+  createActivity,
+  BackendActivity,
   MeetingPreviewData,
-} from '../services/meetingExtractService';
+} from '../api/meetingExtractService';
+import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
 import ConfirmModal from './ConfirmModal';
 import './MeetingExtractPanel.css';
 
 /**
+ * 格式化 ISO 時間字串為簡短展示文字
+ */
+const formatTimeString = (isoString?: string): string => {
+  if (!isoString) {
+    const now = new Date();
+    return `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  }
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } catch {
+    return isoString;
+  }
+};
+
+/**
  * AI 會議紀錄整理面板 (Meeting Extract Panel)
  * 核心功能：
- * 1. 從已上傳的文件挑選一份會議紀錄
+ * 1. 從已上傳的文件挑選一份會議紀錄 (支援快捷上傳與歷史紀錄抽屜管理)
  * 2. 呼叫 LLM 依據 System Prompt 提煉成標準化結構（會議摘要、決策、待辦）
  * 3. 呈現結構化標準表格並提供使用者確認
  * 4. 確認後一鍵寫入資料庫
  */
 export const MeetingExtractPanel: React.FC = () => {
+  // 原生檔案選擇器參照 (快捷直上使用)
+  const quickFileInputRef = useRef<HTMLInputElement>(null);
+
   // 已入庫文檔清單
   const [documents, setDocuments] = useState<BackendDocument[]>([]);
   // 當前選中的文檔 ID
   const [selectedDocId, setSelectedDocId] = useState<number | ''>('');
 
-  // 後端既有活動 ID (背後連結用，不干擾前端簡潔介面)
-  const [defaultActivityId, setDefaultActivityId] = useState<number>(1);
+  // 歷史紀錄文檔抽屜開啟狀態
+  const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
+  // 文檔上傳中狀態
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  // 抽屜專屬錯誤訊息
+  const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
+
+  // 活動關聯與建立狀態 (活動為會議與事項必填之外部關聯)
+  const [activities, setActivities] = useState<BackendActivity[]>([]);
+  const [selectedActivityId, setSelectedActivityId] = useState<number | ''>('');
+  const [activityMode, setActivityMode] = useState<'existing' | 'new'>('existing');
+  const [newActivityData, setNewActivityData] = useState<{
+    name: string;
+    year: number;
+    status: string;
+    venue: string;
+    activity_type: string;
+  }>({
+    name: '',
+    year: new Date().getFullYear(),
+    status: '籌備中',
+    venue: '',
+    activity_type: '會議',
+  });
+  const [isCreatingActivity, setIsCreatingActivity] = useState(false);
+  const [activityNotice, setActivityNotice] = useState<string | null>(null);
+
+  // 記錄當前預覽結果所關聯的來源文檔 ID 與檔名
+  const [extractedDocId, setExtractedDocId] = useState<number | null>(null);
+  const [extractedDocName, setExtractedDocName] = useState<string | null>(null);
 
   // 狀態管理
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
@@ -64,8 +124,19 @@ export const MeetingExtractPanel: React.FC = () => {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
+
+  /**
+   * 將 BackendDocument[] 轉換為 DocumentDrawer 所需的 DocumentItem[] 介面
+   */
+  const drawerDocuments: DocumentItem[] = documents.map((doc) => ({
+    id: String(doc.id),
+    name: doc.filename,
+    size: `${doc.chunk_count} 個切片`,
+    uploadedAt: formatTimeString(doc.upload_date),
+    chunkCount: doc.chunk_count,
+  }));
 
   /**
    * 載入已上傳文件清單
@@ -87,9 +158,116 @@ export const MeetingExtractPanel: React.FC = () => {
     }
   }, [selectedDocId]);
 
+  /**
+   * 載入後端所有活動清單
+   */
+  const loadActivitiesList = useCallback(async () => {
+    try {
+      const acts = await fetchActivities();
+      setActivities(acts);
+      if (acts.length > 0) {
+        setSelectedActivityId((prev) => (prev === '' ? acts[0].id : prev));
+      } else {
+        setActivityMode('new');
+      }
+    } catch {
+      // 靜默捕捉，不干擾初始化體驗
+    }
+  }, []);
+
   useEffect(() => {
     loadDocumentsList();
-  }, [loadDocumentsList]);
+    loadActivitiesList();
+  }, [loadDocumentsList, loadActivitiesList]);
+
+  /**
+   * 文檔真實上傳處理 (支援快捷按鈕與側邊抽屜上傳)
+   * 具備前置主檔名防呆：若清單中已有相同主檔名之文件，直接中斷並提示錯誤，不發送網路請求。
+   * 上傳並向量化成功後，自動更新列表並自動選中該新上傳之文件
+   */
+  const handleUploadFile = async (file: File) => {
+    setDocDrawerError(null);
+    setErrorMessage(null);
+
+    // 前端前置主檔名重複防呆校驗
+    const existingNames = documents.map((d) => d.filename || d.file_path);
+    const duplicate = checkDuplicateFileStem(file.name, existingNames);
+    if (duplicate) {
+      const msg = `已存在相同主檔名之文件「${duplicate}」。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。`;
+      setDocDrawerError(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    try {
+      const res = await uploadDocument(file);
+      const freshDocs = await fetchDocuments();
+      setDocuments(freshDocs);
+
+      // 若後端有回傳 doc_id 則直接選中，否則比對檔名選中
+      if (res.doc_id) {
+        setSelectedDocId(res.doc_id);
+      } else if (freshDocs.length > 0) {
+        const matched = freshDocs.find((d) => d.filename === file.name);
+        if (matched) {
+          setSelectedDocId(matched.id);
+        }
+      }
+      setSuccessMessage(`文檔「${file.name}」上傳成功，已自動載入並選中！`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDocDrawerError(`上傳檔案失敗：${msg}`);
+      setErrorMessage(`上傳檔案失敗：${msg}`);
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  /**
+   * 快捷檔案選擇器 Change 事件處理
+   */
+  const handleQuickFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      handleUploadFile(file);
+      e.target.value = '';
+    }
+  };
+
+  /**
+   * 刪除指定文件 (呼叫 DELETE /documents/{id})
+   * 若刪除之文件為當前選中項，自動重設選中狀態並清空預覽
+   */
+  const handleDeleteDocument = (id: string) => {
+    const targetDoc = documents.find((d) => String(d.id) === id);
+    const docName = targetDoc ? `「${targetDoc.filename}」` : '此文件';
+
+    setConfirmDialog({
+      isOpen: true,
+      title: '確定要刪除歷史紀錄文檔？',
+      message: `確定要自歷史紀錄中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setDocDrawerError(null);
+          await deleteDocumentByIdentifier(id);
+          const freshDocs = await fetchDocuments();
+          setDocuments(freshDocs);
+
+          // 若刪除的是當前選中項，清空選中項與預覽資料
+          if (String(selectedDocId) === id) {
+            setSelectedDocId(freshDocs.length > 0 ? freshDocs[0].id : '');
+            setPreviewData(null);
+            setIsCommitted(false);
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setDocDrawerError(`刪除文檔失敗：${msg}`);
+        }
+      },
+    });
+  };
 
   /**
    * 步驟 1：觸發 LLM 根據 system prompt 整理會議紀錄 (POST /extract_summary)
@@ -104,10 +282,41 @@ export const MeetingExtractPanel: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsCommitted(false);
+    setActivityNotice(null);
 
     try {
       const res = await extractMeetingSummary(Number(selectedDocId));
       setPreviewData(res.preview_data);
+
+      // 保存本次萃取來源文件之 ID 與檔名
+      const currentDoc = documents.find((d) => d.id === selectedDocId);
+      const effectiveDocId = res.doc_id ?? Number(selectedDocId);
+      setExtractedDocId(effectiveDocId);
+      setExtractedDocName(currentDoc?.filename ?? null);
+
+      // 同步取得最新活動清單以供關聯
+      const freshActs = await fetchActivities();
+      setActivities(freshActs);
+      if (freshActs.length > 0) {
+        setActivityMode('existing');
+        setSelectedActivityId((prev) => (prev !== '' ? prev : freshActs[0].id));
+      } else {
+        setActivityMode('new');
+        setSelectedActivityId('');
+      }
+
+      // 依萃取出的會議內容預先填入建議的新活動欄位
+      const parsedYear = res.preview_data.meeting.date
+        ? parseInt(res.preview_data.meeting.date.slice(0, 4), 10) || new Date().getFullYear()
+        : new Date().getFullYear();
+
+      setNewActivityData({
+        name: res.preview_data.meeting.name || '',
+        year: parsedYear,
+        status: '籌備中',
+        venue: res.preview_data.meeting.location || '',
+        activity_type: '會議',
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`會議整理失敗：${msg}`);
@@ -117,7 +326,53 @@ export const MeetingExtractPanel: React.FC = () => {
   };
 
   /**
+   * 快速建立新活動 (POST /activities)
+   */
+  const handleCreateNewActivity = async (): Promise<BackendActivity | null> => {
+    const trimmedName = newActivityData.name.trim();
+    if (!trimmedName) {
+      setErrorMessage('請填寫活動名稱（必填欄位）');
+      return null;
+    }
+    if (!newActivityData.year || newActivityData.year <= 0) {
+      setErrorMessage('請填寫合法的活動年份（必須為大於 0 之西元年份）');
+      return null;
+    }
+    if (!newActivityData.status) {
+      setErrorMessage('請指定活動狀態（必填欄位）');
+      return null;
+    }
+
+    setIsCreatingActivity(true);
+    setErrorMessage(null);
+    try {
+      const created = await createActivity({
+        name: trimmedName,
+        year: newActivityData.year,
+        status: newActivityData.status,
+        venue: newActivityData.venue.trim() || undefined,
+        activity_type: newActivityData.activity_type.trim() || undefined,
+      });
+
+      const nextActs = [...activities, created];
+      setActivities(nextActs);
+      setSelectedActivityId(created.id);
+      setActivityMode('existing');
+      setActivityNotice(`已成功建立活動「${created.name}」並自動選取！`);
+      setTimeout(() => setActivityNotice(null), 4000);
+      return created;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`建立新活動失敗：${msg}`);
+      return null;
+    } finally {
+      setIsCreatingActivity(false);
+    }
+  };
+
+  /**
    * 步驟 2：使用者確認後，寫入資料庫 (POST /commit_summary)
+   * 強調 Activity 必填防呆：若為現有模式必須選擇活動；若為新建模式則先建立活動再完成寫入。
    */
   const handleCommit = async () => {
     if (!previewData) return;
@@ -127,19 +382,45 @@ export const MeetingExtractPanel: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      const selectedDoc = documents.find((d) => d.id === selectedDocId);
+      let targetActivityId: number;
+
+      if (activityMode === 'existing') {
+        if (!selectedActivityId) {
+          setErrorMessage('請先選擇要關聯的目標活動（此欄位為必填項目）。');
+          setIsCommitting(false);
+          return;
+        }
+        targetActivityId = Number(selectedActivityId);
+      } else {
+        // 快速建立新活動模式：若尚未單獨點擊「立即建立」，則在此處自動先行建立
+        const created = await handleCreateNewActivity();
+        if (!created) {
+          setIsCommitting(false);
+          return;
+        }
+        targetActivityId = created.id;
+      }
+
+      const docIdToCommit = extractedDocId ?? (typeof selectedDocId === 'number' ? selectedDocId : undefined);
+      const selectedDoc =
+        documents.find((d) => d.id === docIdToCommit) ||
+        documents.find((d) => d.id === selectedDocId);
+
       const res = await commitMeetingSummary({
-        activity_id: defaultActivityId,
-        doc_id: typeof selectedDocId === 'number' ? selectedDocId : undefined,
-        source_file: selectedDoc?.filename,
+        activity_id: targetActivityId,
+        doc_id: docIdToCommit,
+        source_file: selectedDoc?.filename || extractedDocName || undefined,
         meeting: previewData.meeting,
         decisions: previewData.decisions,
         tasks: previewData.tasks,
       });
 
+      const targetActName =
+        activities.find((a) => a.id === targetActivityId)?.name || newActivityData.name;
+
       setIsCommitted(true);
       setSuccessMessage(
-        `${res.message}（包含 1 筆會議紀錄、${res.decisions.length} 項關鍵決策、${res.tasks.length} 項待辦事項）`
+        `${res.message} 已成功綁定至活動「${targetActName}」（包含 1 筆會議紀錄、${res.decisions.length} 項關鍵決策、${res.tasks.length} 項待辦事項）`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -294,6 +575,8 @@ export const MeetingExtractPanel: React.FC = () => {
     setIsCommitted(false);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setExtractedDocId(null);
+    setExtractedDocName(null);
   };
 
   return (
@@ -301,18 +584,29 @@ export const MeetingExtractPanel: React.FC = () => {
       {/* 頂部標題列 */}
       <header className="extract-top-header">
         <div className="extract-header-title">
-          <h2>AI 會議紀錄整理</h2>
+          <h2>DASH 會議紀錄整理</h2>
         </div>
-        <button
-          type="button"
-          className="button secondary sm-btn"
-          onClick={loadDocumentsList}
-          disabled={isLoadingDocs || isExtracting || isCommitting}
-          title="重新整理文件清單"
-        >
-          <RefreshCw size={14} className={isLoadingDocs ? 'spinning' : ''} />
-          <span>重新整理</span>
-        </button>
+        <div className="extract-header-actions">
+          <button
+            type="button"
+            className="button secondary sm-btn"
+            onClick={loadDocumentsList}
+            disabled={isLoadingDocs || isExtracting || isCommitting || isUploadingDoc}
+            title="重新整理文件清單"
+          >
+            <RefreshCw size={14} className={isLoadingDocs ? 'spinning' : ''} />
+            <span>重新整理</span>
+          </button>
+          <button
+            type="button"
+            className="button secondary sm-btn"
+            onClick={() => setIsDocDrawerOpen(true)}
+            title="開啟歷史紀錄文檔抽屜"
+          >
+            <FileText size={15} />
+            <span>歷史紀錄 ({documents.length})</span>
+          </button>
+        </div>
       </header>
 
       {/* 錯誤警示列 */}
@@ -350,10 +644,10 @@ export const MeetingExtractPanel: React.FC = () => {
                 id="meeting-doc-picker"
                 value={selectedDocId}
                 onChange={(e) => setSelectedDocId(e.target.value ? Number(e.target.value) : '')}
-                disabled={isExtracting || isCommitting}
+                disabled={isExtracting || isCommitting || isUploadingDoc}
               >
                 {documents.length === 0 ? (
-                  <option value="">尚未有已入庫之文件（可於對話面板的文檔抽屜上傳）</option>
+                  <option value="">尚未有已入庫之文件</option>
                 ) : (
                   documents.map((doc) => (
                     <option key={doc.id} value={doc.id}>
@@ -364,11 +658,30 @@ export const MeetingExtractPanel: React.FC = () => {
               </select>
             </div>
 
+            {/* 快捷上傳按鈕 */}
+            <button
+              type="button"
+              className="button secondary upload-shortcut-btn"
+              onClick={() => quickFileInputRef.current?.click()}
+              disabled={isExtracting || isCommitting || isUploadingDoc}
+              title="上傳新會議文件"
+            >
+              <Upload size={14} className={isUploadingDoc ? 'spinning' : ''} />
+              <span>{isUploadingDoc ? '上傳中…' : '上傳文件'}</span>
+            </button>
+            <input
+              ref={quickFileInputRef}
+              type="file"
+              accept=".md,.txt,.pdf,.docx"
+              style={{ display: 'none' }}
+              onChange={handleQuickFileChange}
+            />
+
             <button
               type="button"
               className="button extract-run-btn"
               onClick={handleExtract}
-              disabled={isExtracting || !selectedDocId || documents.length === 0}
+              disabled={isExtracting || !selectedDocId || documents.length === 0 || isUploadingDoc}
             >
               <span>{isExtracting ? 'LLM 整理分析中…' : '開始整理會議紀錄'}</span>
             </button>
@@ -405,12 +718,201 @@ export const MeetingExtractPanel: React.FC = () => {
         {/* 2. 呈現 LLM 返回的標準化架構表格 (供檢視、編輯與確認) */}
         {previewData && !isExtracting && (
           <>
+            {/* 關聯目標活動卡片 (必填) */}
+            <section className="extract-card activity-association-card">
+              <div className="extract-card-head">
+                <div className="extract-card-title">
+                  <Building2 size={18} className="activity-head-icon" />
+                  <span>關聯目標活動</span>
+                  <span className="required-pill">必填</span>
+                </div>
+                <div className="activity-mode-toggle" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activityMode === 'existing'}
+                    className={`activity-toggle-btn ${activityMode === 'existing' ? 'active' : ''}`}
+                    onClick={() => setActivityMode('existing')}
+                  >
+                    選擇現有活動 {activities.length > 0 ? `(${activities.length})` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activityMode === 'new'}
+                    className={`activity-toggle-btn ${activityMode === 'new' ? 'active' : ''}`}
+                    onClick={() => setActivityMode('new')}
+                  >
+                    <FolderPlus size={14} />
+                    <span>快速建立新活動</span>
+                  </button>
+                </div>
+              </div>
+
+              {activityNotice && (
+                <div className="activity-notice-banner" role="status">
+                  <Check size={14} />
+                  <span>{activityNotice}</span>
+                </div>
+              )}
+
+              {activityMode === 'existing' ? (
+                <div className="activity-select-container">
+                  {activities.length === 0 ? (
+                    <div className="activity-empty-box">
+                      <AlertCircle size={18} className="activity-empty-icon" />
+                      <div className="activity-empty-text">
+                        <strong>目前資料庫尚無任何活動紀錄</strong>
+                        <p>所有會議紀錄、決策與待辦項目皆須歸屬於指定活動。請切換至「快速建立新活動」填寫並建立。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="button secondary sm-btn"
+                        onClick={() => setActivityMode('new')}
+                      >
+                        <FolderPlus size={14} />
+                        <span>切換至建立新活動</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="activity-dropdown-group">
+                      <div className="activity-select-row">
+                        <label htmlFor="activity-select-input" className="activity-field-label">
+                          選擇歸屬活動 <span className="req-star">*</span>
+                        </label>
+                        <select
+                          id="activity-select-input"
+                          className="table-input activity-dropdown-select"
+                          value={selectedActivityId}
+                          onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : '')}
+                        >
+                          <option value="">-- 請選擇欲關聯的活動（必填）--</option>
+                          {activities.map((act) => (
+                            <option key={act.id} value={act.id}>
+                              {act.name} ({act.year ? `${act.year}年` : ''}{act.status ? ` • ${act.status}` : ''})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedActivityId && (
+                        <div className="activity-selected-card">
+                          <div className="activity-badge-meta">
+                            <span className="activity-badge-name">
+                              {activities.find((a) => a.id === selectedActivityId)?.name}
+                            </span>
+                            <span className="activity-badge-status">
+                              {activities.find((a) => a.id === selectedActivityId)?.status}
+                            </span>
+                            {activities.find((a) => a.id === selectedActivityId)?.year && (
+                              <span className="activity-badge-year">
+                                {activities.find((a) => a.id === selectedActivityId)?.year} 年
+                              </span>
+                            )}
+                            {activities.find((a) => a.id === selectedActivityId)?.venue && (
+                              <span className="activity-badge-venue">
+                                地點：{activities.find((a) => a.id === selectedActivityId)?.venue}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="activity-create-container">
+                  <div className="activity-form-grid">
+                    <div className="activity-form-field col-span-2">
+                      <label>
+                        活動名稱 <span className="req-star">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="table-input"
+                        value={newActivityData.name}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({ ...prev, name: e.target.value }))
+                        }
+                        placeholder="例如：2026 迎新宿營、第四季校園路跑"
+                      />
+                    </div>
+                    <div className="activity-form-field">
+                      <label>
+                        活動年份 <span className="req-star">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="table-input"
+                        value={newActivityData.year}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({
+                            ...prev,
+                            year: parseInt(e.target.value, 10) || new Date().getFullYear(),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="activity-form-field">
+                      <label>
+                        活動狀態 <span className="req-star">*</span>
+                      </label>
+                      <select
+                        className="table-input"
+                        value={newActivityData.status}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({ ...prev, status: e.target.value }))
+                        }
+                      >
+                        <option value="籌備中">籌備中</option>
+                        <option value="進行中">進行中</option>
+                        <option value="已結束">已結束</option>
+                      </select>
+                    </div>
+                    <div className="activity-form-field col-span-2">
+                      <label>活動地點 (選填)</label>
+                      <input
+                        type="text"
+                        className="table-input"
+                        value={newActivityData.venue}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({ ...prev, venue: e.target.value }))
+                        }
+                        placeholder="例如：活動中心 201 教室"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="activity-create-footer">
+                    <span className="activity-create-hint">
+                      填寫後可點擊立即建立，或直接點擊底部「確認寫入資料庫」自動連帶建立入庫。
+                    </span>
+                    <button
+                      type="button"
+                      className="button secondary sm-btn"
+                      onClick={handleCreateNewActivity}
+                      disabled={isCreatingActivity}
+                    >
+                      <FolderPlus size={14} />
+                      <span>{isCreatingActivity ? '建立中…' : '立即建立此活動'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+
             {/* 會議基本資訊表格 */}
             <section className="extract-card">
               <div className="extract-card-head">
                 <div className="extract-card-title">
                   <Calendar size={18} />
                   <span>會議基本摘要</span>
+                  {extractedDocName && (
+                    <span className="source-doc-badge" title={`已關聯來源文檔 ID: ${extractedDocId}`}>
+                      <FileText size={12} />
+                      來源：{extractedDocName}
+                    </span>
+                  )}
                 </div>
                 <div className="extract-card-actions">
                   <span className="extract-card-hint">可直接點擊欄位進行修改</span>
@@ -705,13 +1207,12 @@ export const MeetingExtractPanel: React.FC = () => {
                           </td>
                           <td>
                             <select
-                              className={`priority-select ${
-                                tsk.priority === '高'
-                                  ? 'high'
-                                  : tsk.priority === '低'
+                              className={`priority-select ${tsk.priority === '高'
+                                ? 'high'
+                                : tsk.priority === '低'
                                   ? 'low'
                                   : 'mid'
-                              }`}
+                                }`}
                               value={tsk.priority || '中'}
                               onChange={(e) =>
                                 handleUpdateTaskField(idx, 'priority', e.target.value)
@@ -766,12 +1267,24 @@ export const MeetingExtractPanel: React.FC = () => {
               {isCommitted
                 ? '已成功寫入資料庫'
                 : isCommitting
-                ? '寫入資料庫中…'
-                : '確認寫入資料庫'}
+                  ? '寫入資料庫中…'
+                  : '確認寫入資料庫'}
             </span>
           </button>
         </div>
       )}
+
+      {/* 歷史紀錄文檔抽屜 */}
+      <DocumentDrawer
+        isOpen={isDocDrawerOpen}
+        onClose={() => setIsDocDrawerOpen(false)}
+        documents={drawerDocuments}
+        onUploadFile={handleUploadFile}
+        onDeleteDocument={handleDeleteDocument}
+        isUploading={isUploadingDoc}
+        errorMessage={docDrawerError}
+        onClearError={() => setDocDrawerError(null)}
+      />
 
       {/* 全域模糊防手殘確認對話框 */}
       <ConfirmModal

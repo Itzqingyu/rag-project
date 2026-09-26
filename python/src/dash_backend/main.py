@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from dash_backend.document_processing.converter import convert_to_markdown
+from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
 from dash_backend.database import (
     get_doc_by_id,
     get_doc_by_path,
@@ -122,6 +122,7 @@ class ExtractSummaryRequest(BaseModel):
 
 class MeetingCreate(BaseModel):
     activity_id: Optional[int] = None
+    source_document_id: Optional[int] = None
     name: str
     start_time: str = ""
     end_time: str = ""
@@ -151,6 +152,8 @@ class DecisionCreate(BaseModel):
 
 class CommitSummaryRequest(BaseModel):
     activity_id: int
+    doc_id: Optional[int] = None
+    source_file: Optional[str] = None
     meeting: MeetingCreate
     decisions: List[DecisionCreate] = []
     tasks: List[TaskCreate] = []
@@ -189,6 +192,7 @@ class MeetingUpdate(BaseModel):
     content: Optional[str] = None
     activity_id: Optional[int] = None
     date: Optional[str] = None
+    source_document_id: Optional[int] = None
 
 class TaskUpdate(BaseModel):
     content: Optional[str] = None
@@ -266,7 +270,25 @@ def get_documents():
 
 @app.post("/upload", tags=["RAG Document"])
 def upload_document(file: UploadFile = File(...)):
-    """接受 MD, TXT, PDF, DOCX 上傳，由 converter 統一轉成 Markdown 並託管於 python/data/markdown/。"""
+    """接受 MD, TXT, PDF, DOCX 上傳，由 converter 統一轉成 Markdown 並託管於 python/data/markdown/。
+    具備主檔名防呆機制：若已存在相同主檔名之文件，直接拒絕並回傳 409 Conflict，嚴格禁止同名覆蓋。
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="未提供有效的檔案名稱")
+
+    # 1. 前置主檔名衝突防呆檢查（在做任何暫存檔或轉檔前進行）
+    base_name = os.path.basename(file.filename)
+    file_stem, ext = os.path.splitext(base_name)
+    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
+
+    existing_doc = get_doc_by_path(target_md_path)
+    if existing_doc:
+        existing_raw = existing_doc.get("raw_file_path") or existing_doc.get("filename") or f"{file_stem}.md"
+        raise HTTPException(
+            status_code=409,
+            detail=f"已存在相同主檔名的文件「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。"
+        )
+
     temp_dir = tempfile.mkdtemp()
     try:
         raw_file_path = os.path.join(temp_dir, file.filename)
@@ -276,10 +298,9 @@ def upload_document(file: UploadFile = File(...)):
         # 呼叫多格式轉檔器將檔案轉換為標準 Markdown
         target_md_path = convert_to_markdown(raw_file_path)
         
-        # 將轉換後的 Markdown 送入 RAG 引擎
+        # 將轉換後的 Markdown 送入 RAG 引擎（無覆蓋參數）
         chunks_added = add_document(
             file_path=target_md_path, 
-            force=True,
             raw_file_path=file.filename
         )
         
@@ -292,8 +313,12 @@ def upload_document(file: UploadFile = File(...)):
             "file_path": target_md_path,
             "chunks_added": chunks_added
         }
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -497,11 +522,13 @@ def extract_summary(req: ExtractSummaryRequest):
 
 @app.post("/commit_summary", tags=["AI Structured Extraction"])
 def commit_summary(req: CommitSummaryRequest):
-    """階段 2：將確認後資料逐筆寫入；中途失敗時，先前成功資料仍會保留。"""
+    """階段 2：將確認後資料逐筆寫入；自動綁定來源文檔 source_document_id。中途失敗時，先前成功資料仍會保留。"""
     try:
-        # 1. 寫入 Meeting
+        # 1. 寫入 Meeting (自動關聯來源文檔 source_document_id)
         meeting_dict = req.meeting.model_dump()
         meeting_dict["activity_id"] = req.activity_id
+        if meeting_dict.get("source_document_id") is None and req.doc_id is not None:
+            meeting_dict["source_document_id"] = req.doc_id
         created_meeting = add_meeting(**meeting_dict)
         meeting_id = created_meeting["id"]
 

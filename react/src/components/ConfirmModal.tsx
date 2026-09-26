@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import './ConfirmModal.css';
 
@@ -30,6 +30,20 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  // 追蹤滑鼠按下時是否為遮罩層本身，防止在 modal 內選字或拖曳到外面放開時誤觸關閉
+  const isMouseDownOnOverlay = useRef(false);
+
+  const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    isMouseDownOnOverlay.current = e.target === e.currentTarget;
+  };
+
+  const handleOverlayMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isMouseDownOnOverlay.current && e.target === e.currentTarget) {
+      onCancel();
+    }
+    isMouseDownOnOverlay.current = false;
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -38,12 +52,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
-      onClick={onCancel}
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
     >
-      <div
-        className="confirm-modal-card"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="confirm-modal-card">
         <div className="confirm-modal-icon-wrapper">
           {isDanger ? (
             <div className="confirm-icon-danger">

@@ -210,20 +210,20 @@ export default function App() {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
             role: 'assistant',
-            content: `✅ Successfully uploaded **${file.name}**. ${data.message} (Added ${data.chunks_added} chunks)`
+            content: `[Success] Successfully uploaded **${file.name}**. ${data.message} (Added ${data.chunks_added} chunks)`
           }]);
         } else {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
             role: 'assistant',
-            content: `❌ Failed to upload document: ${data.detail || 'Unknown error'}`
+            content: `[Failed] Failed to upload document: ${data.detail || 'Unknown error'}`
           }]);
         }
       } catch (error: any) {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'assistant',
-          content: `⚠️ Connection error: Make sure the FastAPI backend is running. (${error.message})`
+          content: `[Warning] Connection error: Make sure the FastAPI backend is running. (${error.message})`
         }]);
       } finally {
         setUploading(false);
@@ -314,7 +314,7 @@ export default function App() {
               >
                 <div className="nav-group-left">
                   <span className="nav-icon" aria-hidden="true"><Bot size={16} /></span>
-                  <span>AI 功能</span>
+                  <span>DASH Agent</span>
                 </div>
                 <span className="nav-group-arrow">
                   {isAiNavOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -330,7 +330,7 @@ export default function App() {
                     onClick={() => handleSetView('chat')}
                   >
                     <MessageSquare size={14} />
-                    <span>AI 對話</span>
+                    <span>對話</span>
                   </button>
 
                   {/* 子選項 2：會議紀錄整理 */}
@@ -351,10 +351,6 @@ export default function App() {
             <span className="eyebrow">ACTIVITY DATA</span>
             <strong>資管系學會</strong>
             <span>{activities.length} 個活動・{activeCount} 個正在處理</span>
-          </div>
-          <div className="profile">
-            <span className="avatar">林</span>
-            <span><strong>林同學</strong><small>活動組</small></span>
           </div>
         </aside>
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
