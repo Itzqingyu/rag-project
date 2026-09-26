@@ -14,6 +14,8 @@ import {
   Plus,
   Trash2,
   Upload,
+  Building2,
+  FolderPlus,
 } from 'lucide-react';
 import {
   fetchDocuments,
@@ -25,6 +27,9 @@ import { BackendDocument } from '../api/apiTypes';
 import {
   extractMeetingSummary,
   commitMeetingSummary,
+  fetchActivities,
+  createActivity,
+  BackendActivity,
   MeetingPreviewData,
 } from '../api/meetingExtractService';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
@@ -72,8 +77,25 @@ export const MeetingExtractPanel: React.FC = () => {
   // 抽屜專屬錯誤訊息
   const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
 
-  // 後端既有活動 ID (背後連結用，不干擾前端簡潔介面)
-  const [defaultActivityId, setDefaultActivityId] = useState<number>(1);
+  // 活動關聯與建立狀態 (活動為會議與事項必填之外部關聯)
+  const [activities, setActivities] = useState<BackendActivity[]>([]);
+  const [selectedActivityId, setSelectedActivityId] = useState<number | ''>('');
+  const [activityMode, setActivityMode] = useState<'existing' | 'new'>('existing');
+  const [newActivityData, setNewActivityData] = useState<{
+    name: string;
+    year: number;
+    status: string;
+    venue: string;
+    activity_type: string;
+  }>({
+    name: '',
+    year: new Date().getFullYear(),
+    status: '籌備中',
+    venue: '',
+    activity_type: '會議',
+  });
+  const [isCreatingActivity, setIsCreatingActivity] = useState(false);
+  const [activityNotice, setActivityNotice] = useState<string | null>(null);
 
   // 狀態管理
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
@@ -132,9 +154,27 @@ export const MeetingExtractPanel: React.FC = () => {
     }
   }, [selectedDocId]);
 
+  /**
+   * 載入後端所有活動清單
+   */
+  const loadActivitiesList = useCallback(async () => {
+    try {
+      const acts = await fetchActivities();
+      setActivities(acts);
+      if (acts.length > 0) {
+        setSelectedActivityId((prev) => (prev === '' ? acts[0].id : prev));
+      } else {
+        setActivityMode('new');
+      }
+    } catch {
+      // 靜默捕捉，不干擾初始化體驗
+    }
+  }, []);
+
   useEffect(() => {
     loadDocumentsList();
-  }, [loadDocumentsList]);
+    loadActivitiesList();
+  }, [loadDocumentsList, loadActivitiesList]);
 
   /**
    * 文檔真實上傳處理 (支援快捷按鈕與側邊抽屜上傳)
@@ -238,10 +278,35 @@ export const MeetingExtractPanel: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsCommitted(false);
+    setActivityNotice(null);
 
     try {
       const res = await extractMeetingSummary(Number(selectedDocId));
       setPreviewData(res.preview_data);
+
+      // 同步取得最新活動清單以供關聯
+      const freshActs = await fetchActivities();
+      setActivities(freshActs);
+      if (freshActs.length > 0) {
+        setActivityMode('existing');
+        setSelectedActivityId((prev) => (prev !== '' ? prev : freshActs[0].id));
+      } else {
+        setActivityMode('new');
+        setSelectedActivityId('');
+      }
+
+      // 依萃取出的會議內容預先填入建議的新活動欄位
+      const parsedYear = res.preview_data.meeting.date
+        ? parseInt(res.preview_data.meeting.date.slice(0, 4), 10) || new Date().getFullYear()
+        : new Date().getFullYear();
+
+      setNewActivityData({
+        name: res.preview_data.meeting.name || '',
+        year: parsedYear,
+        status: '籌備中',
+        venue: res.preview_data.meeting.location || '',
+        activity_type: '會議',
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`會議整理失敗：${msg}`);
@@ -251,7 +316,53 @@ export const MeetingExtractPanel: React.FC = () => {
   };
 
   /**
+   * 快速建立新活動 (POST /activities)
+   */
+  const handleCreateNewActivity = async (): Promise<BackendActivity | null> => {
+    const trimmedName = newActivityData.name.trim();
+    if (!trimmedName) {
+      setErrorMessage('請填寫活動名稱（必填欄位）');
+      return null;
+    }
+    if (!newActivityData.year || newActivityData.year <= 0) {
+      setErrorMessage('請填寫合法的活動年份（必須為大於 0 之西元年份）');
+      return null;
+    }
+    if (!newActivityData.status) {
+      setErrorMessage('請指定活動狀態（必填欄位）');
+      return null;
+    }
+
+    setIsCreatingActivity(true);
+    setErrorMessage(null);
+    try {
+      const created = await createActivity({
+        name: trimmedName,
+        year: newActivityData.year,
+        status: newActivityData.status,
+        venue: newActivityData.venue.trim() || undefined,
+        activity_type: newActivityData.activity_type.trim() || undefined,
+      });
+
+      const nextActs = [...activities, created];
+      setActivities(nextActs);
+      setSelectedActivityId(created.id);
+      setActivityMode('existing');
+      setActivityNotice(`已成功建立活動「${created.name}」並自動選取！`);
+      setTimeout(() => setActivityNotice(null), 4000);
+      return created;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`建立新活動失敗：${msg}`);
+      return null;
+    } finally {
+      setIsCreatingActivity(false);
+    }
+  };
+
+  /**
    * 步驟 2：使用者確認後，寫入資料庫 (POST /commit_summary)
+   * 強調 Activity 必填防呆：若為現有模式必須選擇活動；若為新建模式則先建立活動再完成寫入。
    */
   const handleCommit = async () => {
     if (!previewData) return;
@@ -261,9 +372,28 @@ export const MeetingExtractPanel: React.FC = () => {
     setSuccessMessage(null);
 
     try {
+      let targetActivityId: number;
+
+      if (activityMode === 'existing') {
+        if (!selectedActivityId) {
+          setErrorMessage('請先選擇要關聯的目標活動（此欄位為必填項目）。');
+          setIsCommitting(false);
+          return;
+        }
+        targetActivityId = Number(selectedActivityId);
+      } else {
+        // 快速建立新活動模式：若尚未單獨點擊「立即建立」，則在此處自動先行建立
+        const created = await handleCreateNewActivity();
+        if (!created) {
+          setIsCommitting(false);
+          return;
+        }
+        targetActivityId = created.id;
+      }
+
       const selectedDoc = documents.find((d) => d.id === selectedDocId);
       const res = await commitMeetingSummary({
-        activity_id: defaultActivityId,
+        activity_id: targetActivityId,
         doc_id: typeof selectedDocId === 'number' ? selectedDocId : undefined,
         source_file: selectedDoc?.filename,
         meeting: previewData.meeting,
@@ -271,9 +401,12 @@ export const MeetingExtractPanel: React.FC = () => {
         tasks: previewData.tasks,
       });
 
+      const targetActName =
+        activities.find((a) => a.id === targetActivityId)?.name || newActivityData.name;
+
       setIsCommitted(true);
       setSuccessMessage(
-        `${res.message}（包含 1 筆會議紀錄、${res.decisions.length} 項關鍵決策、${res.tasks.length} 項待辦事項）`
+        `${res.message} 已成功綁定至活動「${targetActName}」（包含 1 筆會議紀錄、${res.decisions.length} 項關鍵決策、${res.tasks.length} 項待辦事項）`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -569,6 +702,189 @@ export const MeetingExtractPanel: React.FC = () => {
         {/* 2. 呈現 LLM 返回的標準化架構表格 (供檢視、編輯與確認) */}
         {previewData && !isExtracting && (
           <>
+            {/* 關聯目標活動卡片 (必填) */}
+            <section className="extract-card activity-association-card">
+              <div className="extract-card-head">
+                <div className="extract-card-title">
+                  <Building2 size={18} className="activity-head-icon" />
+                  <span>關聯目標活動</span>
+                  <span className="required-pill">必填</span>
+                </div>
+                <div className="activity-mode-toggle" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activityMode === 'existing'}
+                    className={`activity-toggle-btn ${activityMode === 'existing' ? 'active' : ''}`}
+                    onClick={() => setActivityMode('existing')}
+                  >
+                    選擇現有活動 {activities.length > 0 ? `(${activities.length})` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activityMode === 'new'}
+                    className={`activity-toggle-btn ${activityMode === 'new' ? 'active' : ''}`}
+                    onClick={() => setActivityMode('new')}
+                  >
+                    <FolderPlus size={14} />
+                    <span>快速建立新活動</span>
+                  </button>
+                </div>
+              </div>
+
+              {activityNotice && (
+                <div className="activity-notice-banner" role="status">
+                  <Check size={14} />
+                  <span>{activityNotice}</span>
+                </div>
+              )}
+
+              {activityMode === 'existing' ? (
+                <div className="activity-select-container">
+                  {activities.length === 0 ? (
+                    <div className="activity-empty-box">
+                      <AlertCircle size={18} className="activity-empty-icon" />
+                      <div className="activity-empty-text">
+                        <strong>目前資料庫尚無任何活動紀錄</strong>
+                        <p>所有會議紀錄、決策與待辦項目皆須歸屬於指定活動。請切換至「快速建立新活動」填寫並建立。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="button secondary sm-btn"
+                        onClick={() => setActivityMode('new')}
+                      >
+                        <FolderPlus size={14} />
+                        <span>切換至建立新活動</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="activity-dropdown-group">
+                      <div className="activity-select-row">
+                        <label htmlFor="activity-select-input" className="activity-field-label">
+                          選擇歸屬活動 <span className="req-star">*</span>
+                        </label>
+                        <select
+                          id="activity-select-input"
+                          className="table-input activity-dropdown-select"
+                          value={selectedActivityId}
+                          onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : '')}
+                        >
+                          <option value="">-- 請選擇欲關聯的活動（必填）--</option>
+                          {activities.map((act) => (
+                            <option key={act.id} value={act.id}>
+                              {act.name} ({act.year ? `${act.year}年` : ''}{act.status ? ` • ${act.status}` : ''})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedActivityId && (
+                        <div className="activity-selected-card">
+                          <div className="activity-badge-meta">
+                            <span className="activity-badge-name">
+                              {activities.find((a) => a.id === selectedActivityId)?.name}
+                            </span>
+                            <span className="activity-badge-status">
+                              {activities.find((a) => a.id === selectedActivityId)?.status}
+                            </span>
+                            {activities.find((a) => a.id === selectedActivityId)?.year && (
+                              <span className="activity-badge-year">
+                                {activities.find((a) => a.id === selectedActivityId)?.year} 年
+                              </span>
+                            )}
+                            {activities.find((a) => a.id === selectedActivityId)?.venue && (
+                              <span className="activity-badge-venue">
+                                地點：{activities.find((a) => a.id === selectedActivityId)?.venue}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="activity-create-container">
+                  <div className="activity-form-grid">
+                    <div className="activity-form-field col-span-2">
+                      <label>
+                        活動名稱 <span className="req-star">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="table-input"
+                        value={newActivityData.name}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({ ...prev, name: e.target.value }))
+                        }
+                        placeholder="例如：2026 迎新宿營、第四季校園路跑"
+                      />
+                    </div>
+                    <div className="activity-form-field">
+                      <label>
+                        活動年份 <span className="req-star">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="table-input"
+                        value={newActivityData.year}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({
+                            ...prev,
+                            year: parseInt(e.target.value, 10) || new Date().getFullYear(),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="activity-form-field">
+                      <label>
+                        活動狀態 <span className="req-star">*</span>
+                      </label>
+                      <select
+                        className="table-input"
+                        value={newActivityData.status}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({ ...prev, status: e.target.value }))
+                        }
+                      >
+                        <option value="籌備中">籌備中</option>
+                        <option value="進行中">進行中</option>
+                        <option value="已結束">已結束</option>
+                      </select>
+                    </div>
+                    <div className="activity-form-field col-span-2">
+                      <label>活動地點 (選填)</label>
+                      <input
+                        type="text"
+                        className="table-input"
+                        value={newActivityData.venue}
+                        onChange={(e) =>
+                          setNewActivityData((prev) => ({ ...prev, venue: e.target.value }))
+                        }
+                        placeholder="例如：活動中心 201 教室"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="activity-create-footer">
+                    <span className="activity-create-hint">
+                      填寫後可點擊立即建立，或直接點擊底部「確認寫入資料庫」自動連帶建立入庫。
+                    </span>
+                    <button
+                      type="button"
+                      className="button secondary sm-btn"
+                      onClick={handleCreateNewActivity}
+                      disabled={isCreatingActivity}
+                    >
+                      <FolderPlus size={14} />
+                      <span>{isCreatingActivity ? '建立中…' : '立即建立此活動'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+
             {/* 會議基本資訊表格 */}
             <section className="extract-card">
               <div className="extract-card-head">

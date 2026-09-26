@@ -107,8 +107,11 @@ rag-project/
 1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
 2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
-4. 前端展示預覽結果供使用者校對修改
-5. 使用者確認後發起 `/commit_summary` 請求，依序寫入 SQLite `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時可能只完成部分寫入
+4. 前端展示預覽結果供使用者校對修改，並於頂部提供「關聯目標活動 (必填)」卡片：
+   - 支援「選擇現有活動」下拉關聯既有活動；若無活動則給予提示並引導建立。
+   - 支援「快速建立新活動」即時填寫活動名稱、年份與狀態，支援立即建立選取或於確認寫入時自動連帶建立。
+   - 具備活動必填防呆機制：若未選取或未填妥活動名稱，全面阻擋寫入並提示使用者。
+5. 使用者確認後發起 `/commit_summary` 請求，綁定指定或新建之 `activity_id`，依序寫入 SQLite `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時先前成功的資料會保留。
 
 ### 對話互動與會話記憶 (Session & Multi-turn Chat)
 1. 使用者可透過 `/sessions` 端點建立或管理對話會話。

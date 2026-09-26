@@ -72,8 +72,8 @@
 2. **AI 會議紀錄結構化提取與寫入流程 (Preview & Commit Workflow)**:
    - 前端發起 `/extract_summary` 請求帶入 `document_id`。
    - `llm_service.extract_structured_meeting_data` 自 `prompts/meeting_extraction.md` 載入系統提示詞，將 SQLite 中 `markdown_content` 全文 1-shot 餵給 LLM 提取為 JSON。
-   - 前端獲得預覽 JSON 供使用者檢視或人工校對修改。
-   - 前端發起 `/commit_summary` 請求，`main.py` 依序建立 Meeting、Decisions、Tasks。各 service 目前各自提交，因此中途失敗時已成功的資料會保留，呼叫端需呈現可能部分成功的結果。
+   - 前端獲得預覽 JSON 供使用者檢視或人工校對修改，並於「關聯目標活動」卡片選擇既有活動或快速建立新活動（必填）。
+   - 前端發起 `/commit_summary` 請求帶入所屬 `activity_id`，`main.py` 依序建立 Meeting、Decisions、Tasks 並綁定該活動。各 service 目前各自提交，因此中途失敗時已成功的資料會保留，呼叫端需呈現可能部分成功的結果。
 
 3. **活動與業務資料管理流程 (Activity Management)**:
    - `Activity` 為核心主體，其餘 `Meeting`, `Task`, `Decision`, `Schedule`, `Incident` 透過外鍵與其關聯。
@@ -115,6 +115,14 @@
     2. 後端 `/upload` 端點於最前置（做任何暫存檔或轉碼前）以主檔名檢查 SQLite，若已存在相同主檔名之文件，直接回傳 `HTTP 409 Conflict` 與防呆提示，零副作用保護既有文檔。
     3. 前端（`ChatPanel`, `MeetingExtractPanel`）於 `documentService.ts` 引入 `checkDuplicateFileStem`，選檔後於發起網路請求前即時中斷並於抽屜提示錯誤。
     4. 新增 `tests/test_upload_duplicate.py` 單元測試，後端 52 個單元測試與前端 20 個單元測試 100% 通過。
+- **AI 會議紀錄整理面板新增活動必填關聯與建立 UI (`MeetingExtractPanel.tsx`)**:
+  - **背景**: 純會議文字紀錄無法自動對應所屬活動，而資料庫中 `meetings`, `decisions`, `tasks` 均有必填之 `activity_id` 外鍵約束。
+  - **實作成果**:
+    1. 於預覽表格頂端新增「關聯目標活動 (必填)」卡片，提供「選擇現有活動」與「快速建立新活動」雙模式切換。
+    2. 串接 `GET /activities` 動態載入活動清單；若資料庫尚無活動，自動友善引導切換至新建活動。
+    3. 串接 `POST /activities` 支援即時填妥活動名稱、年份、狀態與地點，支援手動立即建立或於「確認寫入資料庫」時自動連帶建立入庫。
+    4. 落實活動必填防呆校驗，未指定活動時立即提示錯誤並阻擋寫入。
+    5. 前端 `meetingExtract.test.ts` 新增 `createActivity` 單元測試，前後端全套測試 100% 通過。
 
 
 

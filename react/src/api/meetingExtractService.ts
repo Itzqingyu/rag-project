@@ -103,6 +103,31 @@ export async function fetchActivities(): Promise<BackendActivity[]> {
 }
 
 /**
+ * 建立新活動 Payload 介面
+ */
+export interface CreateActivityPayload {
+  name: string;
+  year: number;
+  status: string;
+  start_date?: string;
+  end_date?: string;
+  venue?: string;
+  activity_type?: string;
+  coordinator?: string;
+  expected_attendees?: number;
+  budget?: number;
+}
+
+/**
+ * 建立新活動 (POST /activities)
+ */
+export async function createActivity(
+  payload: CreateActivityPayload
+): Promise<BackendActivity> {
+  return await apiClient.post<BackendActivity>('/activities', payload);
+}
+
+/**
  * 依指定文件 ID 或路徑發起 AI 會議結構化抽取
  * 對應後端 main.py:470 之 @app.post("/extract_summary") 端點
  * 透過 System Prompt 將整份會議文本 1-shot 提煉為 meeting, decisions, tasks
