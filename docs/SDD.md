@@ -83,7 +83,9 @@ rag-project/
 │   ├── tests/                    # 測試指令碼與單元測試
 │   │   ├── test_main.py          # 整合 CLI 互動測試工具 (含 Session 多輪對話與模式切換測試)
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
-│   │   └── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
+│   │   ├── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
+│   │   ├── test_upload_duplicate.py # 同主檔名上傳防呆與覆蓋行為單元測試
+│   │   └── test_meeting_extract_commit.py # AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
 │   │   ├── dash_database.sqlite  # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
@@ -105,13 +107,13 @@ rag-project/
 
 ### AI 結構化提取與預覽寫入 (Preview-Commit 流程)
 1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
-2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
+2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析，同時回傳對應來源文件的 `doc_id`
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
-4. 前端展示預覽結果供使用者校對修改，並於頂部提供「關聯目標活動 (必填)」卡片：
+4. 前端展示預覽結果供使用者校對修改，並於預覽標題處標示來源文件，於頂部提供「關聯目標活動 (必填)」卡片：
    - 支援「選擇現有活動」下拉關聯既有活動；若無活動則給予提示並引導建立。
    - 支援「快速建立新活動」即時填寫活動名稱、年份與狀態，支援立即建立選取或於確認寫入時自動連帶建立。
    - 具備活動必填防呆機制：若未選取或未填妥活動名稱，全面阻擋寫入並提示使用者。
-5. 使用者確認後發起 `/commit_summary` 請求，綁定指定或新建之 `activity_id`，依序寫入 SQLite `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時先前成功的資料會保留。
+5. 使用者確認後發起 `/commit_summary` 請求，帶入所選或新建之 `activity_id` 以及來源文件的 `doc_id`，後端自動將 `source_document_id` 注入並存入 SQLite `meetings` 表（外鍵指向 `documents.id`，具備 `ON DELETE SET NULL` 級聯防護），依序寫入 `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時先前成功的資料會保留。
 
 ### 對話互動與會話記憶 (Session & Multi-turn Chat)
 1. 使用者可透過 `/sessions` 端點建立或管理對話會話。

@@ -22,6 +22,7 @@
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 - `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
 - `tests/test_upload_duplicate.py`: 同主檔名上傳防呆與覆蓋行為單元測試，驗證 409 Conflict 阻擋、資料庫與實體檔案完整性保護、以及底層 FileExistsError 例外機制。
+- `tests/test_meeting_extract_commit.py`: AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試，驗證 /commit_summary 與 /meetings 支援 source_document_id 自動注入、資料庫持久化、以及關聯文檔刪除時 ON DELETE SET NULL 外鍵約束保護機制。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
 - `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
@@ -73,7 +74,7 @@
    - 前端發起 `/extract_summary` 請求帶入 `document_id`。
    - `llm_service.extract_structured_meeting_data` 自 `prompts/meeting_extraction.md` 載入系統提示詞，將 SQLite 中 `markdown_content` 全文 1-shot 餵給 LLM 提取為 JSON。
    - 前端獲得預覽 JSON 供使用者檢視或人工校對修改，並於「關聯目標活動」卡片選擇既有活動或快速建立新活動（必填）。
-   - 前端發起 `/commit_summary` 請求帶入所屬 `activity_id`，`main.py` 依序建立 Meeting、Decisions、Tasks 並綁定該活動。各 service 目前各自提交，因此中途失敗時已成功的資料會保留，呼叫端需呈現可能部分成功的結果。
+   - 前端發起 `/commit_summary` 請求帶入所屬 `activity_id` 與來源文件 `doc_id`，`main.py` 自動將 `source_document_id` 注入 Meeting 寫入 SQLite，並依序建立 Decisions 與 Tasks 綁定該活動與會議。各 service 目前各自提交，因此中途失敗時已成功的資料會保留，呼叫端需呈現可能部分成功的結果。
 
 3. **活動與業務資料管理流程 (Activity Management)**:
    - `Activity` 為核心主體，其餘 `Meeting`, `Task`, `Decision`, `Schedule`, `Incident` 透過外鍵與其關聯。
@@ -123,6 +124,15 @@
     3. 串接 `POST /activities` 支援即時填妥活動名稱、年份、狀態與地點，支援手動立即建立或於「確認寫入資料庫」時自動連帶建立入庫。
     4. 落實活動必填防呆校驗，未指定活動時立即提示錯誤並阻擋寫入。
     5. 前端 `meetingExtract.test.ts` 新增 `createActivity` 單元測試，前後端全套測試 100% 通過。
+- **修復 meetings 表之 source_document_id 自動關聯與持久化缺失**:
+  - **根本原因**: 
+    1. 後端 `main.py` 中 Pydantic 模型 `MeetingCreate` 與 `MeetingUpdate` 遺漏定義 `source_document_id` 欄位，導致前端傳入或由後端組裝之 `source_document_id` 在 `model_dump()` 時被 Pydantic 自動過濾忽略，無法傳入 `add_meeting()` 寫入資料庫。
+    2. 後端 `CommitSummaryRequest` 未定義頂層 `doc_id` 欄位，導致由 `/extract_summary` 產生的文件 ID 在確認寫入時未被接收。
+  - **核心變更**:
+    1. 後端 `main.py`: 在 `MeetingCreate` 與 `MeetingUpdate` 補上 `source_document_id: Optional[int] = None`；在 `CommitSummaryRequest` 補上 `doc_id: Optional[int] = None` 與 `source_file: Optional[str] = None`。在 `/commit_summary` 端點中，自動將 `doc_id` 注入至 `meeting_dict["source_document_id"]`，落實寫入 SQLite `meetings` 表。
+    2. 前端 `meetingExtractService.ts` 與 `MeetingExtractPanel.tsx`: 擴充 `ExtractedMeeting` 與 `CommitSummaryPayload` 包含 `source_document_id`、`doc_id` 與 `source_file`。在點擊「確認寫入資料庫」時，自動帶入該次結構化抽取來源文件的 `doc_id`。並在預覽卡片頂端呈現「來源：{filename}」標籤徽章。
+    3. 前端樣式 `MeetingExtractPanel.css`: 新增 `.source-doc-badge` 樣式，符合視覺設計規範。
+    4. 新增 `tests/test_meeting_extract_commit.py` 單元測試，全面驗證 `source_document_id` 自動綁定、無來源相容性、RESTful API 支援以及 `ON DELETE SET NULL` 級聯防護。後端 57 個測試與前端 21 個測試 100% 通過。
 
 
 

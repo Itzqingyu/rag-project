@@ -29,6 +29,7 @@ export interface ExtractedMeeting {
   location?: string;
   participants?: string;
   content?: string;
+  source_document_id?: number;
 }
 
 /**
@@ -205,6 +206,8 @@ export async function commitMeetingSummary(
 
   return await apiClient.post<CommitSummaryResponse>('/commit_summary', {
     activity_id: payload.activity_id,
+    doc_id: payload.doc_id,
+    source_file: payload.source_file,
     meeting: normalizedMeeting,
     decisions: normalizedDecisions,
     tasks: normalizedTasks,

@@ -97,6 +97,10 @@ export const MeetingExtractPanel: React.FC = () => {
   const [isCreatingActivity, setIsCreatingActivity] = useState(false);
   const [activityNotice, setActivityNotice] = useState<string | null>(null);
 
+  // 記錄當前預覽結果所關聯的來源文檔 ID 與檔名
+  const [extractedDocId, setExtractedDocId] = useState<number | null>(null);
+  const [extractedDocName, setExtractedDocName] = useState<string | null>(null);
+
   // 狀態管理
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -284,6 +288,12 @@ export const MeetingExtractPanel: React.FC = () => {
       const res = await extractMeetingSummary(Number(selectedDocId));
       setPreviewData(res.preview_data);
 
+      // 保存本次萃取來源文件之 ID 與檔名
+      const currentDoc = documents.find((d) => d.id === selectedDocId);
+      const effectiveDocId = res.doc_id ?? Number(selectedDocId);
+      setExtractedDocId(effectiveDocId);
+      setExtractedDocName(currentDoc?.filename ?? null);
+
       // 同步取得最新活動清單以供關聯
       const freshActs = await fetchActivities();
       setActivities(freshActs);
@@ -391,11 +401,15 @@ export const MeetingExtractPanel: React.FC = () => {
         targetActivityId = created.id;
       }
 
-      const selectedDoc = documents.find((d) => d.id === selectedDocId);
+      const docIdToCommit = extractedDocId ?? (typeof selectedDocId === 'number' ? selectedDocId : undefined);
+      const selectedDoc =
+        documents.find((d) => d.id === docIdToCommit) ||
+        documents.find((d) => d.id === selectedDocId);
+
       const res = await commitMeetingSummary({
         activity_id: targetActivityId,
-        doc_id: typeof selectedDocId === 'number' ? selectedDocId : undefined,
-        source_file: selectedDoc?.filename,
+        doc_id: docIdToCommit,
+        source_file: selectedDoc?.filename || extractedDocName || undefined,
         meeting: previewData.meeting,
         decisions: previewData.decisions,
         tasks: previewData.tasks,
@@ -561,6 +575,8 @@ export const MeetingExtractPanel: React.FC = () => {
     setIsCommitted(false);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setExtractedDocId(null);
+    setExtractedDocName(null);
   };
 
   return (
@@ -891,6 +907,12 @@ export const MeetingExtractPanel: React.FC = () => {
                 <div className="extract-card-title">
                   <Calendar size={18} />
                   <span>會議基本摘要</span>
+                  {extractedDocName && (
+                    <span className="source-doc-badge" title={`已關聯來源文檔 ID: ${extractedDocId}`}>
+                      <FileText size={12} />
+                      來源：{extractedDocName}
+                    </span>
+                  )}
                 </div>
                 <div className="extract-card-actions">
                   <span className="extract-card-hint">可直接點擊欄位進行修改</span>

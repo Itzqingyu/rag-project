@@ -122,6 +122,7 @@ class ExtractSummaryRequest(BaseModel):
 
 class MeetingCreate(BaseModel):
     activity_id: Optional[int] = None
+    source_document_id: Optional[int] = None
     name: str
     start_time: str = ""
     end_time: str = ""
@@ -151,6 +152,8 @@ class DecisionCreate(BaseModel):
 
 class CommitSummaryRequest(BaseModel):
     activity_id: int
+    doc_id: Optional[int] = None
+    source_file: Optional[str] = None
     meeting: MeetingCreate
     decisions: List[DecisionCreate] = []
     tasks: List[TaskCreate] = []
@@ -189,6 +192,7 @@ class MeetingUpdate(BaseModel):
     content: Optional[str] = None
     activity_id: Optional[int] = None
     date: Optional[str] = None
+    source_document_id: Optional[int] = None
 
 class TaskUpdate(BaseModel):
     content: Optional[str] = None
@@ -518,11 +522,13 @@ def extract_summary(req: ExtractSummaryRequest):
 
 @app.post("/commit_summary", tags=["AI Structured Extraction"])
 def commit_summary(req: CommitSummaryRequest):
-    """階段 2：將確認後資料逐筆寫入；中途失敗時，先前成功資料仍會保留。"""
+    """階段 2：將確認後資料逐筆寫入；自動綁定來源文檔 source_document_id。中途失敗時，先前成功資料仍會保留。"""
     try:
-        # 1. 寫入 Meeting
+        # 1. 寫入 Meeting (自動關聯來源文檔 source_document_id)
         meeting_dict = req.meeting.model_dump()
         meeting_dict["activity_id"] = req.activity_id
+        if meeting_dict.get("source_document_id") is None and req.doc_id is not None:
+            meeting_dict["source_document_id"] = req.doc_id
         created_meeting = add_meeting(**meeting_dict)
         meeting_id = created_meeting["id"]
 
