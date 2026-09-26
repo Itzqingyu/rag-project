@@ -349,3 +349,10 @@
   font-size: .78rem;
   line-height: 1.65;
 }
+
+.heading-actions {
+  display: flex;
+  gap: 16px;          /* 兩個按鈕左右的間距 */
+  margin-top: 12px;   /* 距離上方標題的距離 */
+  margin-bottom: 16px;/* 距離下方區塊的距離 */
+}

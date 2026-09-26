@@ -185,3 +185,12 @@
   font-size: 0.71rem;
   line-height: 1.55;
 }
+
+.disc-header-desc {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.disc-add-btn {
+  margin-bottom: 16px;
+}

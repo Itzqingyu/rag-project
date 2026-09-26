@@ -116,7 +116,7 @@ export default function DecisionsPanel({ activityId, currentView, meetingVersion
 
   return (
     <section className={`view-panel ${currentView === 'decisions' ? 'active' : ''}`} data-panel="decisions">
-      <div className="section-heading"><div><p className="eyebrow">DECISIONS</p><h2>決策紀錄</h2><p>只顯示目前 Activity 的決策。</p></div><button className="button primary" type="button" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setFormMode('create'); }}>＋ 新增決策</button></div>
+      <div className="section-heading"><div><p className="eyebrow">DECISIONS</p><h2>決策紀錄</h2><p style={{ marginTop: '4px', marginBottom: '12px' }}>只顯示目前 Activity 的決策。</p></div><button className="button primary" type="button" style={{ marginBottom: '12px' }} onClick={() => { setForm(EMPTY_FORM); setFormError(null); setFormMode('create'); }}>＋ 新增決策</button></div>
       {error && <div className="api-message error" role="alert">{error}</div>}
       {loading && <div className="api-state">載入決策中…</div>}
       {!loading && decisions.length === 0 && <div className="api-state empty"><h3>目前沒有決策紀錄</h3><p>新增決策後會顯示在這裡。</p></div>}

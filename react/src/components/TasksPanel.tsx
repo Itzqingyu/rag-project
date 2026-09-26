@@ -56,6 +56,7 @@ export default function TasksPanel({ activityId, currentView, meetingVersion }: 
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
+  const priorityWeight: Record<string, number> = { '高': 3, '中': 2, '低': 1 };
 
   useEffect(() => {
     let active = true;
@@ -190,9 +191,35 @@ export default function TasksPanel({ activityId, currentView, meetingVersion }: 
     </div>
   );
 
+  // 把這段邏輯放在 return (...) 之前
+  const sortedPendingTasks = [...pendingTasks].sort((a, b) => {
+    // --- 第 1 關：比較時限 ---
+    // 寫一個小幫手來處理日期：如果是空值、"無期限"或無法解析，就給它無限大(Infinity)排到最後面
+    const getTime = (dateStr?: string | null) => {
+      if (!dateStr || dateStr === '無期限') return Infinity;
+      const time = new Date(dateStr).getTime();
+      return isNaN(time) ? Infinity : time;
+    };
+
+    const timeA = getTime(a.due_date);
+    const timeB = getTime(b.due_date);
+
+    // 如果兩者的期限不同天，就直接依期限由近到遠排 (升冪)
+    if (timeA !== timeB) {
+      return timeA - timeB; 
+    }
+
+    // --- 第 2 關：時限同一天時，比較重要性 ---
+    const weightA = priorityWeight[a.priority] || 0;
+    const weightB = priorityWeight[b.priority] || 0;
+    
+    // 重要性分數高的排前面 (降冪，所以是 B - A)
+    return weightB - weightA;
+  });
+
   return (
     <section className={`view-panel ${currentView === 'tasks' ? 'active' : ''}`} data-panel="tasks">
-      <div className="section-heading"><div><p className="eyebrow">TASKS</p><h2>待辦事項</h2><p>待辦只顯示目前 Activity 的資料，會議關聯可留空。</p></div><button className="button primary" type="button" onClick={openCreate}>＋ 新增待辦</button></div>
+      <div className="section-heading"><div><p className="eyebrow">TASKS</p><h2>待辦事項</h2><p className="task-header-desc">待辦只顯示目前 Activity 的資料，會議關聯可留空。</p></div><button className="button primary task-add-btn" type="button" onClick={openCreate}>＋ 新增待辦</button></div>
       {error && <div className="api-message error" role="alert">{error}</div>}
       {loading && <div className="api-state">載入待辦中…</div>}
 
@@ -208,8 +235,26 @@ export default function TasksPanel({ activityId, currentView, meetingVersion }: 
             <div className="api-state empty"><h3>目前沒有符合條件的待辦</h3><p>新增待辦後會顯示在這裡。</p></div>
           ) : (
             <div className="task-board two-columns">
-              {(filter === 'all' || filter === 'pending') && <article className="task-column"><div className="column-title"><span>未完成</span><b>{pendingTasks.length}</b></div>{pendingTasks.map(renderTask)}</article>}
-              {(filter === 'all' || filter === 'completed') && <article className="task-column"><div className="column-title"><span>已完成</span><b>{completedTasks.length}</b></div>{completedTasks.map(renderTask)}</article>}
+              {(filter === 'all' || filter === 'pending') && (
+                <article className="task-column">
+                  <div className="column-title">
+                    {/* 注意：這裡的總數還是用 pendingTasks.length 沒問題 */}
+                    <span>未完成</span><b>{pendingTasks.length}</b>
+                  </div>
+                  {/* 👇 關鍵修改：把它換成排好序的陣列 👇 */}
+                  {sortedPendingTasks.map(renderTask)}
+                </article>
+              )}
+              
+              {(filter === 'all' || filter === 'completed') && (
+                <article className="task-column">
+                  <div className="column-title">
+                    <span>已完成</span><b>{completedTasks.length}</b>
+                  </div>
+                  {/* (如果「已完成」的區塊你也想排序，也可以依樣畫葫蘆做一個 sortedCompletedTasks 放進來) */}
+                  {completedTasks.map(renderTask)}
+                </article>
+              )}
             </div>
           )}
         </>
