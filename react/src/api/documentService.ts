@@ -36,3 +36,25 @@ export async function deleteDocumentByIdentifier(
   const encoded = encodeURIComponent(String(identifier));
   await apiClient.delete(`/documents/${encoded}`);
 }
+
+/**
+ * 檢查即將上傳之檔案主檔名是否與現有文件清單重複（不分副檔名與大小寫）
+ * 範例：若現有清單中包含 "meeting.md"，上傳 "meeting.docx" 或 "meeting.pdf" 即會判定衝突。
+ * @param uploadFileName 即將上傳的原始檔案名稱
+ * @param existingNames 現有文件名稱清單（如 filename 或 name）
+ * @returns 衝突的現存檔名，若無衝突則回傳 null
+ */
+export function checkDuplicateFileStem(
+  uploadFileName: string,
+  existingNames: string[]
+): string | null {
+  const uploadStem = uploadFileName.replace(/\.[^/.]+$/, '').trim().toLowerCase();
+  for (const name of existingNames) {
+    const base = name.split(/[\\/]/).pop() || name;
+    const existingStem = base.replace(/\.[^/.]+$/, '').trim().toLowerCase();
+    if (uploadStem === existingStem) {
+      return base;
+    }
+  }
+  return null;
+}

@@ -5,7 +5,7 @@
 ### 進入點與 API
 - `main.py`: FastAPI 應用程式的主程式。提供完整的 REST API 端點，包含：
   - **系統與健康檢查**: `/ping`
-  - **RAG 文件管理與上傳轉碼**: `/upload` (上傳 MD, TXT, PDF, DOCX 並自動轉換儲存與向量化), `/documents` (GET 清單, DELETE 物理刪除包含 `.md` 與向量庫), `/query` (語意檢索與選填 LLM 回答)
+  - **RAG 文件管理與上傳轉碼**: `/upload` (上傳 MD, TXT, PDF, DOCX 並自動轉換儲存與向量化，具備主檔名衝突前置防呆回傳 409 Conflict), `/documents` (GET 清單, DELETE 物理刪除包含 `.md` 與向量庫), `/query` (語意檢索與選填 LLM 回答)
   - **對話會話與上下文記憶 (Session & Chat)**:
     - `/sessions`: GET (列出所有 Sessions), POST (建立新 Session)
     - `/sessions/{id}`: GET (取得 Session 詳情與歷史訊息), PATCH (更新 Session 標題), DELETE (串聯刪除 Session 及其訊息)
@@ -21,6 +21,7 @@
 - `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。同時支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 - `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
+- `tests/test_upload_duplicate.py`: 同主檔名上傳防呆與覆蓋行為單元測試，驗證 409 Conflict 阻擋、資料庫與實體檔案完整性保護、以及底層 FileExistsError 例外機制。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
 - `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
@@ -35,7 +36,7 @@
 - `ai_services/rag_engine.py`: 整合 `chunker`, `embedding`, `reranker`, `retriever` 模組。
   - **split_markdown**: 讀取 Markdown 並以 `RecursiveCharacterTextSplitter` 切片 (預設 500 字，50 重疊)。
   - **get_embeddings / get_reranker**: 採用 Lazy Singletons 載入 Embedding 模型與重排序模型。
-  - **add_document / search / delete_document / list_documents**: 協調文件向量化、ChromaDB 寫入、物理 `.md` 檔案清理與 SQLite 紀錄。
+  - **add_document / search / delete_document / list_documents**: 協調文件向量化、ChromaDB 寫入、物理 `.md` 檔案清理與 SQLite 紀錄。全面取消 `add_document` 之 `force` 覆蓋參數，遇重複檔案直接拋出 `FileExistsError`，杜絕覆蓋時先刪實體檔案引發崩潰之風險。
 - `ai_services/llm_service.py`: 負責與 LLM 互動與 Prompt 檔案動態載入。
   - 提供 `chat_with_context` 函數處理對話與 RAG 問答生成，支援多輪對話上下文記憶、Clean Context Isolation 隔離過往檢索資料、以及普通對話與 RAG 模式動態切換。
   - 提供 `extract_structured_meeting_data` 函數，實現單檔 1-shot 全文 Prompt 結構化提取。
@@ -107,5 +108,13 @@
   - 新建 `ai_services/` 專門放置 `rag_engine.py`（向量切塊、Embedding、Reranker、檢索）與 `llm_service.py`（Prompt 載入、LiteLLM 調用、多輪對話、結構化提煉）。
   - `document_processing/` 僅保留 `converter.py`，專注於檔案格式解析與轉碼。
   - `database.py` 與各測試調用端更新為 `dash_backend.ai_services...`，全套 49 個單元測試 100% 通過。
+- **同主檔名防呆機制與移除覆蓋刪檔邏輯 (409 Conflict & Zero Overwrite)**:
+  - **根本問題**: 先前 `/upload` 呼叫 `add_document` 時帶入 `force=True`，而底層覆蓋邏輯因先刪除實體檔案再嘗試切塊，引發 `FileNotFoundError` 導致既有文件被滅失、新文件未能入庫。
+  - **核心變更**:
+    1. 底層 `rag_engine.add_document` 徹底移除 `force` 參數與覆蓋刪除邏輯，遇檔案已存在嚴格拋出 `FileExistsError`，確保絕不暗中刪除實體檔案。
+    2. 後端 `/upload` 端點於最前置（做任何暫存檔或轉碼前）以主檔名檢查 SQLite，若已存在相同主檔名之文件，直接回傳 `HTTP 409 Conflict` 與防呆提示，零副作用保護既有文檔。
+    3. 前端（`ChatPanel`, `MeetingExtractPanel`）於 `documentService.ts` 引入 `checkDuplicateFileStem`，選檔後於發起網路請求前即時中斷並於抽屜提示錯誤。
+    4. 新增 `tests/test_upload_duplicate.py` 單元測試，後端 52 個單元測試與前端 20 個單元測試 100% 通過。
+
 
 

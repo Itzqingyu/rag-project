@@ -111,20 +111,20 @@ export default function App() {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
             role: 'assistant',
-            content: `✅ Successfully uploaded **${file.name}**. ${data.message} (Added ${data.chunks_added} chunks)`
+            content: `[Success] Successfully uploaded **${file.name}**. ${data.message} (Added ${data.chunks_added} chunks)`
           }]);
         } else {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
             role: 'assistant',
-            content: `❌ Failed to upload document: ${data.detail || 'Unknown error'}`
+            content: `[Failed] Failed to upload document: ${data.detail || 'Unknown error'}`
           }]);
         }
       } catch (error: any) {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'assistant',
-          content: `⚠️ Connection error: Make sure the FastAPI backend is running. (${error.message})`
+          content: `[Warning] Connection error: Make sure the FastAPI backend is running. (${error.message})`
         }]);
       } finally {
         setUploading(false);

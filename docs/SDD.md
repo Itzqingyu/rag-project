@@ -93,11 +93,14 @@ rag-project/
 
 ## 4. 核心流程
 
-### 文件上傳與轉碼
-1. 使用者上傳原始檔案 (MD, TXT, PDF, DOCX)
-2. Electron IPC 傳遞路徑給主進程，呼叫 Python REST API (`/upload`)
+### 文件上傳與轉碼 (含同名防呆保護)
+1. 使用者選擇欲上傳之原始檔案 (MD, TXT, PDF, DOCX)。
+2. **前後端前置主檔名防呆校驗**：
+   - 前端 (`ChatPanel`, `MeetingExtractPanel`) 在發送請求前比對現有檔案清單，若主檔名重複（例如已存在 `meeting.md`，使用者又上傳 `meeting.docx` 或 `meeting.pdf`），立即中斷並於抽屜提示錯誤，不發送網路請求。
+   - 後端 (`/upload`) 在建立暫存檔與轉碼前查詢資料庫，若主檔名已存在直接回傳 `HTTP 409 Conflict`，嚴格禁止同名覆蓋以保護既有資料完整性。
+   - 系統全面採取「只增不覆蓋」原則；使用者欲更新檔案內容必須先顯式刪除舊文件後再行上傳。
 3. Python `converter.py`: 讀取原始檔案 → 轉換/複製為標準 Markdown 格式並儲存於 `python/data/markdown/`
-4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存
+4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存（若遇已存在紀錄拋出 `FileExistsError`）
 5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (檔名、託管路徑、處理時間、狀態)
 
 ### AI 結構化提取與預覽寫入 (Preview-Commit 流程)

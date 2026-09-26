@@ -28,6 +28,7 @@ import {
   fetchDocuments,
   uploadDocument,
   deleteDocumentByIdentifier,
+  checkDuplicateFileStem,
 } from '../api/documentService';
 import { RetrievedChunk } from '../api/apiTypes';
 import './ChatPanel.css';
@@ -511,10 +512,21 @@ export const ChatPanel: React.FC = () => {
 
   /**
    * 歷史紀錄文件真實上傳 (呼叫 POST /upload)
+   * 具備前置主檔名防呆：若清單中已有相同主檔名之文件，直接中斷並提示錯誤，不發送網路請求。
    */
   const handleUploadFile = async (file: File) => {
-    setIsUploadingDoc(true);
     setDocDrawerError(null);
+
+    // 前端前置主檔名重複防呆校驗
+    const duplicate = checkDuplicateFileStem(file.name, documents.map((d) => d.name));
+    if (duplicate) {
+      setDocDrawerError(
+        `已存在相同主檔名之文件「${duplicate}」。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。`
+      );
+      return;
+    }
+
+    setIsUploadingDoc(true);
     try {
       await uploadDocument(file);
       // 上傳完成後重新獲取文檔列表

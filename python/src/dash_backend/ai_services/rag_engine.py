@@ -85,12 +85,12 @@ def rerank_documents(query: str, documents: List[Document], top_k: int = 5) -> L
 # 3. RAG 檢索與文件管理 (Retriever API)
 # ==========================================
 
-def add_document(file_path: str, force: bool = False, raw_file_path: Optional[str] = None, *, db_path: Optional[str] = None) -> int:
+def add_document(file_path: str, raw_file_path: Optional[str] = None, *, db_path: Optional[str] = None) -> int:
     """解析 Markdown 檔案、文本切塊、寫入 Chroma 向量庫並將 Metadata 存入 SQLite。
+    系統不支援自動覆蓋；若檔案已存在於資料庫中，將拋出 FileExistsError。
     
-    :param file_path: Markdown 實體路徑
-    :param force: 若檔案已存在是否覆蓋舊資料
-    :param raw_file_path: 原始檔案實體路徑
+    :param file_path: 實體檔案路徑 (支援 .md, .txt, .pdf, .docx)
+    :param raw_file_path: 原始檔案實體路徑或原始檔名
     :return: 成功寫入的切塊數量
     """
     if not os.path.exists(file_path):
@@ -104,14 +104,10 @@ def add_document(file_path: str, force: bool = False, raw_file_path: Optional[st
     file_stem, ext = os.path.splitext(raw_name)
     target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
 
-    # 2. 檢查 SQLite 紀錄是否存在
+    # 2. 檢查 SQLite 紀錄是否存在，若已存在則直接拋出 FileExistsError（不支援覆蓋）
     existing_record = db.get_doc_by_path(target_md_path, db_path=db_path)
     if existing_record:
-        if not force:
-            raise FileExistsError(f"檔案已存在於資料庫中: {target_md_path}")
-        else:
-            # 覆蓋模式：先刪除舊的 Chroma 向量與 SQLite 紀錄
-            delete_document(target_md_path, db_path=db_path)
+        raise FileExistsError(f"檔案已存在於資料庫中: {target_md_path}")
 
     # 3. 確保目標託管 Markdown 檔案存在且內容最新 (多格式轉檔 PDF/DOCX/TXT/MD)
     if source_path != os.path.abspath(target_md_path) or ext.lower() != ".md":

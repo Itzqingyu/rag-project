@@ -19,6 +19,7 @@ import {
   fetchDocuments,
   uploadDocument,
   deleteDocumentByIdentifier,
+  checkDuplicateFileStem,
 } from '../api/documentService';
 import { BackendDocument } from '../api/apiTypes';
 import {
@@ -137,12 +138,24 @@ export const MeetingExtractPanel: React.FC = () => {
 
   /**
    * 文檔真實上傳處理 (支援快捷按鈕與側邊抽屜上傳)
+   * 具備前置主檔名防呆：若清單中已有相同主檔名之文件，直接中斷並提示錯誤，不發送網路請求。
    * 上傳並向量化成功後，自動更新列表並自動選中該新上傳之文件
    */
   const handleUploadFile = async (file: File) => {
-    setIsUploadingDoc(true);
     setDocDrawerError(null);
     setErrorMessage(null);
+
+    // 前端前置主檔名重複防呆校驗
+    const existingNames = documents.map((d) => d.filename || d.file_path);
+    const duplicate = checkDuplicateFileStem(file.name, existingNames);
+    if (duplicate) {
+      const msg = `已存在相同主檔名之文件「${duplicate}」。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。`;
+      setDocDrawerError(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
+    setIsUploadingDoc(true);
     try {
       const res = await uploadDocument(file);
       const freshDocs = await fetchDocuments();
