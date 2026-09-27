@@ -42,17 +42,19 @@ rag-project/
 ├── react/                        # Electron + Vite + React 前端
 │   ├── src/
 │   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話)
-│   │   ├── services/             # 後端 API 通訊服務層 (camelCase 命名)
+│   │   ├── api/                  # 後端 API 通訊服務層 (camelCase 命名)
 │   │   │   ├── apiTypes.ts       # 後端資料結構與 TypeScript 介面定義
 │   │   │   ├── apiClient.ts      # HTTP 請求封裝、錯誤攔截與後端斷線處理
 │   │   │   ├── chatService.ts    # 對話會話增刪查改與雙模式訊息發送
-│   │   │   ├── documentService.ts # 知識庫文件清單、上傳轉檔向量化與刪除
+│   │   │   ├── documentService.ts # 歷史紀錄文件清單、上傳轉檔向量化與刪除
 │   │   │   └── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
 │   │   ├── components/           # 組件與同名獨立樣式 (.tsx & .css)
 │   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、即時 API 串接與真實錯誤反饋)
 │   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流，提取會議、決策與待辦)
-│   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、刪除)
-│   │   │   ├── DocumentDrawer.tsx # 知識庫文檔抽屜 (文件清單、真實上傳與刪除)
+│   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、三點選單觸發重命名與刪除)
+│   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景、即時鍵盤快捷支援)
+│   │   │   ├── ConfirmModal.tsx  # 防手殘刪除確認獨立彈窗 (霧化毛玻璃背景)
+│   │   │   ├── DocumentDrawer.tsx # 歷史紀錄文檔抽屜 (文件清單、真實上傳與刪除)
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
 │   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等各自獨立 CSS)
 │   │   └── index.css             # 全域 Design Tokens (:root)、Reset 與 App Shell 樣式
@@ -81,7 +83,9 @@ rag-project/
 │   ├── tests/                    # 測試指令碼與單元測試
 │   │   ├── test_main.py          # 整合 CLI 互動測試工具 (含 Session 多輪對話與模式切換測試)
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
-│   │   └── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
+│   │   ├── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
+│   │   ├── test_upload_duplicate.py # 同主檔名上傳防呆與覆蓋行為單元測試
+│   │   └── test_meeting_extract_commit.py # AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
 │   │   ├── dash_database.sqlite  # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
@@ -91,19 +95,25 @@ rag-project/
 
 ## 4. 核心流程
 
-### 文件上傳與轉碼
-1. 使用者上傳原始檔案 (MD, TXT, PDF, DOCX)
-2. Electron IPC 傳遞路徑給主進程，呼叫 Python REST API (`/upload`)
+### 文件上傳與轉碼 (含同名防呆保護)
+1. 使用者選擇欲上傳之原始檔案 (MD, TXT, PDF, DOCX)。
+2. **前後端前置主檔名防呆校驗**：
+   - 前端 (`ChatPanel`, `MeetingExtractPanel`) 在發送請求前比對現有檔案清單，若主檔名重複（例如已存在 `meeting.md`，使用者又上傳 `meeting.docx` 或 `meeting.pdf`），立即中斷並於抽屜提示錯誤，不發送網路請求。
+   - 後端 (`/upload`) 在建立暫存檔與轉碼前查詢資料庫，若主檔名已存在直接回傳 `HTTP 409 Conflict`，嚴格禁止同名覆蓋以保護既有資料完整性。
+   - 系統全面採取「只增不覆蓋」原則；使用者欲更新檔案內容必須先顯式刪除舊文件後再行上傳。
 3. Python `converter.py`: 讀取原始檔案 → 轉換/複製為標準 Markdown 格式並儲存於 `python/data/markdown/`
-4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存
+4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存（若遇已存在紀錄拋出 `FileExistsError`）
 5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (檔名、託管路徑、處理時間、狀態)
 
 ### AI 結構化提取與預覽寫入 (Preview-Commit 流程)
 1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
-2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析
+2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析，同時回傳對應來源文件的 `doc_id`
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
-4. 前端展示預覽結果供使用者校對修改
-5. 使用者確認後發起 `/commit_summary` 請求，依序寫入 SQLite `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時可能只完成部分寫入
+4. 前端展示預覽結果供使用者校對修改，並於預覽標題處標示來源文件，於頂部提供「關聯目標活動 (必填)」卡片：
+   - 支援「選擇現有活動」下拉關聯既有活動；若無活動則給予提示並引導建立。
+   - 支援「快速建立新活動」即時填寫活動名稱、年份與狀態，支援立即建立選取或於確認寫入時自動連帶建立。
+   - 具備活動必填防呆機制：若未選取或未填妥活動名稱，全面阻擋寫入並提示使用者。
+5. 使用者確認後發起 `/commit_summary` 請求，帶入所選或新建之 `activity_id` 以及來源文件的 `doc_id`，後端自動將 `source_document_id` 注入並存入 SQLite `meetings` 表（外鍵指向 `documents.id`，具備 `ON DELETE SET NULL` 級聯防護），依序寫入 `meetings`, `decisions`, `tasks` 表；目前各筆資料各自提交，中途失敗時先前成功的資料會保留。
 
 ### 對話互動與會話記憶 (Session & Multi-turn Chat)
 1. 使用者可透過 `/sessions` 端點建立或管理對話會話。
@@ -146,9 +156,9 @@ npm run dev                                      # 啟動 Electron 前端
 - ✅ 文件管理 (查看、刪除已導入之 Markdown 文件，同步物理刪除託管 `.md` 與向量庫)
 - ✅ AI 結構化會議分析 (1-shot 摘要抽取與 Preview-Commit 寫入流程)
 - ✅ 活動管理 Python／SQLite 核心 CRUD 與關聯驗證
-- ✅ 前端 LLM 聊天大面板 UI 框架 (雙欄佈局、會話管理側欄、模式切換 Toggle Pill、極簡空狀態、知識庫文檔抽屜)
+- ✅ 前端 LLM 聊天大面板 UI 框架 (雙欄佈局、會話管理側欄、模式切換 Toggle Pill、極簡空狀態、歷史紀錄文檔抽屜)
 - ✅ 前後端 API 串接與端對端整合 (完整接入 Session、Message 雙模式、Document 上傳與向量化，全面剔除模擬假資料並建立嚴格錯誤反饋機制)
-- ✅ 前端「AI 功能」側欄下拉折疊導航與 AI 會議紀錄整理面板 (接入 /extract_summary 與 /commit_summary，實現 1-shot 萃取、即時預覽與活動資料庫寫入)
+- ✅ 前端「AI 功能」側欄下拉折疊導航與 AI 會議紀錄整理面板 (接入 /extract_summary 與 /commit_summary，實現 1-shot 萃取、即時預覽、歷史紀錄抽屜與快捷文檔上傳)
 - ⏳ Electron 打包與自動化端對端啟動流程整合 (進行中)
 - ❌ 高級權限與團隊協作 (後續)
 - ❌ 版本控制與複雜自訂設定 (後續)

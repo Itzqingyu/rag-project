@@ -29,6 +29,7 @@ export interface ExtractedMeeting {
   location?: string;
   participants?: string;
   content?: string;
+  source_document_id?: number;
 }
 
 /**
@@ -100,6 +101,31 @@ export interface CommitSummaryResponse {
  */
 export async function fetchActivities(): Promise<BackendActivity[]> {
   return await apiClient.get<BackendActivity[]>('/activities');
+}
+
+/**
+ * 建立新活動 Payload 介面
+ */
+export interface CreateActivityPayload {
+  name: string;
+  year: number;
+  status: string;
+  start_date?: string;
+  end_date?: string;
+  venue?: string;
+  activity_type?: string;
+  coordinator?: string;
+  expected_attendees?: number;
+  budget?: number;
+}
+
+/**
+ * 建立新活動 (POST /activities)
+ */
+export async function createActivity(
+  payload: CreateActivityPayload
+): Promise<BackendActivity> {
+  return await apiClient.post<BackendActivity>('/activities', payload);
 }
 
 /**
@@ -180,6 +206,8 @@ export async function commitMeetingSummary(
 
   return await apiClient.post<CommitSummaryResponse>('/commit_summary', {
     activity_id: payload.activity_id,
+    doc_id: payload.doc_id,
+    source_file: payload.source_file,
     meeting: normalizedMeeting,
     decisions: normalizedDecisions,
     tasks: normalizedTasks,
