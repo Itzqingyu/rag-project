@@ -863,14 +863,21 @@ a {
    對話框與輔助抽屜 (Dialog Modals & Sidebars)
    ========================================== */
 .modal {
+  /* 👇 這些是你原本設定好的樣式，直接保留 👇 */
   width: min(600px, calc(100vw - 30px));
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 15px;
   color: var(--ink);
   box-shadow: 0 24px 70px rgba(5, 12, 24, 0.28);
-}
 
+  /* 👇 加上這幾行來強制把視窗拉到畫面正中間 👇 */
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
 .modal::backdrop {
   background: rgba(7, 14, 26, 0.5);
   backdrop-filter: blur(3px);
@@ -908,6 +915,11 @@ a {
   background: var(--canvas);
   color: var(--ink);
   cursor: pointer;
+}
+
+.close-button:hover {
+  background-color: #cbd5e1;
+  color: #0f172a;
 }
 
 .field {
@@ -1112,3 +1124,18 @@ a {
 
 .button.danger:hover { background: #ffe5e5; }
 .danger-text { color: #a32626 !important; }
+
+/* 1. 確保 TR 寬度佔滿 100% (原本就有的) */
+.activity-row.empty-row {
+  width: 100%; /* 強制行寬佔滿 100% */
+  pointer-events: none; /* 確保滑鼠移過去不會有任何反應 (原本就有的) */
+}
+
+/* 2. 原生 6 欄空白 td 修復：確保高度和完整底線，但不縮扁 */
+.activity-row.empty-row td {
+  height: 64px; /* 高度撐開 (請根據你真實資料的高度微調這個數字) */
+  border-bottom: 1px solid #ddd; /* 👉 每個 td 都應用底線，這能解決邊框斷掉的問題 */
+  background-color: transparent; /* 背景透明 */
+  width: auto !important; /* 👉 關鍵修改：不要給 td 寬度! (移除 `width: 100%`)，讓 table 佈局自動拉伸它們。使用 !important 確保優先順序，移除 `width: 100%` 的影響。 */
+  box-sizing: border-box; /* 確保邊框包含在高度內 */
+}

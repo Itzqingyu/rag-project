@@ -40,6 +40,27 @@ interface Message {
   content: string;
 }
 
+// 加上型別定義的 QuickAddButton
+const QuickAddButton = ({ 
+  label, 
+  targetView, 
+  activityId, 
+  onAction 
+}: { 
+  label: string; 
+  targetView: string; 
+  activityId: string; 
+  onAction: (view: string) => void; 
+}) => (
+  <button 
+    type="button" 
+    disabled={!activityId} 
+    onClick={() => onAction(targetView)}
+  >
+    <strong>{label}</strong>
+  </button>
+);
+
 export default function App() {
   // ==========================================
   // 1. 保留原本的 AI 對話與上傳狀態邏輯
@@ -93,6 +114,11 @@ export default function App() {
     setCurrentView(view);
     setIsSidebarOpen(false);
   };
+
+  // 控制 Modal 的 Ref
+  const recordModalRef = useRef<HTMLDialogElement>(null);
+  // 來記錄在 Modal 裡面選擇了哪一個活動 (預設可以代入第一筆活動的 ID)
+  const [quickAddActivityId, setQuickAddActivityId] = useState<string>('');
 
   useEffect(() => {
     scrollToBottom();
@@ -267,6 +293,24 @@ export default function App() {
     }
   };
 
+  const MIN_ROWS = 6;
+  const emptyRowsCount = Math.max(1, MIN_ROWS - visibleActivities.length);
+
+  // 處理快速新增的跳轉邏輯
+  const handleQuickJump = (viewToOpen: string) => {
+    if (!quickAddActivityId) {
+      alert('請先選擇所屬活動！');
+      return;
+    }
+    
+    // 👉 關鍵修改：用 Number() 把字串轉換回數字型別，才能符合你的狀態定義
+    setSelectedActivityId(Number(quickAddActivityId));
+    
+    // 切換畫面並關閉 Modal
+    setCurrentView(viewToOpen);
+    recordModalRef.current?.close();
+  };
+
   // ==========================================
   // 2. 原型 UI 結構 (已轉換 className、閉合標籤與 inline style)
   // ==========================================
@@ -362,10 +406,6 @@ export default function App() {
 
         <main className={`main ${['chat', 'extract'].includes(currentView) ? 'chat-mode' : ''}`} id="main-content">
           <section className="page" id="activity-list-view" hidden={currentView !== 'activities'}>
-            <div className="global-prototype-notice" role="note">
-              <strong>第一階段串接</strong>
-              <span>Activity、Meeting、Task 已連接資料庫；Decision、Schedule、Incident 仍為操作示意。</span>
-            </div>
             <div className="page-heading">
               <div>
                 <p className="eyebrow">ACTIVITY HUB</p>
@@ -373,8 +413,12 @@ export default function App() {
                 <p>從籌備、執行到檢討，把每一屆的經驗留下來。</p>
               </div>
               <div className="heading-actions">
-                <button className="button secondary open-record" type="button">＋ 新增紀錄</button>
-                <button className="button primary" id="open-new-activity" type="button" onClick={openCreateActivity}>＋ 新增活動</button>
+                {currentView === 'activities' && (
+                  <>
+                    <button className="button secondary open-record" type="button" onClick={() => recordModalRef.current?.showModal()}>+ 新增紀錄</button>
+                    <button className="button primary" id="open-new-activity" type="button" onClick={openCreateActivity}>+ 新增活動</button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -421,6 +465,21 @@ export default function App() {
                         <td>›</td>
                       </tr>
                     ))}
+
+                  {Array.from({ length: emptyRowsCount }).map((_, index) => (
+                      <tr 
+                        key={`empty-${index}`} 
+                        className="activity-row empty-row" 
+                        aria-hidden="true"
+                      >
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -442,7 +501,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <button className="button secondary open-record" type="button">＋ 新增紀錄</button>
             </div>
 
             <nav className="stage-tabs" aria-label="活動階段">
@@ -636,11 +694,65 @@ export default function App() {
       {/* ========================================== */}
       {/* 4. 保留所有原型的 Dialog Modal */}
       {/* ========================================== */}
-      <dialog className="modal" id="record-modal">
-        <form method="dialog"><div className="modal-head"><div><p className="eyebrow">QUICK ADD</p><h2>新增紀錄</h2></div><button className="close-button" value="cancel" aria-label="關閉">×</button></div>
-          <label className="field"><span>選擇所屬活動</span><select id="record-activity-select"><option value="camp">迎新宿營</option><option value="uniform">制服趴</option><option value="bbq">系烤</option><option value="week">資管週</option></select></label>
-          <p className="modal-copy">要把哪一種紀錄加入此活動？</p>
-          <div className="record-options"><button type="button" data-record="meeting"><span>◫</span><strong>會議</strong><small>建立籌備會議紀錄</small></button><button type="button" data-record="decision"><span>◇</span><strong>決策</strong><small>記錄問題、選項與原因</small></button><button type="button" data-record="task"><span>✓</span><strong>待辦</strong><small>加入負責人與期限</small></button><button type="button" data-record="incident"><span>!</span><strong>臨時紀錄</strong><small>記下活動當天狀況</small></button></div>
+      {/* 快速新增紀錄的 Modal */}
+      <dialog ref={recordModalRef} className="modal" id="record-modal">
+        <form method="dialog">
+          <div className="modal-head">
+            <div>
+              <p className="eyebrow">QUICK ADD</p>
+              <h2>新增紀錄</h2>
+            </div>
+            {/* 關閉按鈕 */}
+            <button className="close-button" value="cancel" aria-label="關閉">×</button>
+          </div>
+
+          {/* 1. 活動選擇下拉選單 */}
+          <label className="field">
+            <span>選擇所屬活動</span>
+            <select 
+              id="record-activity-select"
+              value={quickAddActivityId}
+              onChange={(e) => setQuickAddActivityId(e.target.value)}
+            >
+              <option value="" disabled>請選擇活動...</option>
+              {/* 用迴圈把所有的活動印出來當選項 */}
+              {activities.map(activity => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <p className="modal-copy">要新增哪一種紀錄加入此活動？</p>
+
+          {/* 2. 四種紀錄按鈕 */}
+          <div className="record-options">
+            <QuickAddButton 
+              label="籌備會議" 
+              targetView="meeting" // 假設你的會議頁面 state 叫做 'meetings'
+              activityId={quickAddActivityId}
+              onAction={handleQuickJump}
+            />
+            <QuickAddButton 
+              label="待辦事項" 
+              targetView="tasks" // 假設待辦事項叫做 'tasks'
+              activityId={quickAddActivityId}
+              onAction={handleQuickJump}
+            />
+            <QuickAddButton 
+              label="決策" 
+              targetView="decisions" 
+              activityId={quickAddActivityId}
+              onAction={handleQuickJump}
+            />
+            <QuickAddButton 
+              label="流程規劃" 
+              targetView="schedule" 
+              activityId={quickAddActivityId}
+              onAction={handleQuickJump}
+            />
+          </div>
         </form>
       </dialog>
 
