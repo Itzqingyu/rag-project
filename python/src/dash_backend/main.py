@@ -148,6 +148,7 @@ class DecisionCreate(BaseModel):
     source: str
     confirmation_status: str = "pending"
     meeting_id: Optional[int] = None
+    outcome_note: Optional[str] = None
 
 class CommitSummaryRequest(BaseModel):
     activity_id: int
@@ -208,6 +209,7 @@ class DecisionUpdate(BaseModel):
     reason: Optional[str] = None
     source: Optional[str] = None
     confirmation_status: Optional[str] = None
+    outcome_note: Optional[str] = None
 
 # Schedule
 class ScheduleCreate(BaseModel):
@@ -217,6 +219,7 @@ class ScheduleCreate(BaseModel):
     location: str
     owner: str
     notes: str
+    outcome_note: Optional[str] = None
     category: str
     end_time: Optional[str] = None
     meeting_id: Optional[int] = None
@@ -230,6 +233,7 @@ class ScheduleUpdate(BaseModel):
     location: Optional[str] = None
     owner: Optional[str] = None
     notes: Optional[str] = None
+    outcome_note: Optional[str] = None
     category: Optional[str] = None
 
 # Incident
