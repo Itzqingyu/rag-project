@@ -1,109 +1,238 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { activityApi } from '../api/activityApi';
+import type { Meeting, Task, TaskInput, TaskPriority, TaskStatus } from '../types/activity';
 import './TasksPanel.css';
 
-export default function TasksPanel({ currentActivity, currentView }: any) {
-  // 🌟 新魔法：用來記住現在點擊了哪個篩選按鈕（預設顯示 'all' 全部）
-  const [filter, setFilter] = useState('all');
+interface TasksPanelProps {
+  activityId: number;
+  currentView: string;
+  meetingVersion: number;
+}
 
-  // 防呆機制：如果這個活動還沒有 tasks，就給它一個空陣列
-  const tasks = currentActivity.tasks || [];
-  
-  // 計算上方按鈕的數字
-  const totalCount = tasks.length;
-  const pendingCount = tasks.filter((t:any) => t.status !== 'done').length;
-  const doneCount = tasks.filter((t:any) => t.status === 'done').length;
+interface TaskFormState {
+  content: string;
+  assignee: string;
+  due_date: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  meeting_id: string;
+}
 
-  // 幫任務分門別類，對應到看板的三個直排
-  const todoTasks = tasks.filter((t:any) => t.status === 'todo');
-  const doingTasks = tasks.filter((t:any) => t.status === 'doing');
-  const doneTasks = tasks.filter((t:any) => t.status === 'done');
+const EMPTY_FORM: TaskFormState = {
+  content: '',
+  assignee: '',
+  due_date: '',
+  priority: '中',
+  status: 'pending',
+  meeting_id: '',
+};
 
-  // 把中文的優先度轉換成 CSS 認得的 class
-  const getPriorityClass = (priority: string) => {
-    if (priority === '高') return 'high';
-    if (priority === '中') return 'medium';
-    return 'low';
+function formFromTask(task: Task): TaskFormState {
+  return {
+    content: task.content,
+    assignee: task.assignee,
+    due_date: task.due_date,
+    priority: task.priority,
+    status: task.status,
+    meeting_id: task.meeting_id == null ? '' : String(task.meeting_id),
   };
+}
+
+function priorityClass(priority: TaskPriority): string {
+  if (priority === '高') return 'high';
+  if (priority === '中') return 'medium';
+  return 'low';
+}
+
+export default function TasksPanel({ activityId, currentView, meetingVersion }: TasksPanelProps) {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [filter, setFilter] = useState<'all' | TaskStatus>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [form, setForm] = useState<TaskFormState>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setTasks([]);
+    setMeetings([]);
+    setFormMode(null);
+    setEditingTaskId(null);
+    setForm(EMPTY_FORM);
+
+    Promise.all([activityApi.listTasks(activityId), activityApi.listMeetings(activityId)])
+      .then(([taskRows, meetingRows]) => {
+        if (!active) return;
+        setTasks(taskRows);
+        setMeetings(meetingRows);
+      })
+      .catch((requestError: Error) => {
+        if (active) setError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [activityId, meetingVersion]);
+
+  const meetingNames = useMemo(
+    () => new Map(meetings.map((meeting) => [meeting.id, meeting.name])),
+    [meetings],
+  );
+  const visibleTasks = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter);
+  const pendingTasks = visibleTasks.filter((task) => task.status === 'pending');
+  const completedTasks = visibleTasks.filter((task) => task.status === 'completed');
+
+  const closeForm = () => {
+    if (saving) return;
+    setFormMode(null);
+    setEditingTaskId(null);
+    setFormError(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setEditingTaskId(null);
+    setFormError(null);
+    setFormMode('create');
+  };
+
+  const openEdit = (task: Task) => {
+    setForm(formFromTask(task));
+    setEditingTaskId(task.id);
+    setFormError(null);
+    setFormMode('edit');
+  };
+
+  const setField = <K extends keyof TaskFormState>(field: K, value: TaskFormState[K]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    const payload: TaskInput = {
+      activity_id: activityId,
+      meeting_id: form.meeting_id ? Number(form.meeting_id) : null,
+      content: form.content.trim(),
+      assignee: form.assignee.trim(),
+      due_date: form.due_date,
+      priority: form.priority,
+      status: form.status,
+    };
+
+    try {
+      if (formMode === 'edit' && editingTaskId != null) {
+        const updated = await activityApi.updateTask(editingTaskId, payload);
+        setTasks((current) => current.map((task) => task.id === updated.id ? updated : task));
+      } else {
+        const created = await activityApi.createTask(payload);
+        setTasks((current) => [created, ...current]);
+      }
+      setFormMode(null);
+      setEditingTaskId(null);
+      setForm(EMPTY_FORM);
+    } catch (requestError) {
+      setFormError(requestError instanceof Error ? requestError.message : '待辦儲存失敗');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleStatus = async (task: Task) => {
+    const nextStatus: TaskStatus = task.status === 'completed' ? 'pending' : 'completed';
+    setBusyTaskId(task.id);
+    setError(null);
+    try {
+      const updated = await activityApi.updateTask(task.id, { status: nextStatus });
+      setTasks((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '狀態更新失敗');
+    } finally {
+      setBusyTaskId(null);
+    }
+  };
+
+  const handleDelete = async (task: Task) => {
+    if (!window.confirm(`確定刪除待辦「${task.content}」？`)) return;
+    setBusyTaskId(task.id);
+    setError(null);
+    try {
+      await activityApi.deleteTask(task.id);
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '待辦刪除失敗');
+    } finally {
+      setBusyTaskId(null);
+    }
+  };
+
+  const renderTask = (task: Task) => (
+    <div className={`task-card ${task.status === 'completed' ? 'completed' : ''}`} data-status={task.status} key={task.id}>
+      <div>
+        <span className={`priority ${priorityClass(task.priority)}`}>{task.priority}</span>
+        <button className={`task-check ${task.status === 'completed' ? 'checked' : ''}`} type="button" aria-label={task.status === 'completed' ? '標記為未完成' : '標記完成'} onClick={() => void toggleStatus(task)} disabled={busyTaskId === task.id}></button>
+      </div>
+      <h3>{task.content}</h3>
+      <p>{task.assignee || '未指定負責人'}{task.due_date ? `・期限 ${task.due_date}` : '・無期限'}</p>
+      <small>來源：{task.meeting_id == null ? '未綁定會議' : meetingNames.get(task.meeting_id) || `會議 #${task.meeting_id}`}</small>
+      <div className="card-actions"><button className="text-button" type="button" onClick={() => openEdit(task)}>編輯</button><button className="text-button danger-text" type="button" onClick={() => void handleDelete(task)} disabled={busyTaskId === task.id}>刪除</button></div>
+    </div>
+  );
 
   return (
     <section className={`view-panel ${currentView === 'tasks' ? 'active' : ''}`} data-panel="tasks">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">TASKS</p>
-          <h2>待辦事項</h2>
-          <p>同一筆待辦保留原始會議來源。</p>
+      <div className="section-heading"><div><p className="eyebrow">TASKS</p><h2>待辦事項</h2><p>待辦只顯示目前 Activity 的資料，會議關聯可留空。</p></div><button className="button primary" type="button" onClick={openCreate}>＋ 新增待辦</button></div>
+      {error && <div className="api-message error" role="alert">{error}</div>}
+      {loading && <div className="api-state">載入待辦中…</div>}
+
+      {!loading && (
+        <>
+          <div className="filter-row">
+            <button className={`filter ${filter === 'all' ? 'active' : ''}`} type="button" onClick={() => setFilter('all')}>全部 {tasks.length}</button>
+            <button className={`filter ${filter === 'pending' ? 'active' : ''}`} type="button" onClick={() => setFilter('pending')}>未完成 {tasks.filter((task) => task.status === 'pending').length}</button>
+            <button className={`filter ${filter === 'completed' ? 'active' : ''}`} type="button" onClick={() => setFilter('completed')}>已完成 {tasks.filter((task) => task.status === 'completed').length}</button>
+          </div>
+
+          {visibleTasks.length === 0 ? (
+            <div className="api-state empty"><h3>目前沒有符合條件的待辦</h3><p>新增待辦後會顯示在這裡。</p></div>
+          ) : (
+            <div className="task-board two-columns">
+              {(filter === 'all' || filter === 'pending') && <article className="task-column"><div className="column-title"><span>未完成</span><b>{pendingTasks.length}</b></div>{pendingTasks.map(renderTask)}</article>}
+              {(filter === 'all' || filter === 'completed') && <article className="task-column"><div className="column-title"><span>已完成</span><b>{completedTasks.length}</b></div>{completedTasks.map(renderTask)}</article>}
+            </div>
+          )}
+        </>
+      )}
+
+      {formMode && (
+        <div className="activity-modal-backdrop" role="presentation" onMouseDown={closeForm}>
+          <section className="activity-data-modal" role="dialog" aria-modal="true" aria-labelledby="task-form-title" onMouseDown={(event) => event.stopPropagation()}>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-head"><div><p className="eyebrow">TASK</p><h2 id="task-form-title">{formMode === 'create' ? '新增待辦' : '編輯待辦'}</h2></div><button className="close-button" type="button" onClick={closeForm}>×</button></div>
+              {formError && <div className="api-message error" role="alert">{formError}</div>}
+              <label className="field"><span>待辦內容</span><input value={form.content} onChange={(event) => setField('content', event.target.value)} required /></label>
+              <div className="two-fields"><label className="field"><span>負責人</span><input value={form.assignee} onChange={(event) => setField('assignee', event.target.value)} /></label><label className="field"><span>期限</span><input type="date" value={form.due_date} onChange={(event) => setField('due_date', event.target.value)} /></label></div>
+              <div className="two-fields">
+                <label className="field"><span>優先級</span><select value={form.priority} onChange={(event) => setField('priority', event.target.value as TaskPriority)}><option value="高">高</option><option value="中">中</option><option value="低">低</option></select></label>
+                <label className="field"><span>狀態</span><select value={form.status} onChange={(event) => setField('status', event.target.value as TaskStatus)}><option value="pending">未完成</option><option value="completed">已完成</option></select></label>
+              </div>
+              <label className="field"><span>所屬會議（選填）</span><select value={form.meeting_id} onChange={(event) => setField('meeting_id', event.target.value)}><option value="">不綁定會議</option>{meetings.map((meeting) => <option key={meeting.id} value={meeting.id}>{meeting.name}{meeting.date ? `・${meeting.date}` : ''}</option>)}</select></label>
+              <div className="modal-actions"><button className="button secondary" type="button" onClick={closeForm}>取消</button><button className="button primary" type="submit" disabled={saving}>{saving ? '儲存中…' : '儲存待辦'}</button></div>
+            </form>
+          </section>
         </div>
-        <button className="button primary" type="button">＋ 新增待辦</button>
-      </div>
-      
-      {/* 🔘 篩選按鈕列 */}
-      <div className="filter-row">
-        <button className={`filter ${filter === 'all' ? 'active' : ''}`} type="button" onClick={() => setFilter('all')}>
-          全部 {totalCount}
-        </button>
-        <button className={`filter ${filter === 'pending' ? 'active' : ''}`} type="button" onClick={() => setFilter('pending')}>
-          未完成 {pendingCount}
-        </button>
-        <button className={`filter ${filter === 'done' ? 'active' : ''}`} type="button" onClick={() => setFilter('done')}>
-          已完成 {doneCount}
-        </button>
-      </div>
-      
-      <div className="task-board">
-        {/* 📋 第一行：待處理 */}
-        {(filter === 'all' || filter === 'pending') && (
-          <article className="task-column">
-            <div className="column-title"><span>待處理</span><b>{todoTasks.length}</b></div>
-            {todoTasks.map((task:any) => (
-              <div className="task-card" data-status="pending" key={task.id}>
-                <div>
-                  <span className={`priority ${getPriorityClass(task.priority)}`}>{task.priority}</span>
-                  <button className="task-check" aria-label="標記完成"></button>
-                </div>
-                <h3>{task.title}</h3>
-                <p>{task.owner}・期限 {task.due}</p>
-                <small>來源：{task.source}</small>
-              </div>
-            ))}
-          </article>
-        )}
-
-        {/* 🏃‍♂️ 第二行：進行中 */}
-        {(filter === 'all' || filter === 'pending') && (
-          <article className="task-column">
-            <div className="column-title"><span>進行中</span><b>{doingTasks.length}</b></div>
-            {doingTasks.map((task:any) => (
-              <div className="task-card" data-status="pending" key={task.id}>
-                <div>
-                  <span className={`priority ${getPriorityClass(task.priority)}`}>{task.priority}</span>
-                  <button className="task-check" aria-label="標記完成"></button>
-                </div>
-                <h3>{task.title}</h3>
-                <p>{task.owner}・期限 {task.due}</p>
-                <small>來源：{task.source}</small>
-              </div>
-            ))}
-          </article>
-        )}
-
-        {/* ✅ 第三行：已完成 */}
-        {(filter === 'all' || filter === 'done') && (
-          <article className="task-column">
-            <div className="column-title"><span>已完成</span><b>{doneTasks.length}</b></div>
-            {doneTasks.map((task:any) => (
-              <div className="task-card completed" data-status="done" key={task.id}>
-                <div>
-                  <span className={`priority ${getPriorityClass(task.priority)}`}>{task.priority}</span>
-                  <button className="task-check checked" aria-label="取消完成"></button>
-                </div>
-                <h3>{task.title}</h3>
-                <p>{task.owner}・{task.due} 完成</p>
-                <small>來源：{task.source}</small>
-              </div>
-            ))}
-          </article>
-        )}
-      </div>
+      )}
     </section>
   );
 }

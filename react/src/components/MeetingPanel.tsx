@@ -1,122 +1,235 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { activityApi } from '../api/activityApi';
+import type { Meeting, MeetingInput } from '../types/activity';
 import './MeetingPanel.css';
 
-export default function MeetingPanel({ currentActivity, currentView, setCurrentView }: any) {
-  // 🌟 魔法狀態：用來記錄「原文」是否為展開狀態 (預設為 false 隱藏)
-  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+interface MeetingPanelProps {
+  activityId: number;
+  activityName: string;
+  currentView: string;
+  setCurrentView: (view: string) => void;
+  onMeetingsChanged: () => void;
+}
+
+interface MeetingFormState {
+  name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+  participants: string;
+  content: string;
+}
+
+const EMPTY_FORM: MeetingFormState = {
+  name: '',
+  date: '',
+  start_time: '',
+  end_time: '',
+  location: '',
+  participants: '',
+  content: '',
+};
+
+function toDateTimeInput(value: string): string {
+  return value ? value.replace(' ', 'T').slice(0, 16) : '';
+}
+
+function toApiDateTime(value: string): string {
+  return value ? value.replace('T', ' ') : '';
+}
+
+function formFromMeeting(meeting: Meeting): MeetingFormState {
+  return {
+    name: meeting.name,
+    date: meeting.date,
+    start_time: toDateTimeInput(meeting.start_time),
+    end_time: toDateTimeInput(meeting.end_time),
+    location: meeting.location,
+    participants: meeting.participants,
+    content: meeting.content,
+  };
+}
+
+export default function MeetingPanel({ activityId, activityName, currentView, setCurrentView, onMeetingsChanged }: MeetingPanelProps) {
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
+  const [form, setForm] = useState<MeetingFormState>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const selectedMeeting = useMemo(
+    () => meetings.find((meeting) => meeting.id === selectedMeetingId) ?? null,
+    [meetings, selectedMeetingId],
+  );
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setMeetings([]);
+    setSelectedMeetingId(null);
+    setFormMode(null);
+    setForm(EMPTY_FORM);
+
+    activityApi.listMeetings(activityId)
+      .then((rows) => {
+        if (!active) return;
+        setMeetings(rows);
+        setSelectedMeetingId(rows[0]?.id ?? null);
+      })
+      .catch((requestError: Error) => {
+        if (active) setError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [activityId]);
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setFormError(null);
+    setFormMode('create');
+  };
+
+  const openEdit = () => {
+    if (!selectedMeeting) return;
+    setForm(formFromMeeting(selectedMeeting));
+    setFormError(null);
+    setFormMode('edit');
+  };
+
+  const closeForm = () => {
+    if (saving) return;
+    setFormMode(null);
+    setFormError(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setFormError(null);
+
+    const payload: MeetingInput = {
+      activity_id: activityId,
+      name: form.name.trim(),
+      date: form.date,
+      start_time: toApiDateTime(form.start_time),
+      end_time: toApiDateTime(form.end_time),
+      location: form.location.trim(),
+      participants: form.participants.trim(),
+      content: form.content.trim(),
+    };
+
+    try {
+      if (formMode === 'edit' && selectedMeeting) {
+        const updated = await activityApi.updateMeeting(selectedMeeting.id, payload);
+        setMeetings((current) => current.map((meeting) => meeting.id === updated.id ? updated : meeting));
+      } else {
+        const created = await activityApi.createMeeting(payload);
+        setMeetings((current) => [created, ...current]);
+        setSelectedMeetingId(created.id);
+      }
+      onMeetingsChanged();
+      closeForm();
+    } catch (requestError) {
+      setFormError(requestError instanceof Error ? requestError.message : '會議儲存失敗');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedMeeting || !window.confirm(`確定刪除「${selectedMeeting.name}」？關聯資料會保留，但 meeting_id 將清空。`)) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await activityApi.deleteMeeting(selectedMeeting.id);
+      const remaining = meetings.filter((meeting) => meeting.id !== selectedMeeting.id);
+      setMeetings(remaining);
+      setSelectedMeetingId(remaining[0]?.id ?? null);
+      onMeetingsChanged();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '會議刪除失敗');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const setField = (field: keyof MeetingFormState, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
 
   return (
     <section className={`view-panel ${currentView === 'meeting' ? 'active' : ''}`} data-panel="meeting">
-      
-      {/* 🔙 頂部工具列 */}
       <div className="detail-toolbar">
-        <button className="back-link" type="button" onClick={() => setCurrentView('before')}>
-          ← 回到活動前
-        </button>
-        <div>
-          <button className="button secondary" type="button">↑ 上傳會議紀錄</button>
-          <button className="button secondary" type="button" style={{ margin: '0 8px' }}>編輯會議</button>
-          <button className="button primary" type="button">儲存</button>
-        </div>
+        <button className="back-link" type="button" onClick={() => setCurrentView('before')}>← 回到活動前</button>
+        <button className="button primary" type="button" onClick={openCreate}>＋ 新增會議</button>
       </div>
-      
-      {/* 📅 會議標題區 */}
+
       <div className="section-heading" style={{ marginTop: '24px' }}>
-        <div>
-          <p className="eyebrow">MEETING</p>
-          <h2>{currentActivity.nextMeeting || '三籌會議'}</h2>
-          <p>{currentActivity.nextMeetingDate ? `2026 年 ${currentActivity.nextMeetingDate}` : '日期未定'}・19:00–21:00・系辦會議室</p>
-        </div>
-        <span className="status preparing">即將進行</span>
+        <div><p className="eyebrow">MEETINGS</p><h2>{activityName}・籌備會議</h2><p>只顯示目前活動的會議紀錄。</p></div>
       </div>
-      
-      <div className="attendees">
-        <span>參與人員</span>
-        <div className="avatar-stack">
-          <i>陳</i><i>黃</i><i>吳</i><i>許</i><i>＋8</i>
-        </div>
-      </div>
-      
-      {/* 🤖 AI 整理摘要區 */}
-      <article className="ai-summary-block">
-        <div className="card-title">
-          <div>
-            <p className="eyebrow">AI 整理結果・假資料</p>
-            <h3>會議紀錄已整理為 4 種資料</h3>
-          </div>
-          <span className="source-chip">來源：三籌紀錄.md</span>
-        </div>
-        <div className="extraction-stats">
-          <button type="button" onClick={() => setCurrentView('decisions')}><b>3</b><span>決策</span></button>
-          <button type="button" onClick={() => setCurrentView('tasks')}><b>7</b><span>待辦</span></button>
-          <button type="button"><b>5</b><span>工作分配</span></button>
-          <button type="button" onClick={() => setCurrentView('schedule')}><b>2</b><span>流程變更</span></button>
-        </div>
-      </article>
-      
-      <div className="meeting-grid">
-        {/* 待確認決策卡片 */}
-        <article className="info-card">
-          <div className="card-title">
-            <h3>待確認決策</h3>
-            <div>
-              <span className="count-badge">2</span>
-              <button className="text-button" style={{ marginLeft: '8px' }} type="button">＋ 新增</button>
-            </div>
-          </div>
-          <div className="proposal-card">
-            <p>問題</p>
-            <strong>遊覽車發車時間是否提前？</strong>
-            <p>AI 建議更新</p>
-            <div className="change-row">
-              <span>07:30</span><b>→</b><span className="new-value">07:00</span>
-            </div>
-            <small>原因：避開週末上山車潮</small>
-            <div className="proposal-actions">
-              <button type="button">忽略</button>
-              <button type="button">確認</button>
-            </div>
-          </div>
-        </article>
 
-        {/* 本次待辦卡片 */}
-        <article className="info-card">
+      {error && <div className="api-message error" role="alert">{error}</div>}
+      {loading && <div className="api-state">載入會議中…</div>}
+
+      {!loading && meetings.length === 0 && (
+        <div className="api-state empty"><h3>尚無會議</h3><p>建立第一場籌備會議，後續待辦就能選擇來源。</p><button className="button primary" type="button" onClick={openCreate}>新增會議</button></div>
+      )}
+
+      {meetings.length > 0 && (
+        <div className="meeting-switch" aria-label="選擇會議">
+          {meetings.map((meeting, index) => (
+            <button key={meeting.id} className={meeting.id === selectedMeetingId ? 'active' : ''} type="button" onClick={() => setSelectedMeetingId(meeting.id)}>
+              <span>{String(index + 1).padStart(2, '0')}</span><strong>{meeting.name}</strong><small>{meeting.date || '日期未定'}</small>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedMeeting && (
+        <article className="meeting-detail-card">
           <div className="card-title">
-            <h3>本次待辦</h3>
-            <div>
-              <button className="text-button" type="button" style={{ marginRight: '8px' }}>＋ 新增</button>
-              <button className="text-button" type="button" onClick={() => setCurrentView('tasks')}>查看全部</button>
+            <div><p className="eyebrow">MEETING DETAIL</p><h3>{selectedMeeting.name}</h3></div>
+            <div className="heading-actions">
+              <button className="button secondary" type="button" onClick={openEdit}>編輯</button>
+              <button className="button danger" type="button" onClick={() => void handleDelete()} disabled={deleting}>{deleting ? '刪除中…' : '刪除'}</button>
             </div>
           </div>
-          <ul className="simple-list">
-            <li><span>確認遊覽車發車時間</span><small>陳怡安・9/16</small></li>
-            <li><span>向場地方確認室內音響</span><small>黃冠宇・9/20</small></li>
-            <li><span>更新家長通知單</span><small>吳品妤・9/22</small></li>
-          </ul>
+          <dl className="facts">
+            <div><dt>日期</dt><dd>{selectedMeeting.date || '未填寫'}</dd></div>
+            <div><dt>時間</dt><dd>{selectedMeeting.start_time || '未填寫'}{selectedMeeting.end_time ? ` ～ ${selectedMeeting.end_time}` : ''}</dd></div>
+            <div><dt>地點</dt><dd>{selectedMeeting.location || '未填寫'}</dd></div>
+            <div><dt>參與人員</dt><dd>{selectedMeeting.participants || '未填寫'}</dd></div>
+          </dl>
+          <div className="meeting-content"><span>會議內容</span><p>{selectedMeeting.content || '尚未填寫會議內容。'}</p></div>
         </article>
-      </div>
-      
-      {/* 📄 會議紀錄原文 (展開/收起功能) */}
-      <article className="transcript">
-        <div className="card-title">
-          <h3>會議紀錄原文</h3>
-          {/* 🌟 點擊按鈕切換 isTranscriptOpen 的狀態 */}
-          <button 
-            className="text-button transcript-toggle" 
-            type="button"
-            onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
-          >
-            {isTranscriptOpen ? '收起原文' : '展開原文'}
-          </button>
-        </div>
-        {/* 🌟 根據狀態決定要不要加上 hidden 屬性 */}
-        <div className="transcript-body" hidden={!isTranscriptOpen}>
-          <p>交通組回報週末上山車流量較大，建議發車時間由 07:30 提前至 07:00。總召請交通組在 9/16 前向遊覽車公司確認……</p>
-          <mark>晚會若遇雨，改至室內禮堂；音響組需提前一天完成測試。</mark>
-          <p>保險資料目前尚未確認，請於下次會議前補齊。</p>
-        </div>
-      </article>
+      )}
 
+      {formMode && (
+        <div className="activity-modal-backdrop" role="presentation" onMouseDown={closeForm}>
+          <section className="activity-data-modal" role="dialog" aria-modal="true" aria-labelledby="meeting-form-title" onMouseDown={(event) => event.stopPropagation()}>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-head"><div><p className="eyebrow">MEETING</p><h2 id="meeting-form-title">{formMode === 'create' ? '新增會議' : '編輯會議'}</h2></div><button className="close-button" type="button" onClick={closeForm}>×</button></div>
+              {formError && <div className="api-message error" role="alert">{formError}</div>}
+              <label className="field"><span>會議名稱</span><input value={form.name} onChange={(event) => setField('name', event.target.value)} required /></label>
+              <div className="two-fields"><label className="field"><span>日期</span><input type="date" value={form.date} onChange={(event) => setField('date', event.target.value)} /></label><label className="field"><span>地點</span><input value={form.location} onChange={(event) => setField('location', event.target.value)} /></label></div>
+              <div className="two-fields"><label className="field"><span>開始時間</span><input type="datetime-local" value={form.start_time} onChange={(event) => setField('start_time', event.target.value)} /></label><label className="field"><span>結束時間</span><input type="datetime-local" value={form.end_time} onChange={(event) => setField('end_time', event.target.value)} /></label></div>
+              <label className="field"><span>參與人員</span><input value={form.participants} onChange={(event) => setField('participants', event.target.value)} placeholder="以逗號分隔" /></label>
+              <label className="field"><span>會議內容</span><textarea rows={6} value={form.content} onChange={(event) => setField('content', event.target.value)} /></label>
+              <div className="modal-actions"><button className="button secondary" type="button" onClick={closeForm}>取消</button><button className="button primary" type="submit" disabled={saving}>{saving ? '儲存中…' : '儲存會議'}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
