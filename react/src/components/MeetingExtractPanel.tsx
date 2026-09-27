@@ -583,6 +583,27 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({ hidden
     setExtractedDocName(null);
   };
 
+  /**
+   * 重新整理整個畫面：
+   * 刷新後端最新文件清單、活動清單，並一併重置預覽資料、提示狀態與輸入。
+   */
+  const handleRefreshAll = async () => {
+    handleReset();
+    setActivityNotice(null);
+    setDocDrawerError(null);
+    setNewActivityData({
+      name: '',
+      year: new Date().getFullYear(),
+      status: '籌備中',
+      venue: '',
+      activity_type: '會議',
+    });
+    await Promise.all([
+      loadDocumentsList(),
+      loadActivitiesList(),
+    ]);
+  };
+
   return (
     <div className="extract-panel-layout" hidden={hidden}>
       {/* 頂部標題列 */}
@@ -594,9 +615,9 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({ hidden
           <button
             type="button"
             className="button secondary sm-btn"
-            onClick={loadDocumentsList}
+            onClick={handleRefreshAll}
             disabled={isLoadingDocs || isExtracting || isCommitting || isUploadingDoc}
-            title="重新整理文件清單"
+            title="重新整理畫面與預覽資料"
           >
             <RefreshCw size={14} className={isLoadingDocs ? 'spinning' : ''} />
             <span>重新整理</span>
