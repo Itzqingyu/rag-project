@@ -247,12 +247,6 @@ export default function App() {
               )}
             </div>
           </nav>
-
-          <div className="sidebar-note">
-            <span className="eyebrow">2026 屆</span>
-            <strong>資管系學會</strong>
-            <span>4 個活動・2 個正在處理</span>
-          </div>
         </aside>
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
