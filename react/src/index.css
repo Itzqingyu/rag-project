@@ -436,25 +436,6 @@ a {
   font-size: 0.75rem;
 }
 
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 8px 0;
-}
-
-.profile strong {
-  display: block;
-  color: #ffffff;
-  font-size: 0.85rem;
-}
-
-.profile small {
-  display: block;
-  color: var(--muted);
-  font-size: 0.72rem;
-  margin-top: 2px;
-}
 
 .avatar, .person {
   display: inline-grid;

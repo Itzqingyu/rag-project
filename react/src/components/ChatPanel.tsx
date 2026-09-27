@@ -15,19 +15,22 @@ import ReactMarkdown from 'react-markdown';
 import SessionSidebar, { SessionItem } from './SessionSidebar';
 import DocumentDrawer, { DocumentItem } from './DocumentDrawer';
 import ConfirmModal from './ConfirmModal';
+import RenameModal from './RenameModal';
 import {
   fetchSessions,
   fetchSessionDetail,
   createNewSession,
+  updateSessionTitle,
   deleteSessionById,
   sendChatMessage,
-} from '../services/chatService';
+} from '../api/chatService';
 import {
   fetchDocuments,
   uploadDocument,
   deleteDocumentByIdentifier,
-} from '../services/documentService';
-import { RetrievedChunk } from '../services/apiTypes';
+  checkDuplicateFileStem,
+} from '../api/documentService';
+import { RetrievedChunk } from '../api/apiTypes';
 import './ChatPanel.css';
 
 /**
@@ -68,10 +71,10 @@ function formatTimeString(isoString?: string): string {
  * LLM 聊天面板主組件 (Chat Panel)
  * 整合：
  * 1. 雙欄佈局 (會話清單邊欄 + 聊天串流主區)
- * 2. 模式切換 Toggle Pill (普通對話 vs 知識庫問答)
+ * 2. 模式切換 Toggle Pill (普通對話 vs 歷史紀錄問答)
  * 3. 完整接入 Python FastAPI 後端端點，無任何假資料或模擬回覆
  * 4. 後端連線異常或處理失敗時即時返回真實錯誤狀態
- * 5. 浮動知識庫文檔抽屜 (支援真實上傳切片與刪除)
+ * 5. 浮動歷史紀錄文檔抽屜 (支援真實上傳切片與刪除)
  */
 export const ChatPanel: React.FC = () => {
   // 會話列表狀態 (來源為後端 /sessions)
@@ -79,7 +82,7 @@ export const ChatPanel: React.FC = () => {
   // 當前選中的會話 ID (以 string 儲存對齊組件 props)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
-  // 當前對話模式：'chat' (普通對話) 或 'rag' (知識庫問答)
+  // 當前對話模式：'chat' (普通對話) 或 'rag' (歷史紀錄問答)
   const [currentMode, setCurrentMode] = useState<'chat' | 'rag'>('chat');
 
   // 訊息串流狀態 (各會話的歷史訊息快取)
@@ -93,14 +96,25 @@ export const ChatPanel: React.FC = () => {
   // 全域/頂部 API 連線或操作錯誤訊息
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // 知識庫文檔抽屜開啟狀態
+  // 歷史紀錄文檔抽屜開啟狀態
   const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
-  // 知識庫文件清單狀態 (來源為後端 /documents)
+  // 歷史紀錄文件清單狀態 (來源為後端 /documents)
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  // 知識庫文件上傳中狀態
+  // 歷史紀錄文件上傳中狀態
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
-  // 知識庫抽屜專屬錯誤訊息
+  // 歷史紀錄抽屜專屬錯誤訊息
   const [docDrawerError, setDocDrawerError] = useState<string | null>(null);
+
+  // 編輯會話名稱彈窗狀態 (霧化背景彈窗)
+  const [renameModal, setRenameModal] = useState<{
+    isOpen: boolean;
+    sessionId: string;
+    currentTitle: string;
+  }>({
+    isOpen: false,
+    sessionId: '',
+    currentTitle: '',
+  });
 
   // 參考切片折疊狀態 (key: messageId, value: boolean)
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>({});
@@ -115,7 +129,7 @@ export const ChatPanel: React.FC = () => {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -147,7 +161,7 @@ export const ChatPanel: React.FC = () => {
       setDocuments(mappedDocs);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setDocDrawerError(`無法載入知識庫文檔：${msg}`);
+      setDocDrawerError(`無法載入歷史紀錄文檔：${msg}`);
     }
   }, []);
 
@@ -198,7 +212,7 @@ export const ChatPanel: React.FC = () => {
                 source:
                   (c as { metadata?: { source?: string } }).metadata?.source ||
                   (c as { source?: string }).source ||
-                  '文件知識庫',
+                  '歷史紀錄文件',
               }));
             }
           } catch {
@@ -306,6 +320,52 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
+   * 編輯/重命名對話會話名稱 (呼叫 PATCH /sessions/{id})
+   * 同步更新後端 SQLite 資料庫與本地會話列表
+   */
+  const handleRenameSession = async (id: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+
+    const numId = Number(id);
+    if (isNaN(numId)) return;
+
+    try {
+      setApiError(null);
+      await updateSessionTitle(numId, trimmed);
+      // 本地狀態同步更新
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, title: trimmed } : s))
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(`更新對話名稱失敗：${msg}`);
+    }
+  };
+
+  /**
+   * 開啟重新命名對話框
+   */
+  const handleOpenRenameModal = (id: string, currentTitle: string) => {
+    setRenameModal({
+      isOpen: true,
+      sessionId: id,
+      currentTitle,
+    });
+  };
+
+  /**
+   * 確認並儲存新會話名稱
+   */
+  const handleConfirmRename = async (newTitle: string) => {
+    const targetId = renameModal.sessionId;
+    setRenameModal((prev) => ({ ...prev, isOpen: false }));
+    if (targetId) {
+      await handleRenameSession(targetId, newTitle);
+    }
+  };
+
+  /**
    * 發送訊息至後端 (呼叫 POST /sessions/{id}/messages)
    * 絕不使用假資料模擬，後端異常則顯示真實錯誤
    */
@@ -368,7 +428,7 @@ export const ChatPanel: React.FC = () => {
       const rawChunks = response.retrieved_chunks || [];
       const parsedChunks = rawChunks.map((c) => ({
         content: c.content,
-        source: c.metadata?.source || '文件知識庫',
+        source: c.metadata?.source || '歷史紀錄文件',
       }));
 
       // 構建後端真實回傳之助手訊息
@@ -451,11 +511,22 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
-   * 知識庫文件真實上傳 (呼叫 POST /upload)
+   * 歷史紀錄文件真實上傳 (呼叫 POST /upload)
+   * 具備前置主檔名防呆：若清單中已有相同主檔名之文件，直接中斷並提示錯誤，不發送網路請求。
    */
   const handleUploadFile = async (file: File) => {
-    setIsUploadingDoc(true);
     setDocDrawerError(null);
+
+    // 前端前置主檔名重複防呆校驗
+    const duplicate = checkDuplicateFileStem(file.name, documents.map((d) => d.name));
+    if (duplicate) {
+      setDocDrawerError(
+        `已存在相同主檔名之文件「${duplicate}」。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。`
+      );
+      return;
+    }
+
+    setIsUploadingDoc(true);
     try {
       await uploadDocument(file);
       // 上傳完成後重新獲取文檔列表
@@ -469,7 +540,7 @@ export const ChatPanel: React.FC = () => {
   };
 
   /**
-   * 知識庫文件真實刪除 (先跳出全螢幕模糊確認視窗，確認後呼叫後端 DELETE /documents/{id})
+   * 歷史紀錄文件真實刪除 (先跳出全螢幕模糊確認視窗，確認後呼叫後端 DELETE /documents/{id})
    */
   const handleDeleteDocument = (id: string) => {
     const targetDoc = documents.find((d) => d.id === id);
@@ -477,8 +548,8 @@ export const ChatPanel: React.FC = () => {
 
     setConfirmDialog({
       isOpen: true,
-      title: '確定要刪除知識庫文檔？',
-      message: `確定要自知識庫中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
+      title: '確定要刪除歷史紀錄文檔？',
+      message: `確定要自歷史紀錄中移除 ${docName} 嗎？這將會同步自磁碟物理刪除該 Markdown 文件與向量檢索索引。`,
       onConfirm: async () => {
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         try {
@@ -502,11 +573,10 @@ export const ChatPanel: React.FC = () => {
       <SessionSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onSelectSession={setActiveSessionId}
+        onSelectSession={(id) => setActiveSessionId(id)}
         onCreateSession={handleCreateSession}
         onDeleteSession={handleDeleteSession}
-        onOpenDocDrawer={() => setIsDocDrawerOpen(true)}
-        docCount={documents.length}
+        onOpenRenameModal={handleOpenRenameModal}
       />
 
       {/* 2. 右側：聊天主區域 */}
@@ -514,7 +584,7 @@ export const ChatPanel: React.FC = () => {
         {/* 頂部資訊列 */}
         <header className="chat-top-header">
           <div className="chat-header-title">
-            <h2>{activeSessionId ? activeSessionTitle : 'AI 智庫對話'}</h2>
+            <h2>{activeSessionId ? activeSessionTitle : 'DASH Agent'}</h2>
           </div>
           <div className="chat-header-actions">
             <button
@@ -523,7 +593,7 @@ export const ChatPanel: React.FC = () => {
               onClick={() => setIsDocDrawerOpen(true)}
             >
               <FileText size={15} />
-              <span>知識庫 ({documents.length})</span>
+              <span>歷史紀錄 ({documents.length})</span>
             </button>
           </div>
         </header>
@@ -551,7 +621,7 @@ export const ChatPanel: React.FC = () => {
             // 極簡空狀態：簡潔文字與操作提示
             <div className="chat-empty-state">
               <h3>尚無訊息</h3>
-              <p>在下方輸入開始對話，或切換至知識庫問答查詢入庫文件</p>
+              <p>在下方輸入訊息開始對話</p>
             </div>
           ) : (
             // 渲染訊息氣泡列表
@@ -569,13 +639,12 @@ export const ChatPanel: React.FC = () => {
                   >
                     {/* 頭像 */}
                     <div
-                      className={`chat-avatar ${
-                        isUser
-                          ? 'user-avatar'
-                          : isErrorBubble
+                      className={`chat-avatar ${isUser
+                        ? 'user-avatar'
+                        : isErrorBubble
                           ? 'assistant-avatar error-avatar'
                           : 'assistant-avatar'
-                      }`}
+                        }`}
                     >
                       {isUser ? (
                         <User size={18} />
@@ -595,19 +664,18 @@ export const ChatPanel: React.FC = () => {
                         <span className="bubble-time">{msg.createdAt}</span>
                         {msg.mode && (
                           <span className={`bubble-mode-tag ${msg.mode}`}>
-                            {msg.mode === 'rag' ? '知識庫問答' : '普通對話'}
+                            {msg.mode === 'rag' ? '歷史紀錄問答' : '普通對話'}
                           </span>
                         )}
                       </div>
 
                       <div
-                        className={`chat-bubble-body ${
-                          isUser
-                            ? 'user-body'
-                            : isErrorBubble
+                        className={`chat-bubble-body ${isUser
+                          ? 'user-body'
+                          : isErrorBubble
                             ? 'assistant-body error-body'
                             : 'assistant-body'
-                        }`}
+                          }`}
                       >
                         <div className="chat-markdown-content">
                           <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -688,33 +756,24 @@ export const ChatPanel: React.FC = () => {
                 onClick={() => setCurrentMode('rag')}
               >
                 <BookOpen size={14} />
-                <strong>知識庫問答</strong>
+                <strong>歷史紀錄問答</strong>
               </button>
             </div>
-            <span className="mode-tip-text">
+            {/* <span className="mode-tip-text">
               {currentMode === 'rag'
                 ? '檢索已導入之文件向量切片輔助回答'
                 : '無需檢索文件，由 AI 自由推理與歷史上下文記憶對話'}
-            </span>
+            </span> */}
           </div>
 
           {/* 輸入框與發送按鈕組 */}
           <div className="chat-input-wrapper">
-            <button
-              type="button"
-              className="chat-input-btn doc-attach-btn"
-              title="管理知識庫文件"
-              onClick={() => setIsDocDrawerOpen(true)}
-            >
-              <Paperclip size={18} />
-            </button>
-
             <textarea
               className="chat-textarea"
               placeholder={
                 currentMode === 'rag'
-                  ? '輸入想從知識庫查詢的問題… (Enter 發送，Shift+Enter 換行)'
-                  : '與 AI 助手開始對話… (Enter 發送，Shift+Enter 換行)'
+                  ? '輸入想從歷史紀錄查詢的問題…'
+                  : '與 DASH Agent 對話…'
               }
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -735,7 +794,7 @@ export const ChatPanel: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. 浮動/抽屜式知識庫文檔管理 */}
+      {/* 3. 浮動/抽屜式歷史紀錄文檔管理 */}
       <DocumentDrawer
         isOpen={isDocDrawerOpen}
         onClose={() => setIsDocDrawerOpen(false)}
@@ -754,6 +813,14 @@ export const ChatPanel: React.FC = () => {
         message={confirmDialog.message}
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* 5. 編輯對話名稱彈窗 (背景霧化) */}
+      <RenameModal
+        isOpen={renameModal.isOpen}
+        initialValue={renameModal.currentTitle}
+        onConfirm={handleConfirmRename}
+        onCancel={() => setRenameModal((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );
