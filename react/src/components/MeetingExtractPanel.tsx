@@ -61,7 +61,11 @@ const formatTimeString = (isoString?: string): string => {
  * 3. 呈現結構化標準表格並提供使用者確認
  * 4. 確認後一鍵寫入資料庫
  */
-export const MeetingExtractPanel: React.FC = () => {
+export interface MeetingExtractPanelProps {
+  hidden?: boolean;
+}
+
+export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({ hidden = false }) => {
   // 原生檔案選擇器參照 (快捷直上使用)
   const quickFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -580,7 +584,7 @@ export const MeetingExtractPanel: React.FC = () => {
   };
 
   return (
-    <div className="extract-panel-layout">
+    <div className="extract-panel-layout" hidden={hidden}>
       {/* 頂部標題列 */}
       <header className="extract-top-header">
         <div className="extract-header-title">

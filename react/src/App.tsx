@@ -430,8 +430,8 @@ export default function App() {
           {/* 9. LLM 聊天大面板視圖 */}
           {currentView === 'chat' && <ChatPanel />}
 
-          {/* 10. AI 會議紀錄整理視圖 */}
-          {currentView === 'extract' && <MeetingExtractPanel />}
+          {/* 10. AI 會議紀錄整理視圖 (常駐掛載避免切換面板時預覽資料遺失) */}
+          <MeetingExtractPanel hidden={currentView !== 'extract'} />
         </main>
       </div>
 

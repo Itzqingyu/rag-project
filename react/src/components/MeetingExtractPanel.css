@@ -14,6 +14,10 @@
   position: relative;
 }
 
+.extract-panel-layout[hidden] {
+  display: none !important;
+}
+
 /* 頂部標題列 */
 .extract-top-header {
   flex-shrink: 0;
