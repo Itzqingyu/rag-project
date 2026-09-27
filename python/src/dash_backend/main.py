@@ -552,7 +552,7 @@ def commit_summary(req: CommitSummaryRequest):
 
         return {
             "status": "success",
-            "message": "成功將 AI 結構化會議紀錄寫入資料庫！",
+            "message": "成功將整理後之會議紀錄存入資料庫！",
             "meeting": created_meeting,
             "decisions": created_decisions,
             "tasks": created_tasks

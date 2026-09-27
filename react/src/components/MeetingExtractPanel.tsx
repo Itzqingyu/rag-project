@@ -420,7 +420,7 @@ export const MeetingExtractPanel: React.FC = () => {
 
       setIsCommitted(true);
       setSuccessMessage(
-        `${res.message} 已成功綁定至活動「${targetActName}」（包含 1 筆會議紀錄、${res.decisions.length} 項關鍵決策、${res.tasks.length} 項待辦事項）`
+        `${res.message}`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -693,7 +693,7 @@ export const MeetingExtractPanel: React.FC = () => {
           <div className="extract-loading-box">
             <div className="extract-loading-spinner" />
             <strong>LLM 正在閱讀全文並整理標準會議架構…</strong>
-            <p>依據專業秘書 System Prompt 自動提煉會議摘要、關鍵決策與待辦清單，請稍候。</p>
+            <p>自動提煉會議摘要、關鍵決策與待辦清單，請稍候。</p>
           </div>
         )}
 
@@ -775,117 +775,104 @@ export const MeetingExtractPanel: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <div className="activity-dropdown-group">
-                      <div className="activity-select-row">
-                        <label htmlFor="activity-select-input" className="activity-field-label">
-                          選擇歸屬活動 <span className="req-star">*</span>
-                        </label>
-                        <select
-                          id="activity-select-input"
-                          className="table-input activity-dropdown-select"
-                          value={selectedActivityId}
-                          onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : '')}
-                        >
-                          <option value="">-- 請選擇欲關聯的活動（必填）--</option>
-                          {activities.map((act) => (
-                            <option key={act.id} value={act.id}>
-                              {act.name} ({act.year ? `${act.year}年` : ''}{act.status ? ` • ${act.status}` : ''})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {selectedActivityId && (
-                        <div className="activity-selected-card">
-                          <div className="activity-badge-meta">
-                            <span className="activity-badge-name">
-                              {activities.find((a) => a.id === selectedActivityId)?.name}
-                            </span>
-                            <span className="activity-badge-status">
-                              {activities.find((a) => a.id === selectedActivityId)?.status}
-                            </span>
-                            {activities.find((a) => a.id === selectedActivityId)?.year && (
-                              <span className="activity-badge-year">
-                                {activities.find((a) => a.id === selectedActivityId)?.year} 年
-                              </span>
-                            )}
-                            {activities.find((a) => a.id === selectedActivityId)?.venue && (
-                              <span className="activity-badge-venue">
-                                地點：{activities.find((a) => a.id === selectedActivityId)?.venue}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                    /* 採用與會議基本資訊一致的表格形式 */
+                    <div className="standard-table-wrap">
+                      <table className="standard-meeting-table editable">
+                        <tbody>
+                          <tr>
+                            <th>歸屬活動</th>
+                            <td>
+                              <select
+                                id="activity-select-input"
+                                className="table-input"
+                                value={selectedActivityId}
+                                onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : '')}
+                              >
+                                <option value="">-- 請選擇欲關聯的活動（必填）--</option>
+                                {activities.map((act) => (
+                                  <option key={act.id} value={act.id}>
+                                    {act.name} ({act.year ? `${act.year}年` : ''}{act.status ? ` • ${act.status}` : ''})
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
               ) : (
+                /* 快速建立新活動：改為一致的標準表格排版 */
                 <div className="activity-create-container">
-                  <div className="activity-form-grid">
-                    <div className="activity-form-field col-span-2">
-                      <label>
-                        活動名稱 <span className="req-star">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="table-input"
-                        value={newActivityData.name}
-                        onChange={(e) =>
-                          setNewActivityData((prev) => ({ ...prev, name: e.target.value }))
-                        }
-                        placeholder="例如：2026 迎新宿營、第四季校園路跑"
-                      />
-                    </div>
-                    <div className="activity-form-field">
-                      <label>
-                        活動年份 <span className="req-star">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        className="table-input"
-                        value={newActivityData.year}
-                        onChange={(e) =>
-                          setNewActivityData((prev) => ({
-                            ...prev,
-                            year: parseInt(e.target.value, 10) || new Date().getFullYear(),
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="activity-form-field">
-                      <label>
-                        活動狀態 <span className="req-star">*</span>
-                      </label>
-                      <select
-                        className="table-input"
-                        value={newActivityData.status}
-                        onChange={(e) =>
-                          setNewActivityData((prev) => ({ ...prev, status: e.target.value }))
-                        }
-                      >
-                        <option value="籌備中">籌備中</option>
-                        <option value="進行中">進行中</option>
-                        <option value="已結束">已結束</option>
-                      </select>
-                    </div>
-                    <div className="activity-form-field col-span-2">
-                      <label>活動地點 (選填)</label>
-                      <input
-                        type="text"
-                        className="table-input"
-                        value={newActivityData.venue}
-                        onChange={(e) =>
-                          setNewActivityData((prev) => ({ ...prev, venue: e.target.value }))
-                        }
-                        placeholder="例如：活動中心 201 教室"
-                      />
-                    </div>
+                  <div className="standard-table-wrap">
+                    <table className="standard-meeting-table editable">
+                      <tbody>
+                        <tr>
+                          <th>活動名稱</th>
+                          <td colSpan={3}>
+                            <input
+                              type="text"
+                              className="table-input title-input"
+                              value={newActivityData.name}
+                              onChange={(e) =>
+                                setNewActivityData((prev) => ({ ...prev, name: e.target.value }))
+                              }
+                              placeholder="例如：2026 迎新宿營、第四季校園路跑"
+                            />
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>活動年份</th>
+                          <td>
+                            <input
+                              type="number"
+                              className="table-input"
+                              value={newActivityData.year}
+                              onChange={(e) =>
+                                setNewActivityData((prev) => ({
+                                  ...prev,
+                                  year: parseInt(e.target.value, 10) || new Date().getFullYear(),
+                                }))
+                              }
+                            />
+                          </td>
+                          <th>活動狀態</th>
+                          <td>
+                            <select
+                              className="table-input"
+                              value={newActivityData.status}
+                              onChange={(e) =>
+                                setNewActivityData((prev) => ({ ...prev, status: e.target.value }))
+                              }
+                            >
+                              <option value="籌備中">籌備中</option>
+                              <option value="進行中">進行中</option>
+                              <option value="已結束">已結束</option>
+                            </select>
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>活動地點</th>
+                          <td colSpan={3}>
+                            <input
+                              type="text"
+                              className="table-input"
+                              value={newActivityData.venue}
+                              onChange={(e) =>
+                                setNewActivityData((prev) => ({ ...prev, venue: e.target.value }))
+                              }
+                              placeholder="例如：活動中心 201 教室 (選填)"
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
                   <div className="activity-create-footer">
                     <span className="activity-create-hint">
-                      填寫後可點擊立即建立，或直接點擊底部「確認寫入資料庫」自動連帶建立入庫。
+                      填寫後可點擊立即建立，或直接點擊底部「確認存入資料庫」自動連帶建立入庫。
                     </span>
                     <button
                       type="button"
@@ -1265,10 +1252,10 @@ export const MeetingExtractPanel: React.FC = () => {
             <Check size={16} />
             <span>
               {isCommitted
-                ? '已成功寫入資料庫'
+                ? '已成功存入資料庫'
                 : isCommitting
-                  ? '寫入資料庫中…'
-                  : '確認寫入資料庫'}
+                  ? '存入資料庫中…'
+                  : '確認存入資料庫'}
             </span>
           </button>
         </div>
