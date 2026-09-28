@@ -33,6 +33,7 @@ import SourceRecordPanel from './components/SourceRecordPanel';
 import ChatPanel from './components/ChatPanel';
 // 引入 AI 會議紀錄整理面板組件
 import MeetingExtractPanel from './components/MeetingExtractPanel';
+import html2pdf from 'html2pdf.js';
 
 interface Message {
   id: string;
@@ -318,6 +319,27 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
   
   // 儲存 AI 產生的真資料
   const [handoverSummary, setHandoverSummary] = useState<string>(''); 
+
+  // 建立一個 Ref 用來綁定你要印出來的畫面
+  const pdfExportRef = useRef<HTMLDivElement>(null);
+  // 撰寫匯出 PDF 的邏輯
+  const handleExportPDF = () => {
+    const element = pdfExportRef.current;
+    if (!element) return;
+
+    // 設定 PDF 的輸出格式
+    const opt: any = {
+      margin:       15,
+      filename:     'AI年度交接報告.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 }, // 提高清晰度
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // 呼叫套件產生並下載 PDF
+    // @ts-ignore
+    html2pdf().set(opt).from(element).save();
+  };
 
   // ==========================================
   // 2. 原型 UI 結構 (已轉換 className、閉合標籤與 inline style)
@@ -792,7 +814,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
 
       <dialog ref={handoverModalRef} className="modal" id="handover-modal">
         <form method="dialog">
-          <div className="modal-head">
+          <div className="modal-head">  
             <div>
               <p className="eyebrow">AI HANDOVER</p>
               <h2>交接摘要預覽</h2>
@@ -800,7 +822,14 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
             <button className="close-button" value="cancel" aria-label="關閉">×</button>
           </div>
           
-          <div className="modal-body" style={{ lineHeight: '1.6', textAlign: 'left' }}>
+          {/* 1. 將 ref 綁定在這裡，這樣 PDF 就會只抓取這塊區域的畫面 */}
+          <div ref={pdfExportRef} className="modal-body" style={{ lineHeight: '1.6', textAlign: 'left', padding: '10px' }}>
+            
+            {/* 加一個 PDF 專屬的標題，讓印出來的報表看起來更正式 */}
+            <h1 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '20px', fontSize: '24px' }}>
+              活動交接摘要報告
+            </h1>
+
             {handoverSummary ? (
               <ReactMarkdown>{handoverSummary}</ReactMarkdown>
             ) : (
@@ -809,11 +838,18 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
           </div>
           
           <div className="modal-actions">
-            <button className="button primary" type="button" data-toast="交接摘要已匯出">匯出為 PDF</button>
+            {/* 2. 加上 onClick 事件 */}
+            <button 
+              className="button primary" 
+              type="button" 
+              onClick={handleExportPDF}
+              data-toast="交接摘要已匯出"
+            >
+              匯出為 PDF
+            </button>
           </div>
         </form>
       </dialog>
-      
 
       <div className="toast" id="toast" role="status" aria-live="polite"></div>
     </>

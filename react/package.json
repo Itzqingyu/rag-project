@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
+    "html2pdf.js": "^0.14.0",
     "lucide-react": "^1.44.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
