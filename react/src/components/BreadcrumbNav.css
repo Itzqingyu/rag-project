@@ -1,0 +1,68 @@
+/* ==========================================
+   活動工作台麵包屑導航 (BreadcrumbNav)
+   ========================================== */
+.breadcrumb-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+  cursor: default;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.breadcrumb-item.link {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.breadcrumb-item.link:hover {
+  background: var(--canvas);
+  color: var(--cyan);
+}
+
+.breadcrumb-item.back-button {
+  font-weight: 600;
+  color: var(--cyan);
+  background: var(--cyan-soft);
+}
+
+.breadcrumb-item.back-button:hover {
+  background: #d8e5ff;
+  color: var(--navy);
+}
+
+.breadcrumb-item.current {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.breadcrumb-separator {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  user-select: none;
+}
+
+.breadcrumb-icon {
+  flex-shrink: 0;
+}

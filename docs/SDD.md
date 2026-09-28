@@ -55,6 +55,7 @@ rag-project/
 │   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景、即時鍵盤快捷支援)
 │   │   │   ├── ConfirmModal.tsx  # 防手殘刪除確認獨立彈窗 (霧化毛玻璃背景)
 │   │   │   ├── DocumentDrawer.tsx # 歷史紀錄文檔抽屜 (文件清單、真實上傳與刪除)
+│   │   │   ├── BreadcrumbNav.tsx # 活動工作台頂部多層級麵包屑導航 (支援一鍵返回主活動工作台及分階跳轉)
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
 │   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等各自獨立 CSS)
 │   │   └── index.css             # 全域 Design Tokens (:root)、Reset 與 App Shell 樣式

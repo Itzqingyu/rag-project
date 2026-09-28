@@ -29,6 +29,7 @@ import MeetingPanel from './components/MeetingPanel';
 import DuringPanel from './components/DuringPanel';
 import AfterPanel from './components/AfterPanel';
 import SourceRecordPanel from './components/SourceRecordPanel';
+import BreadcrumbNav from './components/BreadcrumbNav';
 // 引入 LLM 聊天面板組件
 import ChatPanel from './components/ChatPanel';
 // 引入 AI 會議紀錄整理面板組件
@@ -518,6 +519,11 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
 
           {currentActivity && (
           <section className="page activity-workspace" id="activity-workspace" hidden={['activities', 'chat', 'extract'].includes(currentView)}>
+            <BreadcrumbNav
+              activityName={currentActivity.name}
+              currentView={currentView}
+              onNavigate={(view) => setCurrentView(view)}
+            />
             <div className="activity-heading">
               <div className="title-lockup">
                 <span className={`activity-glyph ${GLYPH_COLORS[currentActivity.id % GLYPH_COLORS.length]}`}>{currentActivity.name.charAt(0)}</span>
