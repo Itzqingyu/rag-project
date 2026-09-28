@@ -327,16 +327,26 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
     const element = pdfExportRef.current;
     if (!element) return;
 
-    // 設定 PDF 的輸出格式
+    // 1. 取得今天的日期 (格式：YYYYMMDD)
+    const today = new Date();
+    const dateString = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+
+    // 2. 取得活動名稱，如果找不到就用預設值
+    // (假設你原本用來顯示標題的變數叫做 currentActivity.name)
+    const activityName = currentActivity?.name || '活動';
+
+    // 3. 組合出動態檔名
+    const dynamicFilename = `${activityName}_交接報告_${dateString}.pdf`;
+
     const opt: any = {
       margin:       15,
-      filename:     'AI年度交接報告.pdf',
+      filename:     dynamicFilename, // 👈 改用動態產生的檔名
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2 }, // 提高清晰度
+      html2canvas:  { scale: 2 },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // 呼叫套件產生並下載 PDF
+    // 根據你前面的設定，使用適合的呼叫方式
     // @ts-ignore
     html2pdf().set(opt).from(element).save();
   };
