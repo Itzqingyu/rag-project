@@ -1,5 +1,4 @@
 import React from 'react';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
 import './BreadcrumbNav.css';
 
 interface BreadcrumbNavProps {
@@ -56,14 +55,13 @@ export default function BreadcrumbNav({ activityName, currentView, onNavigate }:
   return (
     <nav className="breadcrumb-nav" aria-label="麵包屑導航">
       {crumbs.map((crumb, index) => {
-        const isFirst = index === 0;
         const isLast = index === crumbs.length - 1;
 
         return (
           <React.Fragment key={`${crumb.label}-${index}`}>
             {index > 0 && (
               <span className="breadcrumb-separator" aria-hidden="true">
-                <ChevronRight size={14} />
+                &gt;
               </span>
             )}
             {isLast || !crumb.view ? (
@@ -73,14 +71,12 @@ export default function BreadcrumbNav({ activityName, currentView, onNavigate }:
             ) : (
               <button
                 type="button"
-                className={`breadcrumb-item link ${isFirst ? 'back-button' : ''}`}
+                className="breadcrumb-item link"
                 onClick={() => {
                   if (crumb.view) onNavigate(crumb.view);
                 }}
-                title={isFirst ? '返回主活動工作台' : `切換至 ${crumb.label}`}
               >
-                {isFirst && <ArrowLeft size={15} className="breadcrumb-icon" aria-hidden="true" />}
-                <span>{crumb.label}</span>
+                {crumb.label}
               </button>
             )}
           </React.Fragment>

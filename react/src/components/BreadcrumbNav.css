@@ -1,68 +1,51 @@
 /* ==========================================
-   活動工作台麵包屑導航 (BreadcrumbNav)
+   活動工作台麵包屑導航 (BreadcrumbNav - 低調純文字風格)
    ========================================== */
 .breadcrumb-nav {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 14px;
-  margin-bottom: 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-size: 0.875rem;
+  gap: 6px;
+  padding: 0;
+  margin-bottom: 12px;
+  background: transparent;
+  border: none;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .breadcrumb-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline;
+  padding: 0;
   border: none;
   background: none;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--ink-soft);
-  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
   cursor: default;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+  line-height: inherit;
 }
 
 .breadcrumb-item.link {
   cursor: pointer;
-  color: var(--ink-soft);
+  color: var(--muted);
+  transition: color 0.15s ease;
 }
 
 .breadcrumb-item.link:hover {
-  background: var(--canvas);
-  color: var(--cyan);
-}
-
-.breadcrumb-item.back-button {
-  font-weight: 600;
-  color: var(--cyan);
-  background: var(--cyan-soft);
-}
-
-.breadcrumb-item.back-button:hover {
-  background: #d8e5ff;
-  color: var(--navy);
+  color: var(--ink);
+  text-decoration: underline;
 }
 
 .breadcrumb-item.current {
-  color: var(--ink);
-  font-weight: 700;
+  color: var(--ink-soft);
+  font-weight: 500;
 }
 
 .breadcrumb-separator {
-  display: inline-flex;
-  align-items: center;
   color: var(--muted);
+  font-size: 0.75rem;
   user-select: none;
-}
-
-.breadcrumb-icon {
-  flex-shrink: 0;
+  opacity: 0.7;
 }
