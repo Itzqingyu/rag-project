@@ -1,11 +1,8 @@
-import os
-from litellm import completion
 from typing import List, Dict, Any
+from litellm import completion
 
-# 💡 動態定位 prompts 資料夾路徑，不管你在哪裡執行程式都不會出錯
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # 目前在 ai_services/
-PROMPTS_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "prompts") # 往上一層找 prompts/
-PROMPT_FILE_PATH = os.path.join(PROMPTS_DIR, "handover_summary.md")
+# 👇 直接從同一層資料夾的 llm_service 引入寫好的工具函式
+from .llm_service import load_prompt_template, _get_model_config
 
 def generate_handover_summary(schedules: List[Dict[str, Any]], decisions: List[Dict[str, Any]]) -> str:
     # 1. 將陣列資料整理成字串
@@ -23,25 +20,28 @@ def generate_handover_summary(schedules: List[Dict[str, Any]], decisions: List[D
     if not schedules_text: schedules_text = "無相關紀錄\n"
     if not decisions_text: decisions_text = "無相關紀錄\n"
 
-    # 2. 讀取 Markdown Prompt 模板
-    try:
-        with open(PROMPT_FILE_PATH, "r", encoding="utf-8") as f:
-            prompt_template = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"找不到 Prompt 模板檔案：{PROMPT_FILE_PATH}")
+    # 2. 【改用共用模組】讀取 Markdown Prompt 模板
+    # 只需要給檔名，llm_service 會自己去 prompts/ 找 .md 檔
+    prompt_template = load_prompt_template("handover_summary")
 
-    # 3. 將資料填入模板中的佔位符 (使用 replace 避免花括號格式衝突)
+    # 3. 將資料填入模板中的佔位符
     final_prompt = prompt_template.replace("{{schedules_data}}", schedules_text)\
                                   .replace("{{decisions_data}}", decisions_text)
 
-    # 4. 呼叫 AI 模型
-    response = completion(
-        model="gemini/gemini-1.5-flash", # 請確認 .env 裡有正確配置金鑰
-        messages=[
-            # 這裡我們將 system 角色與資料合併，直接作為 user 訊息發送，能達到一樣好的效果
-            {"role": "user", "content": final_prompt}
-        ],
-        temperature=0.3
-    )
-    
-    return response.choices[0].message.content
+    # 4. 【改用共用模組】取得模型名稱與金鑰設定
+    model_name, api_base, api_key = _get_model_config()
+
+    # 5. 呼叫 AI 模型
+    try:
+        response = completion(
+            model=model_name,
+            api_base=api_base,
+            api_key=api_key,
+            messages=[
+                {"role": "user", "content": final_prompt}
+            ],
+            temperature=0.3
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        raise RuntimeError(f"AI 交接摘要生成失敗: {str(e)}") from e

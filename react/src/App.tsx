@@ -800,11 +800,12 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
             <button className="close-button" value="cancel" aria-label="關閉">×</button>
           </div>
           
-          <div className="modal-body">
-            {/* 👇 這裡是最關鍵的！把原本寫死的一大串假資料，換成這行： */}
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-              {handoverSummary || '載入中...'}
-            </div>
+          <div className="modal-body" style={{ lineHeight: '1.6', textAlign: 'left' }}>
+            {handoverSummary ? (
+              <ReactMarkdown>{handoverSummary}</ReactMarkdown>
+            ) : (
+              <p>載入中...</p>
+            )}
           </div>
           
           <div className="modal-actions">
