@@ -15,6 +15,7 @@ import {
   ChevronUp,
   FileScan,
   MessageSquare,
+  AlertCircle,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { activityApi } from './api/activityApi';
@@ -313,12 +314,15 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
   const emptyRowsCount = Math.max(1, MIN_ROWS - visibleActivities.length);
 
   // 處理快速新增的跳轉邏輯
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
+
   const handleQuickJump = (viewToOpen: string) => {
     if (!quickAddActivityId) {
-      alert('請先選擇所屬活動！');
+      setQuickAddError('請先選擇所屬活動！');
       return;
     }
     
+    setQuickAddError(null);
     // 關鍵修改：用 Number() 把字串轉換回數字型別，才能符合你的狀態定義
     setSelectedActivityId(Number(quickAddActivityId));
     
@@ -455,7 +459,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
               <div className="heading-actions">
                 {currentView === 'activities' && (
                   <>
-                    <button className="button secondary open-record" type="button" onClick={() => recordModalRef.current?.showModal()}>+ 新增紀錄</button>
+                    <button className="button secondary open-record" type="button" onClick={() => { setQuickAddError(null); recordModalRef.current?.showModal(); }}>+ 新增紀錄</button>
                     <button className="button primary" id="open-new-activity" type="button" onClick={openCreateActivity}>+ 新增活動</button>
                   </>
                 )}
@@ -757,7 +761,10 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
             <select 
               id="record-activity-select"
               value={quickAddActivityId}
-              onChange={(e) => setQuickAddActivityId(e.target.value)}
+              onChange={(e) => {
+                setQuickAddActivityId(e.target.value);
+                setQuickAddError(null);
+              }}
             >
               <option value="" disabled>請選擇活動...</option>
               {/* 用迴圈把所有的活動印出來當選項 */}
@@ -768,6 +775,18 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
               ))}
             </select>
           </label>
+
+          {quickAddError && (
+            <div className="modal-error-banner" role="alert">
+              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div className="error-content">
+                <span>{quickAddError}</span>
+                <button type="button" className="error-dismiss" onClick={() => setQuickAddError(null)}>
+                  關閉
+                </button>
+              </div>
+            </div>
+          )}
 
           <p className="modal-copy">要新增哪一種紀錄加入此活動？</p>
 
