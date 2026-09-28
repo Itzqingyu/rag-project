@@ -887,39 +887,6 @@ a {
   font-size: 0.8rem;
 }
 
-.modal-error-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: .75rem;
-  color: var(--danger, #e53935);
-  background: #fff0f0;
-  border: 1px solid var(--danger, #e53935);
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 14px;
-  line-height: 1.4;
-}
-
-.modal-error-banner .error-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.modal-error-banner .error-dismiss {
-  align-self: flex-end;
-  background: transparent;
-  border: none;
-  font-size: .7rem;
-  font-weight: 700;
-  color: var(--danger, #e53935);
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-}
-
 .close-button {
   display: grid;
   place-items: center;
@@ -994,9 +961,21 @@ a {
   transition: all 0.15s ease;
 }
 
-.record-options button:hover {
+.record-options button:hover:not(:disabled) {
   border-color: var(--cyan);
   background: var(--cyan-soft);
+}
+
+.record-options button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.record-options button:disabled > span {
+  background: var(--canvas);
+  color: var(--muted);
 }
 
 .record-options button > span {
