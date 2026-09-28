@@ -30,6 +30,7 @@ import DuringPanel from './components/DuringPanel';
 import AfterPanel from './components/AfterPanel';
 import SourceRecordPanel from './components/SourceRecordPanel';
 import BreadcrumbNav from './components/BreadcrumbNav';
+import ConfirmModal from './components/ConfirmModal';
 // 引入 LLM 聊天面板組件
 import ChatPanel from './components/ChatPanel';
 // 引入 AI 會議紀錄整理面板組件
@@ -202,8 +203,16 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
     }
   };
 
-  const deleteCurrentActivity = async () => {
-    if (!currentActivity || !window.confirm(`確定刪除「${currentActivity.name}」？有會議或待辦時後端會拒絕刪除。`)) return;
+  const [deleteActivityConfirmOpen, setDeleteActivityConfirmOpen] = useState(false);
+
+  const requestDeleteCurrentActivity = async () => {
+    if (!currentActivity) return;
+    setDeleteActivityConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteActivity = async () => {
+    if (!currentActivity) return;
+    setDeleteActivityConfirmOpen(false);
     setActivityDeleting(true);
     setActivityDeleteError(null);
     try {
@@ -578,7 +587,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
                     currentView={currentView} 
                     setCurrentView={setCurrentView} 
                     onEdit={openEditActivity} 
-                    onDelete={deleteCurrentActivity} 
+                    onDelete={requestDeleteCurrentActivity} 
                     deleting={activityDeleting} 
                     deleteError={activityDeleteError} 
                   />
@@ -866,6 +875,17 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
           </div>
         </form>
       </dialog>
+
+      <ConfirmModal
+        isOpen={deleteActivityConfirmOpen}
+        title="確認刪除活動"
+        message={`確定刪除「${currentActivity?.name}」？有會議或待辦時後端會拒絕刪除。`}
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDeleteActivity}
+        onCancel={() => setDeleteActivityConfirmOpen(false)}
+      />
 
       <div className="toast" id="toast" role="status" aria-live="polite"></div>
     </>

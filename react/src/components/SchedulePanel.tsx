@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../api/activityApi';
 import type { Meeting, Schedule, ScheduleInput } from '../types/activity';
+import ConfirmModal from './ConfirmModal';
 import './SchedulePanel.css';
 
 interface SchedulePanelProps {
@@ -154,8 +155,16 @@ export default function SchedulePanel({ activityId, currentView, meetingVersion,
     }
   };
 
-  const handleDelete = async (schedule: Schedule) => {
-    if (!window.confirm(`確定刪除「${schedule.name}」？相關事件會保留，但 schedule_id 將清空。`)) return;
+  const [schedulePendingDelete, setSchedulePendingDelete] = useState<Schedule | null>(null);
+
+  const handleDelete = (schedule: Schedule) => {
+    setSchedulePendingDelete(schedule);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!schedulePendingDelete) return;
+    const schedule = schedulePendingDelete;
+    setSchedulePendingDelete(null);
     setDeletingId(schedule.id);
     setError(null);
     try {
@@ -260,6 +269,17 @@ export default function SchedulePanel({ activityId, currentView, meetingVersion,
           </form>
         </section>
       </div>}
+
+      <ConfirmModal
+        isOpen={Boolean(schedulePendingDelete)}
+        title="確認刪除流程"
+        message={`確定刪除「${schedulePendingDelete?.name}」？相關事件會保留，但 schedule_id 將清空。`}
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setSchedulePendingDelete(null)}
+      />
     </section>
   );
 }

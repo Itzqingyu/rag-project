@@ -7,7 +7,7 @@ interface OverviewPanelProps {
   currentView: string;
   setCurrentView: (view: string) => void;
   onEdit: () => void;
-  onDelete: () => Promise<void>;
+  onDelete: () => Promise<void> | void;
   deleting: boolean;
   deleteError: string | null;
 }

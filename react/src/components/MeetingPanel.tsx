@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../api/activityApi';
 import type { Meeting, MeetingInput } from '../types/activity';
+import ConfirmModal from './ConfirmModal';
 import './MeetingPanel.css';
 
 interface MeetingPanelProps {
@@ -146,8 +147,16 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedMeeting || !window.confirm(`確定刪除「${selectedMeeting.name}」？關聯資料會保留，但 meeting_id 將清空。`)) return;
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const handleDelete = () => {
+    if (!selectedMeeting) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedMeeting) return;
+    setDeleteConfirmOpen(false);
     setDeleting(true);
     setError(null);
     try {
@@ -252,6 +261,17 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
           </section>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        title="確認刪除會議"
+        message={`確定刪除「${selectedMeeting?.name}」？關聯資料會保留，但 meeting_id 將清空。`}
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </section>
   );
 }
