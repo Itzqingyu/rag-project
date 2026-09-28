@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
 from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
 from dash_backend.database import (
@@ -65,6 +66,8 @@ from dash_backend.activity_services.incident import (
     delete_incident,
 )
 
+from ai_services.handover_agent import generate_handover_summary
+
 app = FastAPI(
     title="DASH Backend API",
     description="DASH (Decision, Activity, Schedule, History) RESTful API",
@@ -79,6 +82,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+load_dotenv()
 
 
 # ==========================================
@@ -256,6 +261,11 @@ class IncidentUpdate(BaseModel):
     occurred_at: Optional[str] = None
     cause: Optional[str] = None
     suggestion: Optional[str] = None
+
+# 定義前端傳過來的資料結構
+class HandoverRequest(BaseModel):
+    schedules: List[Dict[str, Any]]
+    decisions: List[Dict[str, Any]]
 
 
 # ==========================================
@@ -814,6 +824,21 @@ def api_delete_incident(incident_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail="找不到突發事件紀錄")
     return {"status": "success", "deleted": deleted}
+
+# AI 交接摘要 (Handover Endpoints)
+@app.post("/handover/generate", tags=["Handover"])
+def api_generate_handover(payload: HandoverRequest):
+    try:
+        # 將前端傳來的資料轉交給 ai_services 處理
+        ai_summary = generate_handover_summary(
+            schedules=payload.schedules,
+            decisions=payload.decisions
+        )
+        return {"status": "success", "summary": ai_summary}
+        
+    except Exception as exc:
+        print(f"AI 生成失敗: {str(exc)}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 if __name__ == "__main__":

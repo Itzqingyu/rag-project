@@ -115,8 +115,13 @@ export default function App() {
     setIsSidebarOpen(false);
   };
 
+  // 找出狀態為「已完成」的活動數量，當作已建立交接報告的指標
+const archivedCount = activities.filter(act => act.status === '已完成').length;
+
   // 控制 Modal 的 Ref
   const recordModalRef = useRef<HTMLDialogElement>(null);
+  // 控制交接摘要 Modal 的變數
+  const handoverModalRef = useRef<HTMLDialogElement>(null);
   // 來記錄在 Modal 裡面選擇了哪一個活動 (預設可以代入第一筆活動的 ID)
   const [quickAddActivityId, setQuickAddActivityId] = useState<string>('');
 
@@ -303,13 +308,16 @@ export default function App() {
       return;
     }
     
-    // 👉 關鍵修改：用 Number() 把字串轉換回數字型別，才能符合你的狀態定義
+    // 關鍵修改：用 Number() 把字串轉換回數字型別，才能符合你的狀態定義
     setSelectedActivityId(Number(quickAddActivityId));
     
     // 切換畫面並關閉 Modal
     setCurrentView(viewToOpen);
     recordModalRef.current?.close();
   };
+  
+  // 儲存 AI 產生的真資料
+  const [handoverSummary, setHandoverSummary] = useState<string>(''); 
 
   // ==========================================
   // 2. 原型 UI 結構 (已轉換 className、閉合標籤與 inline style)
@@ -416,7 +424,7 @@ export default function App() {
               <article><span>全部活動</span><strong>{activities.length}</strong><small>SQLite 中的真實資料</small></article>
               <article><span>正在處理</span><strong>{activeCount}</strong><small>準備中或進行中</small></article>
               <article><span>已完成</span><strong>{completedCount}</strong><small>可進入活動後檢討</small></article>
-              <article className="accent-card"><span>目前選取</span><strong>{currentActivity?.name || '尚未選擇'}</strong><small>{currentActivity?.status || '請從列表進入活動'}</small></article>
+              <article className="accent-card"><span>✨ AI 知識庫累積</span><strong>{archivedCount} 份已完成報告</strong><small>成功轉化為組織決策記憶</small></article>
             </div>
 
             <div className="surface">
@@ -571,7 +579,7 @@ export default function App() {
                 {/* 04 活動後 */}
                 {currentView === 'after' && (
                   <>
-                    <AfterPanel currentView={currentView} activityId={currentActivity.id} scheduleVersion={scheduleVersion}/>
+                    <AfterPanel currentView={currentView} activityId={currentActivity?.id} scheduleVersion={scheduleVersion} onOpenHandover={(aiText: string) => { setHandoverSummary(aiText); handoverModalRef.current?.showModal(); }} />
                     <SourceRecordPanel currentView={currentView} setCurrentView={setCurrentView} />
                   </>
                 )}
@@ -782,27 +790,29 @@ export default function App() {
         </form>
       </dialog>
 
-      <dialog className="modal" id="handover-modal">
-        <form method="dialog"><div className="modal-head"><div><p className="eyebrow">AI HANDOVER</p><h2>交接摘要預覽</h2></div><button className="close-button" value="cancel" aria-label="關閉">×</button></div>
-          <div className="handover-content" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '12px', marginTop: '16px' }}>
-            <h3 style={{ marginBottom: '8px', fontSize: '16px' }}>今年做得好的地方</h3>
-            <p style={{ marginBottom: '16px', lineHeight: '1.6' }}>1. 單向環形動線有效改善了中午尖峰時段的回堵。<br />2. 熱門攤位使用兌換券顯著減少了找零錯誤。</p>
-            <hr style={{ margin: '16px 0', border: '0', borderTop: '1px solid var(--border)' }} />
-            <h3 style={{ marginBottom: '8px', fontSize: '16px' }}>發生的重要問題</h3>
-            <p style={{ marginBottom: '16px', lineHeight: '1.6' }}>第一天中午入口處因飲料攤與兌換券櫃台過近，導致回堵約 8 分鐘。</p>
-            <hr style={{ margin: '16px 0', border: '0', borderTop: '1px solid var(--border)' }} />
-            <h3 style={{ marginBottom: '8px', fontSize: '16px' }}>關鍵決策與執行結果</h3>
-            <ul style={{ marginBottom: '16px', paddingLeft: '20px', lineHeight: '1.6' }}>
-              <li><strong>攤位改採單向環形動線</strong>：成效良好，值得沿用。</li>
-              <li><strong>部分攤位改用兌換券</strong>：縮短了結帳時間，值得沿用。</li>
-            </ul>
-            <hr style={{ margin: '16px 0', border: '0', borderTop: '1px solid var(--border)' }} />
-            <h3 style={{ marginBottom: '8px', fontSize: '16px' }}>下次建議</h3>
-            <p style={{ marginBottom: '16px', lineHeight: '1.6' }}>明年建議保留環形動線與兌換券制度，但務必將兌換券櫃台移至入口外側，避免與熱門攤位人潮交叉。</p>
+      <dialog ref={handoverModalRef} className="modal" id="handover-modal">
+        <form method="dialog">
+          <div className="modal-head">
+            <div>
+              <p className="eyebrow">AI HANDOVER</p>
+              <h2>交接摘要預覽</h2>
+            </div>
+            <button className="close-button" value="cancel" aria-label="關閉">×</button>
           </div>
-          <div className="modal-actions"><button className="button secondary" value="cancel">關閉預覽</button><button className="button primary" type="button" data-toast="交接摘要已匯出">匯出為 PDF</button></div>
+          
+          <div className="modal-body">
+            {/* 👇 這裡是最關鍵的！把原本寫死的一大串假資料，換成這行： */}
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+              {handoverSummary || '載入中...'}
+            </div>
+          </div>
+          
+          <div className="modal-actions">
+            <button className="button primary" type="button" data-toast="交接摘要已匯出">匯出為 PDF</button>
+          </div>
         </form>
       </dialog>
+      
 
       <div className="toast" id="toast" role="status" aria-live="polite"></div>
     </>

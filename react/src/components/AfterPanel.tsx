@@ -3,7 +3,7 @@ import { activityApi } from '../api/activityApi';
 import './AfterPanel.css';
 
 // 在 Props 裡接收 schedules 和 decisions
-export default function AfterPanel({ currentView, activityId, scheduleVersion }: any) {
+export default function AfterPanel({ currentView, activityId, scheduleVersion, onOpenHandover }: any) {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [decisions, setDecisions] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
@@ -99,6 +99,23 @@ export default function AfterPanel({ currentView, activityId, scheduleVersion }:
       setEditingDecisionId(null);
     } catch (error) {
       console.error("儲存決策結果失敗:", error);
+    }
+  };
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const handleGenerateClick = async () => {
+    setIsGenerating(true);
+    try {
+      // 把目前的流程與決策資料，丟給你的 Python API
+      const data = await activityApi.generateHandover(schedules, decisions);
+      
+      // 把拿到的 AI 摘要，透過 Prop 傳給 App.tsx，並打開 Modal
+      onOpenHandover(data.summary); 
+    } catch (error) {
+      alert("AI 生成失敗，請確認後端伺服器有開啟！");
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -287,21 +304,32 @@ export default function AfterPanel({ currentView, activityId, scheduleVersion }:
       </div>
 
       {/* ==================== AI 交接摘要區塊 ==================== */}
-      {/* 加上 flex 讓它左右排好，並設定 gap */}
       <article className="handover-card enriched-handover" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginTop: '24px' }}>
-        {/* 文字區加上中路限寬防禦 */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p className="eyebrow">AI 年度交接摘要・假資料</p>
-          <h3 style={{ wordBreak: 'break-all' }}>2026 迎新宿營交接重點</h3>
-          <p>已根據目前填寫內容整理重大決策、問題與下次建議。</p>
-          <div className="handover-metrics">
-            <span><b>5</b>重大決策</span><span><b>8</b>主要問題</span><span><b>3</b>值得沿用</span><span><b>6</b>需要改善</span>
+          {/* 👇 1. 拿掉「假資料」字眼，標題改成通用的活動交接重點 */}
+          <p className="eyebrow">AI 年度交接摘要</p>
+          <h3 style={{ wordBreak: 'break-all' }}>活動交接重點</h3>
+          <p>已根據目前填寫內容，由 AI 自動整理重大決策、問題與下次建議。</p>
+          
+          {/* 👇 2. 把假數字換成上方已經算好的真實狀態變數 */}
+          <div className="handover-metrics" style={{ display: 'flex', gap: '16px' }}>
+            <span><b>{evaluatedDecisions}</b>項決策紀錄</span>
+            <span><b>{reviewedSchedules}</b>項流程檢討</span>
+            <span><b>{totalIncidents}</b>筆臨時紀錄</span>
           </div>
         </div>
-        {/* 按鈕加上絕對防禦 */}
-        <button className="button primary" type="button" style={{ flexShrink: 0 }}>✨ 預覽摘要</button>
+        
+        {/* 👇 3. 綁定我們前一步準備好的 API 呼叫函式 (handleGenerateClick) */}
+        <button 
+          className="button primary" 
+          type="button" 
+          style={{ flexShrink: 0 }} 
+          onClick={handleGenerateClick} // 👈 改為觸發後端 API
+          disabled={isGenerating}       // 👈 生成中鎖住按鈕
+        >
+          {isGenerating ? '✨ AI 生成中...' : '✨ 預覽摘要'}
+        </button>
       </article>
-      
     </section>
   );
 }
