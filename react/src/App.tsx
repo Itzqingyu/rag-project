@@ -100,8 +100,8 @@ export default function App() {
   // 控制目前顯示的畫面，預設為 'activities' (活動列表)
   const [currentView, setCurrentView] = useState('activities');
 
-  // 控制左側主選單是否開啟 (預設為開啟；收合時完全隱藏並由三線按鈕控制)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // 控制窄視窗的主選單抽屜；桌面側欄由 CSS 保持常駐
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // 控制右側 AI 歷史參考抽屜是否開啟
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
@@ -109,7 +109,7 @@ export default function App() {
   // 控制左側邊欄「AI 功能」下拉選單展開/收合 (預設展開)
   const [isAiNavOpen, setIsAiNavOpen] = useState(true);
 
-  // 封裝一個切換畫面的小函式：點擊切換頁面時自動收起側邊欄
+  // 切換畫面時收起窄視窗的抽屜，不影響桌面側欄
   const handleSetView = (view: string) => {
     setCurrentView(view);
     setIsSidebarOpen(false);
@@ -445,8 +445,10 @@ export default function App() {
                         onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') selectActivity(activity.id); }}
                       >
                         <td>
-                          <span className={`activity-glyph ${GLYPH_COLORS[index % GLYPH_COLORS.length]}`}>{activity.name.charAt(0)}</span>
-                          <span><strong>{activity.name}</strong><small>{activity.activity_type || '未分類'}・{activity.expected_attendees == null ? '人數未定' : `${activity.expected_attendees} 人`}</small></span>
+                          <div className="activity-name-content">
+                            <span className={`activity-glyph ${GLYPH_COLORS[index % GLYPH_COLORS.length]}`}>{activity.name.charAt(0)}</span>
+                            <span><strong>{activity.name}</strong><small>{activity.activity_type || '未分類'}・{activity.expected_attendees == null ? '人數未定' : `${activity.expected_attendees} 人`}</small></span>
+                          </div>
                         </td>
                         <td>{formatActivityDate(activity)}</td>
                         <td><span className={`status ${getStatusClass(activity.status)}`}>{activity.status}</span></td>
