@@ -102,6 +102,7 @@ export interface Decision {
   created_at: string;
   updated_at: string;
   state: string;
+  outcome_note?: string | null;
 }
 
 export interface DecisionInput {
@@ -113,7 +114,7 @@ export interface DecisionInput {
   reason: string;
   source: string;
   confirmation_status: ConfirmationStatus;
-  outcome_note: string;
+  outcome_note?: string | null;
 }
 
 export type DecisionUpdate = Partial<Omit<DecisionInput, 'activity_id'>> & {

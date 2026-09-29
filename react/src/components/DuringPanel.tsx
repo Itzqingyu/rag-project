@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../api/activityApi';
 import type { Incident, IncidentInput, Schedule } from '../types/activity';
+import ConfirmModal from './ConfirmModal';
 import './DuringPanel.css';
 
 interface DuringPanelProps {
@@ -141,8 +142,16 @@ export default function DuringPanel({ activityId, currentView, setCurrentView, s
     }
   };
 
-  const handleDelete = async (incident: Incident) => {
-    if (!window.confirm('確定刪除這筆活動中紀錄？')) return;
+  const [incidentPendingDelete, setIncidentPendingDelete] = useState<Incident | null>(null);
+
+  const handleDelete = (incident: Incident) => {
+    setIncidentPendingDelete(incident);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!incidentPendingDelete) return;
+    const incident = incidentPendingDelete;
+    setIncidentPendingDelete(null);
     setDeletingId(incident.id);
     setError(null);
     try {
@@ -223,6 +232,17 @@ export default function DuringPanel({ activityId, currentView, setCurrentView, s
           </form>
         </section>
       </div>}
+
+      <ConfirmModal
+        isOpen={Boolean(incidentPendingDelete)}
+        title="確認刪除紀錄"
+        message="確定刪除這筆活動中紀錄？"
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setIncidentPendingDelete(null)}
+      />
     </section>
   );
 }

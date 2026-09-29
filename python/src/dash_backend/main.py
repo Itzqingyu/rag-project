@@ -1,6 +1,8 @@
 import os
+import re
 import shutil
 import tempfile
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -66,7 +68,7 @@ from dash_backend.activity_services.incident import (
     delete_incident,
 )
 
-from ai_services.handover_agent import generate_handover_summary
+from dash_backend.ai_services.handover_agent import generate_handover_summary
 
 app = FastAPI(
     title="DASH Backend API",
@@ -266,6 +268,12 @@ class IncidentUpdate(BaseModel):
 class HandoverRequest(BaseModel):
     schedules: List[Dict[str, Any]]
     decisions: List[Dict[str, Any]]
+
+
+class HandoverSaveRequest(BaseModel):
+    activity_id: Optional[int] = None
+    activity_name: str
+    content: str
 
 
 # ==========================================
@@ -839,6 +847,60 @@ def api_generate_handover(payload: HandoverRequest):
     except Exception as exc:
         print(f"AI 生成失敗: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/handover/save", tags=["Handover"])
+def api_save_handover(payload: HandoverSaveRequest):
+    """
+    將交接摘要存為 Markdown 檔案並自動向量化切片入庫至紀錄庫
+    """
+    if not payload.content or not payload.content.strip():
+        raise HTTPException(status_code=400, detail="交接報告內容不能為空")
+
+    today_str = datetime.now().strftime("%Y%m%d")
+    raw_name = (payload.activity_name or "活動").strip()
+    clean_name = re.sub(r'[\\/*?:"<>|]', "", raw_name).strip() or "活動"
+    file_stem = f"{clean_name}_交接報告_{today_str}"
+    filename = f"{file_stem}.md"
+    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, filename)
+
+    existing_doc = get_doc_by_path(target_md_path)
+    if existing_doc or os.path.exists(target_md_path):
+        existing_raw = (existing_doc.get("raw_file_path") or existing_doc.get("filename") or filename) if existing_doc else filename
+        raise HTTPException(
+            status_code=409,
+            detail=f"紀錄庫已存在相同主檔名的交接報告「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，若需採用新交接摘要，請先至歷史紀錄庫手動刪除舊文件後再行存入。"
+        )
+
+    try:
+        os.makedirs(DEFAULT_MARKDOWN_DIR, exist_ok=True)
+        with open(target_md_path, "w", encoding="utf-8") as f:
+            f.write(payload.content)
+
+        chunks_added = add_document(
+            file_path=target_md_path,
+            raw_file_path=filename
+        )
+
+        doc_record = get_doc_by_path(target_md_path)
+
+        return {
+            "status": "success",
+            "message": f"成功將「{filename}」存入紀錄庫並完成向量化！",
+            "filename": filename,
+            "file_path": target_md_path,
+            "doc_id": doc_record["id"] if doc_record else None,
+            "chunks_added": chunks_added
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if os.path.exists(target_md_path) and not get_doc_by_path(target_md_path):
+            try:
+                os.remove(target_md_path)
+            except OSError:
+                pass
+        raise HTTPException(status_code=500, detail=f"存入紀錄庫失敗: {str(exc)}")
 
 
 if __name__ == "__main__":

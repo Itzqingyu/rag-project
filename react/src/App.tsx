@@ -29,6 +29,8 @@ import MeetingPanel from './components/MeetingPanel';
 import DuringPanel from './components/DuringPanel';
 import AfterPanel from './components/AfterPanel';
 import SourceRecordPanel from './components/SourceRecordPanel';
+import BreadcrumbNav from './components/BreadcrumbNav';
+import ConfirmModal from './components/ConfirmModal';
 // 引入 LLM 聊天面板組件
 import ChatPanel from './components/ChatPanel';
 // 引入 AI 會議紀錄整理面板組件
@@ -201,8 +203,16 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
     }
   };
 
-  const deleteCurrentActivity = async () => {
-    if (!currentActivity || !window.confirm(`確定刪除「${currentActivity.name}」？有會議或待辦時後端會拒絕刪除。`)) return;
+  const [deleteActivityConfirmOpen, setDeleteActivityConfirmOpen] = useState(false);
+
+  const requestDeleteCurrentActivity = async () => {
+    if (!currentActivity) return;
+    setDeleteActivityConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteActivity = async () => {
+    if (!currentActivity) return;
+    setDeleteActivityConfirmOpen(false);
     setActivityDeleting(true);
     setActivityDeleteError(null);
     try {
@@ -304,10 +314,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
 
   // 處理快速新增的跳轉邏輯
   const handleQuickJump = (viewToOpen: string) => {
-    if (!quickAddActivityId) {
-      alert('請先選擇所屬活動！');
-      return;
-    }
+    if (!quickAddActivityId) return;
     
     // 關鍵修改：用 Number() 把字串轉換回數字型別，才能符合你的狀態定義
     setSelectedActivityId(Number(quickAddActivityId));
@@ -319,6 +326,32 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
   
   // 儲存 AI 產生的真資料
   const [handoverSummary, setHandoverSummary] = useState<string>(''); 
+  const [handoverSaved, setHandoverSaved] = useState<boolean>(false);
+  const [isSavingHandover, setIsSavingHandover] = useState<boolean>(false);
+  const [handoverSaveMessage, setHandoverSaveMessage] = useState<string | null>(null);
+  const [handoverSaveError, setHandoverSaveError] = useState<string | null>(null);
+
+  // 存入紀錄庫處理函數
+  const handleSaveHandoverToKnowledgeBase = async () => {
+    if (!handoverSummary || isSavingHandover) return;
+    setIsSavingHandover(true);
+    setHandoverSaveMessage(null);
+    setHandoverSaveError(null);
+    try {
+      const activityName = currentActivity?.name || '活動';
+      const result = await activityApi.saveHandover({
+        activity_id: currentActivity?.id,
+        activity_name: activityName,
+        content: handoverSummary,
+      });
+      setHandoverSaved(true);
+      setHandoverSaveMessage(result.message || '已成功存入紀錄庫並完成向量化！');
+    } catch (err: any) {
+      setHandoverSaveError(err.message || '存入紀錄庫失敗');
+    } finally {
+      setIsSavingHandover(false);
+    }
+  };
 
   // 建立一個 Ref 用來綁定你要印出來的畫面
   const pdfExportRef = useRef<HTMLDivElement>(null);
@@ -332,7 +365,6 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
     const dateString = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
 
     // 2. 取得活動名稱，如果找不到就用預設值
-    // (假設你原本用來顯示標題的變數叫做 currentActivity.name)
     const activityName = currentActivity?.name || '活動';
 
     // 3. 組合出動態檔名
@@ -340,13 +372,12 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
 
     const opt: any = {
       margin:       15,
-      filename:     dynamicFilename, // 👈 改用動態產生的檔名
+      filename:     dynamicFilename,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2 },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // 根據你前面的設定，使用適合的呼叫方式
     // @ts-ignore
     html2pdf().set(opt).from(element).save();
   };
@@ -518,6 +549,11 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
 
           {currentActivity && (
           <section className="page activity-workspace" id="activity-workspace" hidden={['activities', 'chat', 'extract'].includes(currentView)}>
+            <BreadcrumbNav
+              activityName={currentActivity.name}
+              currentView={currentView}
+              onNavigate={(view) => setCurrentView(view)}
+            />
             <div className="activity-heading">
               <div className="title-lockup">
                 <span className={`activity-glyph ${GLYPH_COLORS[currentActivity.id % GLYPH_COLORS.length]}`}>{currentActivity.name.charAt(0)}</span>
@@ -572,7 +608,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
                     currentView={currentView} 
                     setCurrentView={setCurrentView} 
                     onEdit={openEditActivity} 
-                    onDelete={deleteCurrentActivity} 
+                    onDelete={requestDeleteCurrentActivity} 
                     deleting={activityDeleting} 
                     deleteError={activityDeleteError} 
                   />
@@ -611,7 +647,18 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
                 {/* 04 活動後 */}
                 {currentView === 'after' && (
                   <>
-                    <AfterPanel currentView={currentView} activityId={currentActivity?.id} scheduleVersion={scheduleVersion} onOpenHandover={(aiText: string) => { setHandoverSummary(aiText); handoverModalRef.current?.showModal(); }} />
+                    <AfterPanel 
+                      currentView={currentView} 
+                      activityId={currentActivity?.id} 
+                      scheduleVersion={scheduleVersion} 
+                      onOpenHandover={(aiText: string) => { 
+                        setHandoverSummary(aiText); 
+                        setHandoverSaved(false);
+                        setHandoverSaveMessage(null);
+                        setHandoverSaveError(null);
+                        handoverModalRef.current?.showModal(); 
+                      }} 
+                    />
                     <SourceRecordPanel currentView={currentView} setCurrentView={setCurrentView} />
                   </>
                 )}
@@ -831,24 +878,40 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
             </div>
             <button className="close-button" value="cancel" aria-label="關閉">×</button>
           </div>
+
+          {handoverSaveMessage && (
+            <div className="modal-banner success">{handoverSaveMessage}</div>
+          )}
+          {handoverSaveError && (
+            <div className="modal-banner error">{handoverSaveError}</div>
+          )}
           
           {/* 1. 將 ref 綁定在這裡，這樣 PDF 就會只抓取這塊區域的畫面 */}
-          <div ref={pdfExportRef} className="modal-body" style={{ lineHeight: '1.6', textAlign: 'left', padding: '10px' }}>
+          <div ref={pdfExportRef} className="handover-modal-body">
             
             {/* 加一個 PDF 專屬的標題，讓印出來的報表看起來更正式 */}
-            <h1 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '20px', fontSize: '24px' }}>
+            <h1 className="handover-report-title">
               活動交接摘要報告
             </h1>
 
-            {handoverSummary ? (
-              <ReactMarkdown>{handoverSummary}</ReactMarkdown>
-            ) : (
-              <p>載入中...</p>
-            )}
+            <div className="handover-report-markdown">
+              {handoverSummary ? (
+                <ReactMarkdown>{handoverSummary}</ReactMarkdown>
+              ) : (
+                <p className="handover-loading-text">載入中...</p>
+              )}
+            </div>
           </div>
           
-          <div className="modal-actions">
-            {/* 2. 加上 onClick 事件 */}
+          <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={handleSaveHandoverToKnowledgeBase}
+              disabled={isSavingHandover || handoverSaved || !handoverSummary}
+            >
+              {isSavingHandover ? '存入中...' : handoverSaved ? '已存入紀錄庫' : '存入紀錄庫'}
+            </button>
             <button 
               className="button primary" 
               type="button" 
@@ -860,6 +923,17 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
           </div>
         </form>
       </dialog>
+
+      <ConfirmModal
+        isOpen={deleteActivityConfirmOpen}
+        title="確認刪除活動"
+        message={`確定刪除「${currentActivity?.name}」？有會議或待辦時後端會拒絕刪除。`}
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDeleteActivity}
+        onCancel={() => setDeleteActivityConfirmOpen(false)}
+      />
 
       <div className="toast" id="toast" role="status" aria-live="polite"></div>
     </>

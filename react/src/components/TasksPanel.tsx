@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../api/activityApi';
 import type { Meeting, Task, TaskInput, TaskPriority, TaskStatus } from '../types/activity';
+import ConfirmModal from './ConfirmModal';
 import './TasksPanel.css';
 
 interface TasksPanelProps {
@@ -164,8 +165,16 @@ export default function TasksPanel({ activityId, currentView, meetingVersion }: 
     }
   };
 
-  const handleDelete = async (task: Task) => {
-    if (!window.confirm(`確定刪除待辦「${task.content}」？`)) return;
+  const [taskPendingDelete, setTaskPendingDelete] = useState<Task | null>(null);
+
+  const handleDelete = (task: Task) => {
+    setTaskPendingDelete(task);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!taskPendingDelete) return;
+    const task = taskPendingDelete;
+    setTaskPendingDelete(null);
     setBusyTaskId(task.id);
     setError(null);
     try {
@@ -278,6 +287,17 @@ export default function TasksPanel({ activityId, currentView, meetingVersion }: 
           </section>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(taskPendingDelete)}
+        title="確認刪除待辦"
+        message={`確定刪除待辦「${taskPendingDelete?.content}」？`}
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setTaskPendingDelete(null)}
+      />
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { activityApi } from '../api/activityApi';
 import './AfterPanel.css';
 
@@ -103,7 +104,9 @@ export default function AfterPanel({ currentView, activityId, scheduleVersion, o
   };
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const handleGenerateClick = async () => {
+    setGenerateError(null);
     setIsGenerating(true);
     try {
       // 把目前的流程與決策資料，丟給你的 Python API
@@ -112,7 +115,7 @@ export default function AfterPanel({ currentView, activityId, scheduleVersion, o
       // 把拿到的 AI 摘要，透過 Prop 傳給 App.tsx，並打開 Modal
       onOpenHandover(data.summary); 
     } catch (error) {
-      alert("AI 生成失敗，請確認後端伺服器有開啟！");
+      setGenerateError('AI 生成失敗，請確認後端伺服器有開啟！');
       console.error(error);
     } finally {
       setIsGenerating(false);
@@ -330,6 +333,18 @@ export default function AfterPanel({ currentView, activityId, scheduleVersion, o
           {isGenerating ? '✨ AI 生成中...' : '✨ 預覽摘要'}
         </button>
       </article>
+
+      {generateError && (
+        <div className="after-error-banner" role="alert">
+          <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div className="error-content">
+            <span>{generateError}</span>
+            <button type="button" className="error-dismiss" onClick={() => setGenerateError(null)}>
+              關閉
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
