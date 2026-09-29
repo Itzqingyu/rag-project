@@ -14,26 +14,15 @@ from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional
 from langchain_chroma import Chroma
 
-# 路徑定義：資料庫統一存放於專案根目錄的 data/ 底下
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-OLD_DB_PATH = os.path.join(DATA_DIR, "rag_database.sqlite")
-DB_PATH = os.path.join(DATA_DIR, "dash_database.sqlite")
-CHROMA_DB_DIR = os.path.join(DATA_DIR, "chroma_db")
-
-# 確保 data 目錄存在
-os.makedirs(DATA_DIR, exist_ok=True)
-
-# 若舊版資料庫存在且新版尚未建立，平滑遷移舊資料庫
-if os.path.exists(OLD_DB_PATH) and not os.path.exists(DB_PATH):
-    try:
-        import shutil
-        shutil.copy2(OLD_DB_PATH, DB_PATH)
-    except Exception:
-        pass
-
 # 全域單例：ChromaDB Vectorstore
 _vectorstore = None
+DB_PATH = None
+
+
+def reset_db_state() -> None:
+    """重置資料庫連線快取與向量庫實例（切換 Vault 時調用）。"""
+    global _vectorstore
+    _vectorstore = None
 
 
 # ==========================================
@@ -43,7 +32,14 @@ _vectorstore = None
 @contextmanager
 def get_connection(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     """提供會自動關閉的共用 SQLite 連線 ContextManager，並強制啟用 PRAGMA foreign_keys = ON。"""
-    resolved_path = db_path or DB_PATH
+    if db_path:
+        resolved_path = db_path
+    elif DB_PATH:
+        resolved_path = DB_PATH
+    else:
+        from dash_backend.vault_manager import get_db_path
+        resolved_path = get_db_path()
+
     os.makedirs(os.path.dirname(os.path.abspath(resolved_path)), exist_ok=True)
 
     conn = sqlite3.connect(resolved_path)
@@ -371,7 +367,11 @@ def get_vectorstore(db_dir: Optional[str] = None) -> Chroma:
     global _vectorstore
     from dash_backend.ai_services.rag_engine import get_embeddings
 
-    target_dir = db_dir or CHROMA_DB_DIR
+    if not db_dir:
+        from dash_backend.vault_manager import get_chroma_dir
+        target_dir = get_chroma_dir()
+    else:
+        target_dir = db_dir
     if _vectorstore is None or db_dir is not None:
         os.makedirs(target_dir, exist_ok=True)
         store = Chroma(

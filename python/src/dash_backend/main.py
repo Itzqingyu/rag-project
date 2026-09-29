@@ -11,14 +11,31 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from dash_backend.vault_manager import (
+    ensure_default_vault,
+    get_active_vault_name,
     get_vault_stats,
+    list_vaults,
+    init_vault,
+    switch_vault,
+    rename_vault,
+    delete_vault,
     export_vault_to_zip,
     import_vault_from_zip,
-    list_backups,
-    restore_backup,
+    verify_vault_zip,
 )
 
-from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
+# 系統啟動前確保開箱預設 default Vault 存在
+ensure_default_vault()
+
+from dash_backend.document_processing.converter import convert_to_markdown, get_default_markdown_dir
+
+DEFAULT_MARKDOWN_DIR = None
+
+def get_markdown_target_dir() -> str:
+    if DEFAULT_MARKDOWN_DIR:
+        return DEFAULT_MARKDOWN_DIR
+    return get_default_markdown_dir()
+
 from dash_backend.database import (
     get_doc_by_id,
     get_doc_by_path,
@@ -285,8 +302,18 @@ class HandoverSaveRequest(BaseModel):
     content: str
 
 
-class VaultRestoreRequest(BaseModel):
-    backup_filename: str
+class VaultSwitchRequest(BaseModel):
+    vault_name: str
+
+
+class VaultCreateRequest(BaseModel):
+    vault_name: str
+    description: Optional[str] = ""
+
+
+class VaultRenameRequest(BaseModel):
+    old_name: str
+    new_name: str
 
 
 # ==========================================
@@ -314,7 +341,7 @@ def upload_document(file: UploadFile = File(...)):
     # 1. 前置主檔名衝突防呆檢查（在做任何暫存檔或轉檔前進行）
     base_name = os.path.basename(file.filename)
     file_stem, ext = os.path.splitext(base_name)
-    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
+    target_md_path = os.path.join(get_markdown_target_dir(), f"{file_stem}.md")
 
     existing_doc = get_doc_by_path(target_md_path)
     if existing_doc:
@@ -536,7 +563,7 @@ def extract_summary(req: ExtractSummaryRequest):
     if not record:
         raise HTTPException(status_code=404, detail="找不到指定的文件紀錄")
         
-    md_file_path = os.path.join(DEFAULT_MARKDOWN_DIR, record["filename"])
+    md_file_path = os.path.join(get_markdown_target_dir(), record["filename"])
     if not os.path.exists(md_file_path):
         raise HTTPException(status_code=404, detail=f"找不到實體 Markdown 檔案: {record['filename']}")
 
@@ -881,7 +908,7 @@ def api_save_handover(payload: HandoverSaveRequest):
     clean_name = re.sub(r'[\\/*?:"<>|]', "", raw_name).strip() or "活動"
     file_stem = f"{clean_name}_交接報告_{today_str}"
     filename = f"{file_stem}.md"
-    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, filename)
+    target_md_path = os.path.join(get_markdown_target_dir(), filename)
 
     existing_doc = get_doc_by_path(target_md_path)
     if existing_doc or os.path.exists(target_md_path):
@@ -892,7 +919,7 @@ def api_save_handover(payload: HandoverSaveRequest):
         )
 
     try:
-        os.makedirs(DEFAULT_MARKDOWN_DIR, exist_ok=True)
+        os.makedirs(get_markdown_target_dir(), exist_ok=True)
         with open(target_md_path, "w", encoding="utf-8") as f:
             f.write(payload.content)
 
@@ -920,18 +947,91 @@ def api_save_handover(payload: HandoverSaveRequest):
 
 
 # ==========================================
-# 資料庫與全量交接 (Vault Management) 端點
+# 多 Vault 管理與 DASH OUT / DASH IN 端點
 # ==========================================
+
+@app.get("/vaults", tags=["Vault Management"])
+def api_list_vaults():
+    """列出 ~/.dash/vaults/ 底下所有合法 Vault 與狀態"""
+    return list_vaults()
+
+
+@app.get("/vaults/active", tags=["Vault Management"])
+def api_get_active_vault():
+    """取得當前使用中之 Vault 名稱與資料庫統計數據"""
+    active_name = get_active_vault_name()
+    return {
+        "active_vault": active_name,
+        "stats": get_vault_stats(active_name)
+    }
+
+
+@app.post("/vaults/switch", tags=["Vault Management"])
+def api_switch_vault(payload: VaultSwitchRequest):
+    """動態熱切換使用中的 Vault"""
+    try:
+        return switch_vault(payload.vault_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"切換 Vault 失敗: {str(exc)}")
+
+
+@app.post("/vaults/create", tags=["Vault Management"])
+def api_create_vault(payload: VaultCreateRequest):
+    """建立全新的空白 Vault 並自動切換至新 Vault"""
+    try:
+        init_result = init_vault(payload.vault_name, payload.description or "")
+        switch_result = switch_vault(init_result["name"])
+        return {
+            "status": "success",
+            "message": f"已成功建立並切換至全新 Vault「{init_result['name']}」",
+            "vault": init_result,
+            "stats": switch_result.get("stats", {})
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"建立 Vault 失敗: {str(exc)}")
+
+
+@app.post("/vaults/rename", tags=["Vault Management"])
+def api_rename_vault(payload: VaultRenameRequest):
+    """重新命名指定的 Vault"""
+    try:
+        return rename_vault(payload.old_name, payload.new_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"重新命名 Vault 失敗: {str(exc)}")
+
+
+@app.delete("/vaults/{vault_name}", tags=["Vault Management"])
+def api_delete_vault(vault_name: str):
+    """刪除指定的非使用中 Vault（包含所有實體檔案）"""
+    try:
+        return delete_vault(vault_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"刪除 Vault 失敗: {str(exc)}")
+
 
 @app.get("/vault/stats", tags=["Vault Management"])
 def api_get_vault_stats():
-    """取得本地資料庫與檔案儲存庫之統計數據概況"""
+    """取得當前使用中 Vault 之統計數據概況 (DASH OUT 面板使用)"""
     return get_vault_stats()
 
 
 @app.get("/vault/export", tags=["Vault Management"])
 def api_export_vault():
-    """整包導出本機資料庫、Chroma 向量庫與 Markdown 文本為標準 ZIP 檔案"""
+    """DASH OUT: 整包導出當前使用中 Vault 為標準 ZIP 檔案"""
     try:
         zip_path = export_vault_to_zip()
         filename = os.path.basename(zip_path)
@@ -944,9 +1044,9 @@ def api_export_vault():
         raise HTTPException(status_code=500, detail=f"導出資料包失敗: {str(exc)}")
 
 
-@app.post("/vault/import", tags=["Vault Management"])
-async def api_import_vault(file: UploadFile = File(...)):
-    """安全檢驗並全量導入 ZIP 資料包（覆蓋前自動進行快照備份）"""
+@app.post("/vault/inspect-zip", tags=["Vault Management"])
+async def api_inspect_vault_zip(file: UploadFile = File(...)):
+    """檢驗上傳之 ZIP 是否合法，並回傳 manifest 資訊供前端彈窗確認新 Vault 名稱"""
     if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="請上傳副檔名為 .zip 的資料包檔案")
 
@@ -956,36 +1056,46 @@ async def api_import_vault(file: UploadFile = File(...)):
         with open(temp_zip_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        result = import_vault_from_zip(temp_zip_path)
-        return result
+        manifest = verify_vault_zip(temp_zip_path)
+        return {
+            "status": "success",
+            "manifest": manifest,
+            "suggested_name": manifest.get("name", "imported_vault")
+        }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"導入資料包失敗: {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"解析資料包失敗: {str(exc)}")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-@app.get("/vault/backups", tags=["Vault Management"])
-def api_list_backups():
-    """取得本地自動建立之快照備份檔案列表"""
-    return list_backups()
+@app.post("/vault/import", tags=["Vault Management"])
+async def api_import_vault(
+    file: UploadFile = File(...),
+    target_name: Optional[str] = None
+):
+    """DASH IN: 驗證 ZIP 並解壓建立為全新獨立 Vault，完成後自動切換（絕不覆蓋）"""
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="請上傳副檔名為 .zip 的資料包檔案")
 
-
-@app.post("/vault/restore", tags=["Vault Management"])
-def api_restore_backup(payload: VaultRestoreRequest):
-    """依指定快照檔名進行還原"""
+    temp_dir = tempfile.mkdtemp()
+    temp_zip_path = os.path.join(temp_dir, file.filename)
     try:
-        result = restore_backup(payload.backup_filename)
+        with open(temp_zip_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        result = import_vault_from_zip(temp_zip_path, target_name=target_name)
         return result
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"還原快照失敗: {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"匯入資料包失敗: {str(exc)}")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    ensure_default_vault()
+    uvicorn.run("dash_backend.main:app", host="127.0.0.1", port=8000, reload=True)

@@ -12,7 +12,9 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 import dash_backend.database as db
-from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
+from dash_backend.document_processing.converter import convert_to_markdown, get_default_markdown_dir
+
+DEFAULT_MARKDOWN_DIR = None
 
 # ==========================================
 # 1. Embedding 與 Reranker 模型載入 (Lazy Singletons)
@@ -105,7 +107,8 @@ def add_document(file_path: str, *, db_path: Optional[str] = None) -> int:
     # 1. 判斷預期的託管 Markdown 檔案路徑
     raw_name = os.path.basename(file_path)
     file_stem, ext = os.path.splitext(raw_name)
-    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
+    md_dir = DEFAULT_MARKDOWN_DIR or get_default_markdown_dir()
+    target_md_path = os.path.join(md_dir, f"{file_stem}.md")
 
     # 2. 檢查 SQLite 紀錄是否存在，若已存在則直接拋出 FileExistsError（不支援覆蓋）
     existing_record = db.get_doc_by_path(target_md_path, db_path=db_path)
@@ -146,7 +149,8 @@ def delete_document(identifier: str, *, db_path: Optional[str] = None) -> bool:
     file_path = record["file_path"]
     filename = record["filename"]
     rel_path = f"markdown/{filename}"
-    abs_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, filename)
+    md_dir = DEFAULT_MARKDOWN_DIR or get_default_markdown_dir()
+    abs_md_path = os.path.join(md_dir, filename)
     
     vectorstore = db.get_vectorstore()
     # 支援相對路徑與相容舊版絕對路徑的向量清理

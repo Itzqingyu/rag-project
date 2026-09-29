@@ -16,6 +16,7 @@ import {
   FileScan,
   MessageSquare,
   ArrowLeftRight,
+  Archive,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { activityApi } from './api/activityApi';
@@ -36,8 +37,10 @@ import ConfirmModal from './components/ConfirmModal';
 import ChatPanel from './components/ChatPanel';
 // 引入 AI 會議紀錄整理面板組件
 import MeetingExtractPanel from './components/MeetingExtractPanel';
-// 引入 DASH IN & OUT 本地交接工作台組件
-import DashInOutPanel from './components/DashInOutPanel';
+// 引入 DASH OUT 本地資料導出面板組件
+import DashOutPanel from './components/DashOutPanel';
+// 引入側邊欄底部 Vault 控制列組件
+import VaultManagerBar from './components/VaultManagerBar';
 import html2pdf from 'html2pdf.js';
 
 interface Message {
@@ -154,6 +157,13 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
   useEffect(() => {
     loadActivities();
   }, []);
+
+  const handleVaultChanged = () => {
+    setSelectedActivityId(null);
+    loadActivities();
+    setScheduleVersion((v) => v + 1);
+    setMeetingVersion((v) => v + 1);
+  };
 
   const visibleActivities = activities.filter((activity) => {
     const keyword = activitySearch.trim().toLocaleLowerCase('zh-TW');
@@ -466,7 +476,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
               )}
             </div>
 
-            {/* DASH IN & OUT 全量交接導航項目 */}
+            {/* DASH OUT 全量交接導出項目 */}
             <a
               className={`nav-item ${currentView === 'vault' ? 'active' : ''}`}
               href="#vault"
@@ -477,10 +487,13 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
                 handleSetView('vault');
               }}
             >
-              <span className="nav-icon" aria-hidden="true"><ArrowLeftRight size={16} /></span>
-              <span>DASH IN & OUT</span>
+              <span className="nav-icon" aria-hidden="true"><Archive size={16} /></span>
+              <span>DASH OUT</span>
             </a>
           </nav>
+
+          {/* 側邊欄底部 Vault 管理列 */}
+          <VaultManagerBar onVaultChanged={handleVaultChanged} />
         </aside>
         <button className="nav-backdrop" id="nav-backdrop" type="button" aria-label="關閉選單" tabIndex={-1} hidden={!isSidebarOpen} onClick={() => setIsSidebarOpen(false)}></button>
 
@@ -718,9 +731,9 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
           {/* 10. AI 會議紀錄整理視圖 (常駐掛載避免切換面板時預覽資料遺失) */}
           <MeetingExtractPanel hidden={currentView !== 'extract'} />
 
-          {/* 11. DASH IN & OUT 本地交接工作台視圖 */}
+          {/* 11. DASH OUT 本地交接導出視圖 */}
           {currentView === 'vault' && (
-            <DashInOutPanel onDataReloaded={loadActivities} />
+            <DashOutPanel />
           )}
         </main>
       </div>

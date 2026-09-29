@@ -24,13 +24,17 @@ DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以�
     - **向量化**: fastembed (輕量級、無須 PyTorch 的 ONNX 推理引擎)
     - **LLM API**: litellm (統一接口，支援 OpenAI/Claude)
 
-### 資料庫與檔案儲存
-- **純文字 / 託管文件**: 系統統一轉碼為 `.md` (Markdown 格式) 並儲存於 `python/data/markdown/` 目錄
-- **原始文件**: 上傳轉換完成後與系統獨立 (使用者刪除或修改原始 PDF/Word 不影響系統內 Markdown)
-- **切片文字**: Markdown 切片由 `rag_engine.py` 處理
-- **向量數據**: ChromaDB persistent mode 儲存於 `python/data/chroma_db/`
-- **對話歷史與元資料**: SQLite 儲存於 `python/data/rag_database.sqlite`
-- **檔案與活動管理**: SQLite (追蹤已導入的 Markdown 文件，以及 Activity、Meeting、Task、Decision、Schedule、Incident 等業務資料)
+### 資料庫與多 Vault 儲存架構 (~/.dash/)
+- **全域設定**: 存於使用者家目錄 `~/.dash/config.json`，記錄當前使用中的 `active_vault`
+- **Vault 集中目錄**: 統一收攏於 `~/.dash/vaults/<vault_name>/`
+- **開箱即用**: 首次啟動自動建立純淨的 `~/.dash/vaults/default/` 作為預設知識庫
+- **單一 Vault 內部結構**:
+  - `dash_manifest.json`: Vault 專屬身分識別檔（身分證），記載 vault_id、名稱、版本與建檔時間
+  - `dash_database.sqlite`: SQLite 核心資料庫（活動業務表、會議、決策、日程、突發事件、對話會話等）
+  - `chroma_db/`: ChromaDB 向量檢索索引切塊庫
+  - `markdown/`: 託管之標準 Markdown 文本文件庫
+- **DASH OUT (全量導出)**: 獨立工作面板，可一鍵將當前使用中 Vault 打包為內含 manifest 身分證的標準 `.zip` 檔案
+- **DASH IN (安全匯入)**: 側邊欄底部 Vault 控制列支援匯入 `.zip`，經身分證檢驗後解壓縮建立為全新獨立 Vault 並自動切換（絕不覆蓋舊資料）
 
 ### 模型
 - **Embedding**: fastembed（使用 ONNX Runtime 於 CPU 運行之 Embedding 模型）
@@ -41,24 +45,26 @@ DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以�
 rag-project/
 ├── react/                        # Electron + Vite + React 前端
 │   ├── src/
-│   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話)
+│   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話 vs DASH OUT)
 │   │   ├── api/                  # 後端 API 通訊服務層 (camelCase 命名)
 │   │   │   ├── apiTypes.ts       # 後端資料結構與 TypeScript 介面定義
 │   │   │   ├── apiClient.ts      # HTTP 請求封裝、錯誤攔截與後端斷線處理
 │   │   │   ├── chatService.ts    # 對話會話增刪查改與雙模式訊息發送
 │   │   │   ├── documentService.ts # 歷史紀錄文件清單、上傳轉檔向量化與刪除
 │   │   │   ├── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
-│   │   │   └── vaultService.ts   # 本地資料庫交接與全量管理 (統計、導出、安全導入與快照還原)
+│   │   │   └── vaultApi.ts       # 多 Vault 管理與 DASH OUT 導出、DASH IN 匯入 API
 │   │   ├── components/           # 組件與同名獨立樣式 (.tsx & .css)
+│   │   │   ├── VaultManagerBar.tsx # 側邊欄底部 Vault 控制列 (切換、重命名、刪除防呆、新建空白、DASH IN)
+│   │   │   ├── VaultManagerBar.css # 側邊欄底部 Vault 控制列專屬樣式
+│   │   │   ├── DashOutPanel.tsx  # DASH OUT 全量資料導出專用面板 (資料統計卡片與一鍵打包 ZIP)
+│   │   │   ├── DashOutPanel.css  # DASH OUT 面板專屬樣式
 │   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、即時 API 串接與真實錯誤反饋)
-│   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流，提取會議、決策與待辦)
-│   │   │   ├── DashInOutPanel.tsx # 本地資料全量交接工作台 (整包導出、防呆導入、資料庫規模統計與快照還原)
-│   │   │   ├── DashInOutPanel.css # 本地交接工作台專屬卡片與表格樣式
+│   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流)
 │   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、三點選單觸發重命名與刪除)
-│   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景、即時鍵盤快捷支援)
+│   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景)
 │   │   │   ├── ConfirmModal.tsx  # 防手殘刪除確認獨立彈窗 (霧化毛玻璃背景)
 │   │   │   ├── DocumentDrawer.tsx # 歷史紀錄文檔抽屜 (文件清單、真實上傳與刪除)
-│   │   │   ├── BreadcrumbNav.tsx # 活動工作台頂部多層級麵包屑導航 (支援一鍵返回主活動工作台及分階跳轉)
+│   │   │   ├── BreadcrumbNav.tsx # 活動工作台頂部多層級麵包屑導航
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
 │   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等各自獨立 CSS)
 │   │   └── index.css             # 全域 Design Tokens (:root)、Reset 與 App Shell 樣式
