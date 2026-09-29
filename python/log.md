@@ -157,6 +157,32 @@
     6. 前端組件 `DashInOutPanel.tsx` 與 `DashInOutPanel.css`: 實作「本地資料庫概況」、「整包導出」、「安全導入」與「快照備份歷史」四大卡片，整合覆蓋風險確認彈窗 `ConfirmModal`。
     7. 前端導航與路由: 側邊欄於「DASH Agent」下方新增一級導航按鈕「DASH IN & OUT」（圖示：`ArrowLeftRight`），切換至專屬交接工作台。
     8. 單元測試: 新增 `python/tests/test_vault.py`（5 個測試全數通過），擴充 `react/tests/services.test.ts`（2 個測試全數通過），前後端全套 87 個單元測試 100% 通過。
+- **文件路徑相對化標準化與冗餘欄位清理 (Relative Path Normalization & Raw File Path Removal)**:
+  - **變更背景**:
+    1. 過去 SQLite `documents.file_path` 與 ChromaDB `source` metadata 記錄本機絕對路徑（如 `Z:\...\python\data\markdown\xxx.md`），導致跨電腦或不同工作路徑遷移資料庫 (DASH IN & OUT) 後，路徑失真無法對齊實體檔案與向量檢索。
+    2. `raw_file_path` 欄位原本暫存上傳時的原始檔名，但實務上上傳後的原始暫存檔已立即刪除，防呆重複檔名校驗亦完全依賴主檔名 (`file_stem`)，使得 `raw_file_path` 無實質功能用途。
+  - **核心變更**:
+    1. `database.py`:
+       - 自 `documents` 資料表建表語句中全面移除 `raw_file_path` 欄位與 `ALTER TABLE` 邏輯。
+       - 新增 `to_rel_doc_path(path: str) -> str` 函數，統一將路徑轉換為 `markdown/{filename}` 相對路徑。
+       - `add_or_update_doc_record`: 移除 `raw_file_path` 參數，入庫時一律以標準化相對路徑儲存 `file_path`。
+       - `get_doc_by_path` 與 `delete_doc_record_by_path`: 擴充比對邏輯，支援相對路徑、舊版絕對路徑與單純檔名等多維度匹配。
+    2. `ai_services/rag_engine.py`:
+       - `split_markdown`: 切片 metadata 中的 `source` 統一存放 `markdown/{filename}` 相對路徑。
+       - `add_document`: 移除 `raw_file_path` 參數。
+       - `delete_document`: 同步清理相對路徑與相容舊版路徑之向量，並安全物理刪除 `data/markdown/` 下實體檔案。
+    3. `main.py`:
+       - `/upload` 與 `/handover/save`: 移除 `raw_file_path` 傳參。同主檔名重複衝突提示中的現存檔案資訊統一取用 `existing_doc.get("filename")`，確保前端能精準展示已存在的實體 Markdown 檔名。
+    4. 測試套件維護:
+       - 更新 `test_upload_duplicate.py`、`test_meeting_extract_commit.py`、`test_meeting_task.py`、`test_activity_cli.py` 等測試，驗證 64 個後端單元測試與 23 個前端單元測試 100% 通過。
+- **清除 SQLite documents.markdown_content 雙重儲存冗餘 (Single Source of Truth)**:
+  - **變更背景**: 實體 Markdown 檔案已集中託管於 `python/data/markdown/` 目錄中，在 SQLite 中額外保留 `markdown_content` 造成龐大文字資料重疊儲存，破壞單一真實來源原則。
+  - **核心變更**:
+    1. `database.py`: 從 `documents` 表結構中移除 `markdown_content` 欄位與 `ALTER TABLE`，`add_or_update_doc_record` 移除對應參數與寫入。
+    2. `rag_engine.py`: `add_document` 不再將全文寫入 SQLite，維持 SQLite 純粹紀錄元資料。
+    3. `main.py` 與 `test_main.py`: `/extract_summary` 與 CLI 解析選單直接自 `DEFAULT_MARKDOWN_DIR` 實體檔案讀取 Markdown 內容進行 1-shot LLM 抽取。
+    4. `test_main.py`: 移除已廢棄的 `force` 覆蓋參數，完全遵照「只增不覆蓋」防呆原則。
+    5. `test_activity_cli.py`: 修復模組 import 路徑與測試實體檔建立流程，全套 64 個後端單元測試與 23 個前端測試全數綠燈通過。
 
 
 

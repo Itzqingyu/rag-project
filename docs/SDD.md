@@ -109,12 +109,12 @@ rag-project/
    - 後端 (`/upload`) 在建立暫存檔與轉碼前查詢資料庫，若主檔名已存在直接回傳 `HTTP 409 Conflict`，嚴格禁止同名覆蓋以保護既有資料完整性。
    - 系統全面採取「只增不覆蓋」原則；使用者欲更新檔案內容必須先顯式刪除舊文件後再行上傳。
 3. Python `converter.py`: 讀取原始檔案 → 轉換/複製為標準 Markdown 格式並儲存於 `python/data/markdown/`
-4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存（若遇已存在紀錄拋出 `FileExistsError`）
-5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (檔名、託管路徑、處理時間、狀態)
+4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 (source metadata 標準化為 `markdown/{filename}`) → 向量化 → ChromaDB 儲存（若遇已存在紀錄拋出 `FileExistsError`）
+5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (`file_path` 統一以相對於 `data/` 之 `markdown/{filename}` 相對路徑持久化，徹底避免跨機器或跨目錄路徑失效問題；移除無實質用途之 `raw_file_path` 欄位)
 
 ### AI 結構化提取與預覽寫入 (Preview-Commit 流程)
 1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
-2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析，同時回傳對應來源文件的 `doc_id`
+2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，直接自 `python/data/markdown/{filename}` 讀取實體 Markdown 全文，1-shot 餵給 LLM 進行結構化解析，同時回傳對應來源文件的 `doc_id`
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
 4. 前端展示預覽結果供使用者校對修改，並於預覽標題處標示來源文件，於頂部提供「關聯目標活動 (必填)」卡片：
    - 支援「選擇現有活動」下拉關聯既有活動；若無活動則給予提示並引導建立。

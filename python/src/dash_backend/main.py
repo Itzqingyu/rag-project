@@ -318,7 +318,7 @@ def upload_document(file: UploadFile = File(...)):
 
     existing_doc = get_doc_by_path(target_md_path)
     if existing_doc:
-        existing_raw = existing_doc.get("raw_file_path") or existing_doc.get("filename") or f"{file_stem}.md"
+        existing_raw = existing_doc.get("filename") or f"{file_stem}.md"
         raise HTTPException(
             status_code=409,
             detail=f"已存在相同主檔名的文件「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。"
@@ -334,10 +334,7 @@ def upload_document(file: UploadFile = File(...)):
         target_md_path = convert_to_markdown(raw_file_path)
         
         # 將轉換後的 Markdown 送入 RAG 引擎（無覆蓋參數）
-        chunks_added = add_document(
-            file_path=target_md_path, 
-            raw_file_path=file.filename
-        )
+        chunks_added = add_document(file_path=target_md_path)
         
         doc_record = get_doc_by_path(target_md_path)
         
@@ -539,7 +536,16 @@ def extract_summary(req: ExtractSummaryRequest):
     if not record:
         raise HTTPException(status_code=404, detail="找不到指定的文件紀錄")
         
-    markdown_content = record.get("markdown_content", "")
+    md_file_path = os.path.join(DEFAULT_MARKDOWN_DIR, record["filename"])
+    if not os.path.exists(md_file_path):
+        raise HTTPException(status_code=404, detail=f"找不到實體 Markdown 檔案: {record['filename']}")
+
+    try:
+        with open(md_file_path, "r", encoding="utf-8") as f:
+            markdown_content = f.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"讀取文件失敗: {e}")
+
     if not markdown_content.strip():
         raise HTTPException(status_code=400, detail="文件內文為空，無法進行 AI 萃取")
         
@@ -879,7 +885,7 @@ def api_save_handover(payload: HandoverSaveRequest):
 
     existing_doc = get_doc_by_path(target_md_path)
     if existing_doc or os.path.exists(target_md_path):
-        existing_raw = (existing_doc.get("raw_file_path") or existing_doc.get("filename") or filename) if existing_doc else filename
+        existing_raw = existing_doc.get("filename") if existing_doc else filename
         raise HTTPException(
             status_code=409,
             detail=f"紀錄庫已存在相同主檔名的交接報告「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，若需採用新交接摘要，請先至歷史紀錄庫手動刪除舊文件後再行存入。"
@@ -890,10 +896,7 @@ def api_save_handover(payload: HandoverSaveRequest):
         with open(target_md_path, "w", encoding="utf-8") as f:
             f.write(payload.content)
 
-        chunks_added = add_document(
-            file_path=target_md_path,
-            raw_file_path=filename
-        )
+        chunks_added = add_document(file_path=target_md_path)
 
         doc_record = get_doc_by_path(target_md_path)
 

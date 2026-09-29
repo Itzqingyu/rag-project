@@ -65,18 +65,10 @@ def init_db(db_path: Optional[str] = None) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT UNIQUE NOT NULL,
                 filename TEXT NOT NULL,
-                raw_file_path TEXT,      -- 未經 markdown 解析的原始實體檔案路徑
-                markdown_content TEXT,   -- 解析後的完整 Markdown 文字內容
                 upload_date DATETIME NOT NULL,
                 chunk_count INTEGER NOT NULL
             )
         ''')
-        cursor.execute("PRAGMA table_info(documents)")
-        existing_doc_cols = [row[1] for row in cursor.fetchall()]
-        if "raw_file_path" not in existing_doc_cols:
-            cursor.execute("ALTER TABLE documents ADD COLUMN raw_file_path TEXT")
-        if "markdown_content" not in existing_doc_cols:
-            cursor.execute("ALTER TABLE documents ADD COLUMN markdown_content TEXT")
 
         # 1.2 活動主表
         cursor.execute('''
@@ -282,12 +274,23 @@ init_db()
 # 2. Documents (文件) CRUD
 # ==========================================
 
+def to_rel_doc_path(path: str) -> str:
+    """將檔案實體路徑或名稱標準化為相對於 data/ 的相對路徑 (格式固定為 markdown/{filename})。"""
+    filename = os.path.basename(path)
+    return f"markdown/{filename}"
+
+
 def get_doc_by_path(file_path: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """根據檔案路徑查詢文件上傳與切塊紀錄。"""
+    """根據檔案路徑查詢文件上傳與切塊紀錄。支援相對路徑、絕對路徑與檔名查詢。"""
     init_db(db_path)
+    rel_path = to_rel_doc_path(file_path)
+    filename = os.path.basename(file_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM documents WHERE file_path = ?', (file_path,))
+        cursor.execute(
+            'SELECT * FROM documents WHERE file_path = ? OR file_path = ? OR filename = ?',
+            (rel_path, file_path, filename)
+        )
         row = cursor.fetchone()
         return dict(row) if row else None
 
@@ -315,36 +318,38 @@ def get_all_docs(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
 def add_or_update_doc_record(
     file_path: str,
     chunk_count: int,
-    raw_file_path: Optional[str] = None,
-    markdown_content: Optional[str] = None,
     *,
     db_path: Optional[str] = None,
 ) -> None:
-    """新增或覆蓋更新文件的 Metadata 紀錄。"""
+    """新增或覆蓋更新文件的 Metadata 紀錄。file_path 會統一標準化為 markdown/{filename} 相對路徑儲存。"""
     init_db(db_path)
     filename = os.path.basename(file_path)
+    rel_path = to_rel_doc_path(file_path)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO documents (file_path, filename, raw_file_path, markdown_content, upload_date, chunk_count)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO documents (file_path, filename, upload_date, chunk_count)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(file_path) DO UPDATE SET
-                raw_file_path = excluded.raw_file_path,
-                markdown_content = excluded.markdown_content,
                 upload_date = excluded.upload_date,
                 chunk_count = excluded.chunk_count
-        ''', (file_path, filename, raw_file_path, markdown_content, now, chunk_count))
+        ''', (rel_path, filename, now, chunk_count))
         conn.commit()
 
 
 def delete_doc_record_by_path(file_path: str, db_path: Optional[str] = None) -> None:
-    """根據檔案路徑從 SQLite 移除文件紀錄。"""
+    """根據檔案路徑從 SQLite 移除文件紀錄。支援相對路徑、絕對路徑與檔名比對刪除。"""
     init_db(db_path)
+    rel_path = to_rel_doc_path(file_path)
+    filename = os.path.basename(file_path)
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM documents WHERE file_path = ?', (file_path,))
+        cursor.execute(
+            'DELETE FROM documents WHERE file_path = ? OR file_path = ? OR filename = ?',
+            (rel_path, file_path, filename)
+        )
         conn.commit()
 
 
