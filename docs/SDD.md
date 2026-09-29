@@ -47,10 +47,13 @@ rag-project/
 │   │   │   ├── apiClient.ts      # HTTP 請求封裝、錯誤攔截與後端斷線處理
 │   │   │   ├── chatService.ts    # 對話會話增刪查改與雙模式訊息發送
 │   │   │   ├── documentService.ts # 歷史紀錄文件清單、上傳轉檔向量化與刪除
-│   │   │   └── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
+│   │   │   ├── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
+│   │   │   └── vaultService.ts   # 本地資料庫交接與全量管理 (統計、導出、安全導入與快照還原)
 │   │   ├── components/           # 組件與同名獨立樣式 (.tsx & .css)
 │   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、即時 API 串接與真實錯誤反饋)
 │   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流，提取會議、決策與待辦)
+│   │   │   ├── DashInOutPanel.tsx # 本地資料全量交接工作台 (整包導出、防呆導入、資料庫規模統計與快照還原)
+│   │   │   ├── DashInOutPanel.css # 本地交接工作台專屬卡片與表格樣式
 │   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、三點選單觸發重命名與刪除)
 │   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景、即時鍵盤快捷支援)
 │   │   │   ├── ConfirmModal.tsx  # 防手殘刪除確認獨立彈窗 (霧化毛玻璃背景)
@@ -65,6 +68,7 @@ rag-project/
 │   │   └── dash_backend/
 │   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
 │   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema、Sessions/Messages 與 ChromaDB 向量庫)
+│   │       ├── vault_manager.py  # 全量交接管理器 (ZIP 打包、dash_manifest.json 簽名校驗、自動備份與還原)
 │   │       ├── prompts/          # System Prompt Markdown 檔案目錄
 │   │       │   ├── meeting_extraction.md # 會議紀錄 1-shot 結構化抽取 Prompt
 │   │       │   ├── rag_qa.md             # RAG 通用問答 Prompt
@@ -86,11 +90,13 @@ rag-project/
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
 │   │   ├── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
 │   │   ├── test_upload_duplicate.py # 同主檔名上傳防呆與覆蓋行為單元測試
-│   │   └── test_meeting_extract_commit.py # AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試
+│   │   ├── test_meeting_extract_commit.py # AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試
+│   │   └── test_vault.py         # DASH IN & OUT 全量交接、ZIP 簽名防呆與快照備份單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
 │   │   ├── dash_database.sqlite  # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
 │   │   └── markdown/             # 託管之 Markdown 格式文本庫
+│   ├── data_backups/             # 本地安全快照備份目錄 (自動留存全量 ZIP 備份檔)
 │   └── pyproject.toml            # 依賴套件配置
 ```
 
@@ -133,6 +139,12 @@ rag-project/
    - 執行主檔名查重嚴格防呆（若已存在同名檔案則回傳 `HTTP 409 Conflict`，要求使用者先至歷史紀錄手動刪除舊文件後再行存入）。
    - 將 Markdown 內容實體寫入託管目錄 `python/data/markdown/`。
    - 呼叫 `rag_engine.add_document` 自動進行文本切片、fastembed 向量化寫入 ChromaDB，並登錄 Metadata 至 SQLite `documents` 表。
+
+### DASH IN & OUT 全量交接與資料庫管理 (Vault Management)
+1. **全量導出 (Export)**：呼叫 `/vault/export`，後端將 `dash_database.sqlite`、`chroma_db/` 與 `markdown/` 連同包含應用程式版本與統計數據的 `dash_manifest.json` 打包成標準 ZIP 檔案，供無損遷移或交接給下一屆負責人。
+2. **防呆檢驗與導入 (Import)**：使用者透過「DASH IN & OUT」面板上傳 ZIP，後端 `/vault/import` 嚴格校驗是否內含 `dash_manifest.json` 與必要資料結構，若非本系統產物或結構損壞則回傳 400 拒絕導入。
+3. **安全快照備份 (Auto-backup)**：在全量覆蓋替換本地資料前，後端自動將當前 `data/` 壓縮留存於 `python/data_backups/backup_{YYYYMMDD_HHMMSS}.zip`，確保使用者資料零遺失風險。
+4. **歷史備份查看與還原 (Restore)**：面板提供快照歷史清單，支援一鍵還原回指定的歷史快照。
 
 ## 5. 開發步驟
 

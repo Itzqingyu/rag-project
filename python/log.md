@@ -18,12 +18,15 @@
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
   - **AI 交接摘要與紀錄庫存入 (Handover)**: `/handover/generate` (以 LLM 總整日程與決策資料生成 Markdown 交接摘要), `/handover/save` (依活動名稱與日期自動命名、查重防呆 409、實體寫入 Markdown 託管庫並進行向量化與 SQLite 登錄)
+  - **資料庫與全量交接管理 (Vault Management)**: `/vault/stats` (取得資料庫與檔案統計數據), `/vault/export` (整包打包下載 ZIP), `/vault/import` (安全驗證與全量導入 ZIP，覆蓋前自動建立快照備份), `/vault/backups` (列出本機安全快照歷史), `/vault/restore` (依指定快照檔名一鍵還原)
 
+- `vault_manager.py`: 負責本機資料庫與資料目錄 (`dash_database.sqlite`, `chroma_db/`, `markdown/`) 之全量導出、ZIP 內建 `dash_manifest.json` 專屬簽名驗證、安全覆蓋導入、覆蓋前自動快照備份 (`data_backups/`) 與歷史快照還原。
 - `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。同時支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 - `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
 - `tests/test_upload_duplicate.py`: 同主檔名上傳防呆與覆蓋行為單元測試，驗證 409 Conflict 阻擋、資料庫與實體檔案完整性保護、底層 FileExistsError 例外機制、以及 /handover/save 儲存、向量化與查重防呆。
 - `tests/test_meeting_extract_commit.py`: AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試，驗證 /commit_summary 與 /meetings 支援 source_document_id 自動注入、資料庫持久化、以及關聯文檔刪除時 ON DELETE SET NULL 外鍵約束保護機制。
+- `tests/test_vault.py`: 全量交接系統單元測試，驗證 ZIP 打包與 dash_manifest.json 簽名、非法/損壞壓縮包阻擋、自動快照備份機制與 FastAPI 端點。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
 - `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
@@ -143,6 +146,17 @@
     4. 前端 `App.tsx`: 在交接摘要彈窗（`handoverModalRef`）操作列新增「存入紀錄庫」按鈕，支援 loading 禁用狀態，存入成功後切換為「已存入紀錄庫」並於 Modal 頂部顯示綠色成功橫幅；若遇 409 衝突或網路錯誤則顯示紅色警告橫幅。重新產生交接摘要時自動重設存入狀態。
     5. 前端 `index.css`: 新增 `--success`、`--success-soft` 顏色變數與 `.modal-banner` 樣式。
     6. 單元測試: 在 `python/tests/test_upload_duplicate.py` 新增 `test_handover_save_success_and_duplicate` 與 `test_handover_save_empty_content`，全套 5 個單元測試 100% 通過。
+- **DASH IN & OUT 本地全量交接系統 (/vault 模組與端點實作)**:
+  - **功能背景**: 本地 App 在無雲端環境下，各設備累積之活動、會議、待辦與向量資料庫彼此隔離。為了實現跨設備、跨屆幹部間的無損交接與防呆備份，建立全量打包與安全導入工作台。
+  - **核心變更**:
+    1. 後端 `vault_manager.py`: 封裝全量資料庫打包與還原邏輯。整包匯出時自動將 `dash_database.sqlite`、`chroma_db/` 與 `markdown/` 連同 `dash_manifest.json`（記錄 app、version、exported_at 與統計數據）打包為標準 ZIP 檔案。
+    2. 簽名驗證與防呆: 導入 ZIP 時嚴格檢驗 `dash_manifest.json` 與核心資料庫結構，拒絕非本系統產物或結構毀損之檔案，阻擋率 100%。
+    3. 自動安全快照 (Zero Data Loss): 在執行全量覆蓋替換前，系統自動將當前 `data/` 目錄封存至 `data_backups/backup_{YYYYMMDD_HHMMSS}.zip`，提供歷史快照列表與一鍵無損還原。
+    4. 後端 `main.py`: 新增 `/vault/stats`, `/vault/export`, `/vault/import`, `/vault/backups`, `/vault/restore` 完整 RESTful 端點。
+    5. 前端 `vaultService.ts`: 封裝 API 客戶端捷徑與檔案下載流程。
+    6. 前端組件 `DashInOutPanel.tsx` 與 `DashInOutPanel.css`: 實作「本地資料庫概況」、「整包導出」、「安全導入」與「快照備份歷史」四大卡片，整合覆蓋風險確認彈窗 `ConfirmModal`。
+    7. 前端導航與路由: 側邊欄於「DASH Agent」下方新增一級導航按鈕「DASH IN & OUT」（圖示：`ArrowLeftRight`），切換至專屬交接工作台。
+    8. 單元測試: 新增 `python/tests/test_vault.py`（5 個測試全數通過），擴充 `react/tests/services.test.ts`（2 個測試全數通過），前後端全套 87 個單元測試 100% 通過。
 
 
 

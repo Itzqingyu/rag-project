@@ -5,9 +5,18 @@ import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+
+from dash_backend.vault_manager import (
+    get_vault_stats,
+    export_vault_to_zip,
+    import_vault_from_zip,
+    list_backups,
+    restore_backup,
+)
 
 from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
 from dash_backend.database import (
@@ -274,6 +283,10 @@ class HandoverSaveRequest(BaseModel):
     activity_id: Optional[int] = None
     activity_name: str
     content: str
+
+
+class VaultRestoreRequest(BaseModel):
+    backup_filename: str
 
 
 # ==========================================
@@ -901,6 +914,73 @@ def api_save_handover(payload: HandoverSaveRequest):
             except OSError:
                 pass
         raise HTTPException(status_code=500, detail=f"存入紀錄庫失敗: {str(exc)}")
+
+
+# ==========================================
+# 資料庫與全量交接 (Vault Management) 端點
+# ==========================================
+
+@app.get("/vault/stats", tags=["Vault Management"])
+def api_get_vault_stats():
+    """取得本地資料庫與檔案儲存庫之統計數據概況"""
+    return get_vault_stats()
+
+
+@app.get("/vault/export", tags=["Vault Management"])
+def api_export_vault():
+    """整包導出本機資料庫、Chroma 向量庫與 Markdown 文本為標準 ZIP 檔案"""
+    try:
+        zip_path = export_vault_to_zip()
+        filename = os.path.basename(zip_path)
+        return FileResponse(
+            path=zip_path,
+            filename=filename,
+            media_type="application/zip"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"導出資料包失敗: {str(exc)}")
+
+
+@app.post("/vault/import", tags=["Vault Management"])
+async def api_import_vault(file: UploadFile = File(...)):
+    """安全檢驗並全量導入 ZIP 資料包（覆蓋前自動進行快照備份）"""
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="請上傳副檔名為 .zip 的資料包檔案")
+
+    temp_dir = tempfile.mkdtemp()
+    temp_zip_path = os.path.join(temp_dir, file.filename)
+    try:
+        with open(temp_zip_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        result = import_vault_from_zip(temp_zip_path)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"導入資料包失敗: {str(exc)}")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.get("/vault/backups", tags=["Vault Management"])
+def api_list_backups():
+    """取得本地自動建立之快照備份檔案列表"""
+    return list_backups()
+
+
+@app.post("/vault/restore", tags=["Vault Management"])
+def api_restore_backup(payload: VaultRestoreRequest):
+    """依指定快照檔名進行還原"""
+    try:
+        result = restore_backup(payload.backup_filename)
+        return result
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"還原快照失敗: {str(exc)}")
 
 
 if __name__ == "__main__":
