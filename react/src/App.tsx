@@ -17,6 +17,7 @@ import {
   MessageSquare,
   ArrowLeftRight,
   Archive,
+  RefreshCw,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { activityApi } from './api/activityApi';
@@ -109,8 +110,8 @@ export default function App() {
   // 控制目前顯示的畫面，預設為 'activities' (活動列表)
   const [currentView, setCurrentView] = useState('activities');
 
-  // 控制左側主選單是否開啟 (預設為開啟；收合時完全隱藏並由三線按鈕控制)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // 控制左側主選單是否開啟 (預設為收合；由側邊小按鈕控制展開)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // 控制右側 AI 歷史參考抽屜是否開啟
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
@@ -157,6 +158,13 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
   useEffect(() => {
     loadActivities();
   }, []);
+
+  // 當切換到活動工作台或總覽時，自動重新載入活動清單以確保最新狀態
+  useEffect(() => {
+    if (currentView === 'activities' || currentView === 'overview') {
+      loadActivities();
+    }
+  }, [currentView]);
 
   const handleVaultChanged = () => {
     setSelectedActivityId(null);
@@ -310,7 +318,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `❌ Query failed: ${error.message}`
+        content: `Query failed: ${error.message}`
       }]);
       setLoading(false);
     }
@@ -508,6 +516,16 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
               <div className="heading-actions">
                 {currentView === 'activities' && (
                   <>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={loadActivities}
+                      disabled={activitiesLoading}
+                      title="重新整理活動清單"
+                    >
+                      <RefreshCw size={14} className={activitiesLoading ? 'spin' : ''} />
+                      <span>重新整理</span>
+                    </button>
                     <button className="button secondary open-record" type="button" onClick={() => recordModalRef.current?.showModal()}>+ 新增紀錄</button>
                     <button className="button primary" id="open-new-activity" type="button" onClick={openCreateActivity}>+ 新增活動</button>
                   </>
@@ -519,7 +537,7 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
               <article><span>全部活動</span><strong>{activities.length}</strong><small>SQLite 中的真實資料</small></article>
               <article><span>正在處理</span><strong>{activeCount}</strong><small>準備中或進行中</small></article>
               <article><span>已完成</span><strong>{completedCount}</strong><small>可進入活動後檢討</small></article>
-              <article className="accent-card"><span>✨ AI 知識庫累積</span><strong>{archivedCount} 份已完成報告</strong><small>成功轉化為組織決策記憶</small></article>
+              <article className="accent-card"><span>AI 知識庫累積</span><strong>{archivedCount} 份已完成報告</strong><small>成功轉化為組織決策記憶</small></article>
             </div>
 
             <div className="surface">

@@ -179,10 +179,13 @@ export const MeetingExtractPanel: React.FC<MeetingExtractPanelProps> = ({ hidden
     }
   }, []);
 
+  // 切換至本面板 (!hidden) 時自動從後端刷新文檔清單與活動清單
   useEffect(() => {
-    loadDocumentsList();
-    loadActivitiesList();
-  }, [loadDocumentsList, loadActivitiesList]);
+    if (!hidden) {
+      loadDocumentsList();
+      loadActivitiesList();
+    }
+  }, [hidden, loadDocumentsList, loadActivitiesList]);
 
   /**
    * 文檔真實上傳處理 (支援快捷按鈕與側邊抽屜上傳)
