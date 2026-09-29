@@ -27,6 +27,7 @@ DECISION_FIELDS = {
     "reason",
     "source",
     "confirmation_status",
+    "outcome_note",
 }
 CONFIRMATION_STATUSES = {"pending", "confirmed"}
 
@@ -69,6 +70,8 @@ def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
             normalized[field_name] = _options_json(value)
         elif field_name == "confirmation_status":
             normalized[field_name] = _confirmation_status(value)
+        elif field_name == "outcome_note":
+            normalized[field_name] = value if value is None else str(value)
         else:
             normalized[field_name] = required_text(value, field_name)
     return normalized
@@ -87,6 +90,7 @@ def create_decision(
     source: str,
     confirmation_status: str = "pending",
     meeting_id: Optional[int] = None,
+    outcome_note: Optional[str] = None,
     *,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -101,6 +105,7 @@ def create_decision(
             "reason": reason,
             "source": source,
             "confirmation_status": confirmation_status,
+            "outcome_note": outcome_note,
         }
     )
     init_db(db_path)
@@ -115,9 +120,9 @@ def create_decision(
             """
             INSERT INTO decisions (
                 activity_id, meeting_id, problem, options, final_decision,
-                reason, source, confirmation_status, created_at, updated_at
+                reason, source, confirmation_status, outcome_note, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 values["activity_id"],
@@ -128,6 +133,7 @@ def create_decision(
                 values["reason"],
                 values["source"],
                 values["confirmation_status"],
+                values.get("outcome_note"),
                 now,
                 now,
             ),

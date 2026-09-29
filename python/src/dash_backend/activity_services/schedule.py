@@ -25,6 +25,7 @@ SCHEDULE_FIELDS = {
     "owner",
     "notes",
     "category",
+    "outcome_note",
 }
 
 
@@ -43,6 +44,8 @@ def _normalize_fields(values: Dict[str, Any]) -> Dict[str, Any]:
             normalized[field_name] = iso_datetime(
                 value, field_name, optional=True
             )
+        elif field_name == "outcome_note":
+            normalized[field_name] = value if value is None else str(value)
         else:
             normalized[field_name] = required_text(value, field_name)
     return normalized
@@ -58,6 +61,7 @@ def create_schedule(
     category: str,
     end_time: Optional[str] = None,
     meeting_id: Optional[int] = None,
+    outcome_note: Optional[str] = None,
     *,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -72,6 +76,7 @@ def create_schedule(
             "location": location,
             "owner": owner,
             "notes": notes,
+            "outcome_note": outcome_note,
             "category": category,
         }
     )
@@ -88,9 +93,9 @@ def create_schedule(
             """
             INSERT INTO schedules (
                 activity_id, meeting_id, name, start_time, end_time, location,
-                owner, notes, category, created_at, updated_at
+                owner, notes, outcome_note, category, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 values["activity_id"],
@@ -101,6 +106,7 @@ def create_schedule(
                 values["location"],
                 values["owner"],
                 values["notes"],
+                values.get("outcome_note"),
                 values["category"],
                 now,
                 now,

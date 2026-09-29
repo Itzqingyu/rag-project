@@ -339,13 +339,27 @@
 }
 
 .overview-actions {
-  display: grid;
-  gap: 10px;
-  margin: 18px 0;
+  display: flex;
+  flex-direction: column;  /* 讓按鈕變成由上往下垂直排列 */
+  gap: 20px;               /* 拉大兩個按鈕之間的上下間距 */
+  height: 100%;            /* 讓這個容器撐滿卡片的可用高度 */
+  justify-content: center; /* 關鍵！這會讓按鈕垂直置中，把下方多出的空白平均分攤到上下 */
 }
 
 .muted-copy {
   color: var(--muted);
   font-size: .78rem;
   line-height: 1.65;
+}
+
+.heading-actions {
+  display: flex;
+  gap: 16px;          /* 兩個按鈕左右的間距 */
+  margin-top: 12px;   /* 距離上方標題的距離 */
+  margin-bottom: 16px;/* 距離下方區塊的距離 */
+}
+
+.overview-actions button {
+  min-height: 56px; /* 把按鈕明顯拉高 (可以根據喜好調整為 48px 或 64px) */
+  font-size: 16px;  /* 稍微放大字體，才不會在變高的按鈕裡顯得太空虛 */
 }

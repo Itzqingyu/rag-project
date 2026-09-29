@@ -17,11 +17,12 @@
   - **決策紀錄 (Decision)**: `/decisions` (GET, POST), `/decisions/{id}` (GET, PUT, DELETE)
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
+  - **AI 交接摘要與紀錄庫存入 (Handover)**: `/handover/generate` (以 LLM 總整日程與決策資料生成 Markdown 交接摘要), `/handover/save` (依活動名稱與日期自動命名、查重防呆 409、實體寫入 Markdown 託管庫並進行向量化與 SQLite 登錄)
 
 - `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。同時支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試。
 - `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
 - `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
-- `tests/test_upload_duplicate.py`: 同主檔名上傳防呆與覆蓋行為單元測試，驗證 409 Conflict 阻擋、資料庫與實體檔案完整性保護、以及底層 FileExistsError 例外機制。
+- `tests/test_upload_duplicate.py`: 同主檔名上傳防呆與覆蓋行為單元測試，驗證 409 Conflict 阻擋、資料庫與實體檔案完整性保護、底層 FileExistsError 例外機制、以及 /handover/save 儲存、向量化與查重防呆。
 - `tests/test_meeting_extract_commit.py`: AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試，驗證 /commit_summary 與 /meetings 支援 source_document_id 自動注入、資料庫持久化、以及關聯文檔刪除時 ON DELETE SET NULL 外鍵約束保護機制。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
@@ -133,6 +134,15 @@
     2. 前端 `meetingExtractService.ts` 與 `MeetingExtractPanel.tsx`: 擴充 `ExtractedMeeting` 與 `CommitSummaryPayload` 包含 `source_document_id`、`doc_id` 與 `source_file`。在點擊「確認寫入資料庫」時，自動帶入該次結構化抽取來源文件的 `doc_id`。並在預覽卡片頂端呈現「來源：{filename}」標籤徽章。
     3. 前端樣式 `MeetingExtractPanel.css`: 新增 `.source-doc-badge` 樣式，符合視覺設計規範。
     4. 新增 `tests/test_meeting_extract_commit.py` 單元測試，全面驗證 `source_document_id` 自動綁定、無來源相容性、RESTful API 支援以及 `ON DELETE SET NULL` 級聯防護。後端 57 個測試與前端 21 個測試 100% 通過。
+- **活動交接摘要存入紀錄庫 (/handover/save 端點與前後端整合)**:
+  - **功能背景**: 既有交接總整功能僅能在彈窗中預覽並匯出為 PDF，缺乏一鍵歸檔至系統歷史紀錄庫（RAG 知識庫）的功能。
+  - **核心變更**:
+    1. 後端 `main.py`: 新增 `HandoverSaveRequest` 模型與 `POST /handover/save` 端點。自動依 `{活動名稱}_交接報告_{YYYYMMDD}.md` 規格命名，前置防呆檢查目標檔案與 SQLite 是否已存在同名檔案，若衝突回傳 `HTTP 409 Conflict` 且提示手動刪除舊檔；若無衝突則實體寫入託管目錄 `DEFAULT_MARKDOWN_DIR`，並調用 `add_document` 完成 Markdown 文本切片、fastembed 向量化寫入 ChromaDB 與登錄 SQLite `documents` 表。
+    2. 修復 `main.py` 中 `handover_agent` 之 import 路徑為 `from dash_backend.ai_services.handover_agent import generate_handover_summary`。
+    3. 前端 `activityApi.ts`: 新增 `saveHandover` 方法，串接 `POST /handover/save`。
+    4. 前端 `App.tsx`: 在交接摘要彈窗（`handoverModalRef`）操作列新增「存入紀錄庫」按鈕，支援 loading 禁用狀態，存入成功後切換為「已存入紀錄庫」並於 Modal 頂部顯示綠色成功橫幅；若遇 409 衝突或網路錯誤則顯示紅色警告橫幅。重新產生交接摘要時自動重設存入狀態。
+    5. 前端 `index.css`: 新增 `--success`、`--success-soft` 顏色變數與 `.modal-banner` 樣式。
+    6. 單元測試: 在 `python/tests/test_upload_duplicate.py` 新增 `test_handover_save_success_and_duplicate` 與 `test_handover_save_empty_content`，全套 5 個單元測試 100% 通過。
 
 
 

@@ -7,7 +7,7 @@ interface OverviewPanelProps {
   currentView: string;
   setCurrentView: (view: string) => void;
   onEdit: () => void;
-  onDelete: () => Promise<void>;
+  onDelete: () => Promise<void> | void;
   deleting: boolean;
   deleteError: string | null;
 }
@@ -84,7 +84,6 @@ export default function OverviewPanel({
             <button className="button secondary" type="button" onClick={() => setCurrentView('meeting')}>管理會議</button>
             <button className="button secondary" type="button" onClick={() => setCurrentView('tasks')}>管理待辦</button>
           </div>
-          <p className="muted-copy">本階段已連接 Activity、Meeting 與 Task；其他模組仍保留原型畫面。</p>
         </article>
       </div>
     </section>

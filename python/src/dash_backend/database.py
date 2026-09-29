@@ -167,6 +167,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 source TEXT NOT NULL,
                 confirmation_status TEXT NOT NULL DEFAULT 'pending'
                     CHECK (confirmation_status IN ('pending', 'confirmed')),
+                outcome_note TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY(activity_id) REFERENCES activities(id)
@@ -175,6 +176,12 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
+        # 針對 decisions 的平滑升級，獨立執行
+        cursor.execute("PRAGMA table_info(decisions)")
+        existing_decision_cols = [row[1] for row in cursor.fetchall()]
+        if "outcome_note" not in existing_decision_cols:
+            cursor.execute("ALTER TABLE decisions ADD COLUMN outcome_note TEXT")
+       
         # 1.6 流程日程表 (SET NULL meeting_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS schedules (
@@ -187,6 +194,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 location TEXT NOT NULL,
                 owner TEXT NOT NULL,
                 notes TEXT NOT NULL,
+                outcome_note TEXT,
                 category TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -196,6 +204,11 @@ def init_db(db_path: Optional[str] = None) -> None:
                     ON DELETE SET NULL
             )
         ''')
+        cursor.execute("PRAGMA table_info(schedules)")
+        existing_schedule_cols = [row[1] for row in cursor.fetchall()]
+        if "outcome_note" not in existing_schedule_cols:
+            cursor.execute("ALTER TABLE schedules ADD COLUMN outcome_note TEXT")
+            
         # 1.7 突發事件表 (SET NULL schedule_id)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS incidents (

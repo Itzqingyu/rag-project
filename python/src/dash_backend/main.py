@@ -1,10 +1,13 @@
 import os
+import re
 import shutil
 import tempfile
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
 from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
 from dash_backend.database import (
@@ -65,6 +68,8 @@ from dash_backend.activity_services.incident import (
     delete_incident,
 )
 
+from dash_backend.ai_services.handover_agent import generate_handover_summary
+
 app = FastAPI(
     title="DASH Backend API",
     description="DASH (Decision, Activity, Schedule, History) RESTful API",
@@ -79,6 +84,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+load_dotenv()
 
 
 # ==========================================
@@ -149,6 +156,7 @@ class DecisionCreate(BaseModel):
     source: str
     confirmation_status: str = "pending"
     meeting_id: Optional[int] = None
+    outcome_note: Optional[str] = None
 
 class CommitSummaryRequest(BaseModel):
     activity_id: int
@@ -212,6 +220,7 @@ class DecisionUpdate(BaseModel):
     reason: Optional[str] = None
     source: Optional[str] = None
     confirmation_status: Optional[str] = None
+    outcome_note: Optional[str] = None
 
 # Schedule
 class ScheduleCreate(BaseModel):
@@ -221,6 +230,7 @@ class ScheduleCreate(BaseModel):
     location: str
     owner: str
     notes: str
+    outcome_note: Optional[str] = None
     category: str
     end_time: Optional[str] = None
     meeting_id: Optional[int] = None
@@ -234,6 +244,7 @@ class ScheduleUpdate(BaseModel):
     location: Optional[str] = None
     owner: Optional[str] = None
     notes: Optional[str] = None
+    outcome_note: Optional[str] = None
     category: Optional[str] = None
 
 # Incident
@@ -252,6 +263,17 @@ class IncidentUpdate(BaseModel):
     occurred_at: Optional[str] = None
     cause: Optional[str] = None
     suggestion: Optional[str] = None
+
+# 定義前端傳過來的資料結構
+class HandoverRequest(BaseModel):
+    schedules: List[Dict[str, Any]]
+    decisions: List[Dict[str, Any]]
+
+
+class HandoverSaveRequest(BaseModel):
+    activity_id: Optional[int] = None
+    activity_name: str
+    content: str
 
 
 # ==========================================
@@ -810,6 +832,75 @@ def api_delete_incident(incident_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail="找不到突發事件紀錄")
     return {"status": "success", "deleted": deleted}
+
+# AI 交接摘要 (Handover Endpoints)
+@app.post("/handover/generate", tags=["Handover"])
+def api_generate_handover(payload: HandoverRequest):
+    try:
+        # 將前端傳來的資料轉交給 ai_services 處理
+        ai_summary = generate_handover_summary(
+            schedules=payload.schedules,
+            decisions=payload.decisions
+        )
+        return {"status": "success", "summary": ai_summary}
+        
+    except Exception as exc:
+        print(f"AI 生成失敗: {str(exc)}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/handover/save", tags=["Handover"])
+def api_save_handover(payload: HandoverSaveRequest):
+    """
+    將交接摘要存為 Markdown 檔案並自動向量化切片入庫至紀錄庫
+    """
+    if not payload.content or not payload.content.strip():
+        raise HTTPException(status_code=400, detail="交接報告內容不能為空")
+
+    today_str = datetime.now().strftime("%Y%m%d")
+    raw_name = (payload.activity_name or "活動").strip()
+    clean_name = re.sub(r'[\\/*?:"<>|]', "", raw_name).strip() or "活動"
+    file_stem = f"{clean_name}_交接報告_{today_str}"
+    filename = f"{file_stem}.md"
+    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, filename)
+
+    existing_doc = get_doc_by_path(target_md_path)
+    if existing_doc or os.path.exists(target_md_path):
+        existing_raw = (existing_doc.get("raw_file_path") or existing_doc.get("filename") or filename) if existing_doc else filename
+        raise HTTPException(
+            status_code=409,
+            detail=f"紀錄庫已存在相同主檔名的交接報告「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，若需採用新交接摘要，請先至歷史紀錄庫手動刪除舊文件後再行存入。"
+        )
+
+    try:
+        os.makedirs(DEFAULT_MARKDOWN_DIR, exist_ok=True)
+        with open(target_md_path, "w", encoding="utf-8") as f:
+            f.write(payload.content)
+
+        chunks_added = add_document(
+            file_path=target_md_path,
+            raw_file_path=filename
+        )
+
+        doc_record = get_doc_by_path(target_md_path)
+
+        return {
+            "status": "success",
+            "message": f"成功將「{filename}」存入紀錄庫並完成向量化！",
+            "filename": filename,
+            "file_path": target_md_path,
+            "doc_id": doc_record["id"] if doc_record else None,
+            "chunks_added": chunks_added
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if os.path.exists(target_md_path) and not get_doc_by_path(target_md_path):
+            try:
+                os.remove(target_md_path)
+            except OSError:
+                pass
+        raise HTTPException(status_code=500, detail=f"存入紀錄庫失敗: {str(exc)}")
 
 
 if __name__ == "__main__":

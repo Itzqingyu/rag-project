@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../api/activityApi';
 import type { Meeting, MeetingInput } from '../types/activity';
+import ConfirmModal from './ConfirmModal';
 import './MeetingPanel.css';
 
 interface MeetingPanelProps {
@@ -146,8 +147,16 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedMeeting || !window.confirm(`確定刪除「${selectedMeeting.name}」？關聯資料會保留，但 meeting_id 將清空。`)) return;
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const handleDelete = () => {
+    if (!selectedMeeting) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedMeeting) return;
+    setDeleteConfirmOpen(false);
     setDeleting(true);
     setError(null);
     try {
@@ -175,7 +184,12 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
       </div>
 
       <div className="section-heading" style={{ marginTop: '24px' }}>
-        <div><p className="eyebrow">MEETINGS</p><h2>{activityName}・籌備會議</h2><p>只顯示目前活動的會議紀錄。</p></div>
+        <div><p className="eyebrow">MEETINGS</p>
+          <h2>{activityName}・籌備會議</h2>
+          <p style={{ marginTop: '6px', marginBottom: '12px'}}>
+          只顯示目前活動的會議紀錄。
+        </p>
+        </div>
       </div>
 
       {error && <div className="api-message error" role="alert">{error}</div>}
@@ -186,11 +200,28 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
       )}
 
       {meetings.length > 0 && (
-        <div className="meeting-switch" aria-label="選擇會議">
-          {meetings.map((meeting, index) => (
-            <button key={meeting.id} className={meeting.id === selectedMeetingId ? 'active' : ''} type="button" onClick={() => setSelectedMeetingId(meeting.id)}>
-              <span>{String(index + 1).padStart(2, '0')}</span><strong>{meeting.name}</strong><small>{meeting.date || '日期未定'}</small>
-            </button>
+        <div className="meeting-tabs-container" aria-label="選擇會議">
+          {/* 👇 加上 [...meetings].sort(...) 來依照時間排序 */}
+          {[...meetings]
+            .sort((a, b) => {
+              // 將日期字串轉為時間戳，進行相減來升冪排序 (越早發生的排越前面)
+              const dateA = new Date(a.date || '').getTime();
+              const dateB = new Date(b.date || '').getTime();
+              return dateA - dateB; 
+            })
+            .map((meeting, index) => (
+              <button 
+                key={meeting.id} 
+                className={`meeting-tab ${meeting.id === selectedMeetingId ? 'active' : ''}`} 
+                type="button" 
+                onClick={() => setSelectedMeetingId(meeting.id)}
+              >
+                <div className="tab-header">
+                  <span className="tab-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="tab-date">{meeting.date || '日期未定'}</span>
+                </div>
+                <strong className="tab-name">{meeting.name}</strong>
+              </button>
           ))}
         </div>
       )}
@@ -198,8 +229,8 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
       {selectedMeeting && (
         <article className="meeting-detail-card">
           <div className="card-title">
-            <div><p className="eyebrow">MEETING DETAIL</p><h3>{selectedMeeting.name}</h3></div>
-            <div className="heading-actions">
+            <div><p className="eyebrow">MEETING DETAIL</p><h3 style={{ wordBreak: 'break-all' }}>{selectedMeeting.name}</h3></div>
+            <div className="heading-actions" style={{ flexShrink: 0, display: 'flex', gap: '8px' }}>
               <button className="button secondary" type="button" onClick={openEdit}>編輯</button>
               <button className="button danger" type="button" onClick={() => void handleDelete()} disabled={deleting}>{deleting ? '刪除中…' : '刪除'}</button>
             </div>
@@ -230,6 +261,17 @@ export default function MeetingPanel({ activityId, activityName, currentView, se
           </section>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        title="確認刪除會議"
+        message={`確定刪除「${selectedMeeting?.name}」？關聯資料會保留，但 meeting_id 將清空。`}
+        confirmText="確認刪除"
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </section>
   );
 }

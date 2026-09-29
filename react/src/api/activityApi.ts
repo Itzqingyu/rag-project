@@ -123,4 +123,29 @@ export const activityApi = {
     request<Incident>(`/incidents/${incidentId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteIncident: (incidentId: number) =>
     request<DeleteByIdResponse>(`/incidents/${incidentId}`, { method: 'DELETE' }),
+  generateHandover: async (schedules: any[], decisions: any[]) => {
+    // 假設你的 FastAPI 跑在 8000 port
+    const response = await fetch('http://127.0.0.1:8000/handover/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schedules, decisions })
+    });
+    
+    if (!response.ok) {
+      throw new Error('AI 生成失敗');
+    }
+    return response.json();
+  },
+  saveHandover: (payload: { activity_id?: number; activity_name: string; content: string }) =>
+    request<{
+      status: string;
+      message: string;
+      filename: string;
+      file_path: string;
+      doc_id?: number | null;
+      chunks_added: number;
+    }>('/handover/save', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

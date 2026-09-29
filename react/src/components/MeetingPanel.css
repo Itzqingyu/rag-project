@@ -236,3 +236,82 @@
   white-space: pre-wrap;
   line-height: 1.7;
 }
+
+/* 讓卡片變成橫向排排站，超出畫面可以滑動 */
+.meeting-tabs-container {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 4px 8px 4px; /* 留點空間給陰影 */
+  margin-bottom:12px;
+}
+
+.meeting-tabs-container::-webkit-scrollbar {
+  height: 6px;
+}
+.meeting-tabs-container::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+/* 單一張會議卡片的長相 */
+.meeting-tab {
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  max-width: 240px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+/* 滑鼠移過去的效果：微微浮起 */
+.meeting-tab:hover {
+  border-color: #4776e6; /* 這裡的顏色可以配合你們的藍色 */
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(71, 118, 230, 0.1);
+}
+
+/* 被選中的卡片樣式：變成藍底藍字 */
+.meeting-tab.active {
+  background: #f0f4ff;
+  border-color: #4776e6;
+}
+
+/* 卡片上半部的序號與日期 */
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.tab-index {
+  font-weight: 700;
+  color: #a0aec0;
+}
+.meeting-tab.active .tab-index {
+  color: #4776e6; /* 選中時序號變藍色 */
+}
+
+.tab-date {
+  color: #718096;
+}
+
+/* 會議名稱 */
+.tab-name {
+  font-size: 15px;
+  color: #2d3748;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meeting-tab.active .tab-name {
+  color: #2b6cb0; /* 選中時名稱變深藍色 */
+}
