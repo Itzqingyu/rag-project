@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { vaultApi, VaultItem } from '../api/vaultApi';
+import ConfirmModal from './ConfirmModal';
 import './VaultManagerBar.css';
 
 interface VaultManagerBarProps {
@@ -452,46 +453,17 @@ export default function VaultManagerBar({ onVaultChanged }: VaultManagerBarProps
         </div>
       )}
 
-      {/* 3. 刪除 Vault 確認對話框 */}
-      {deleteModalOpen && (
-        <div className="vault-modal-backdrop">
-          <div className="vault-modal-card">
-            <div className="vault-modal-header">
-              <h3>確認刪除 Vault</h3>
-              <button
-                type="button"
-                className="vault-modal-close-btn"
-                onClick={() => setDeleteModalOpen(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="vault-modal-body">
-              <p className="vault-modal-note danger">
-                警告：您即將永久刪除 Vault「{targetDeleteVault}」。此動作將實體移除該目錄下的所有活動、行程、決策、向量切片與文件，且無法復原！
-              </p>
-              {errorMsg && <p className="vault-modal-note danger">{errorMsg}</p>}
-            </div>
-            <div className="vault-modal-actions">
-              <button
-                type="button"
-                className="vault-btn-secondary"
-                onClick={() => setDeleteModalOpen(false)}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="vault-btn-danger"
-                disabled={isLoading}
-                onClick={handleConfirmDelete}
-              >
-                {isLoading ? '刪除中...' : '確定永久刪除'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 3. 刪除 Vault 確認對話框 (使用系統通用 ConfirmModal，支援自動換行與精緻居中毛玻璃效果) */}
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        title="確認刪除 Vault"
+        message={`確定要永久刪除 Vault「${targetDeleteVault}」嗎？此動作將實體移除該目錄下的所有活動、行程、決策、向量切片與文件，且無法復原。`}
+        confirmText={isLoading ? '刪除中...' : '確定永久刪除'}
+        cancelText="取消"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModalOpen(false)}
+      />
 
       {/* 4. DASH IN: 匯入 ZIP 確認建立新 Vault 對話框 */}
       {importModalOpen && (

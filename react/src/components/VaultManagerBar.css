@@ -1,13 +1,15 @@
 /**
  * VaultManagerBar.css - 側邊欄底部 Vault 控制列與彈出面板樣式
+ * 配色完美融入側邊欄 (var(--navy) 與 var(--navy-soft)) 暗色主題
  */
 
 .vault-bar-container {
   margin-top: auto;
-  padding: 12px 14px;
-  border-top: 1px solid var(--line);
+  padding: 14px 0 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
-  background-color: var(--panel);
+  background: transparent;
+  white-space: normal;
 }
 
 .vault-trigger-btn {
@@ -15,27 +17,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
-  background: var(--canvas);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  color: var(--ink);
+  padding: 9px 12px;
+  background: var(--navy-soft);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 13px;
-  font-weight: 500;
   text-align: left;
 }
 
 .vault-trigger-btn:hover {
-  background: var(--line);
-  border-color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .vault-trigger-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   overflow: hidden;
 }
@@ -57,19 +58,19 @@
   font-size: 10px;
   text-transform: uppercase;
   color: var(--muted);
-  letter-spacing: 0.5px;
-  font-weight: 600;
+  letter-spacing: 0.6px;
+  font-weight: 700;
   line-height: 1.1;
 }
 
 .vault-trigger-name {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
+  font-weight: 700;
+  color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 130px;
+  max-width: 140px;
 }
 
 .vault-trigger-arrow {
@@ -77,19 +78,20 @@
   flex-shrink: 0;
 }
 
-/* 浮層面板 */
+/* 浮層面板 (Popover) */
 .vault-popover {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 12px;
-  right: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 10px 25px rgba(17, 27, 46, 0.12);
+  bottom: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  background: var(--navy-soft);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
   z-index: 100;
-  padding: 8px;
-  animation: vaultPopoverFade 0.2s ease;
+  padding: 10px;
+  animation: vaultPopoverFade 0.18s ease;
+  white-space: normal;
 }
 
 @keyframes vaultPopoverFade {
@@ -104,8 +106,8 @@
 }
 
 .vault-popover-head {
-  padding: 6px 8px 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -121,11 +123,11 @@
 
 .vault-popover-count {
   font-size: 11px;
-  color: var(--muted);
-  background: var(--canvas);
-  padding: 1px 6px;
+  color: var(--cyan-soft);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 7px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .vault-list {
@@ -141,7 +143,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 8px;
+  padding: 8px 10px;
   border-radius: 8px;
   background: transparent;
   border: 1px solid transparent;
@@ -149,15 +151,16 @@
   transition: all 0.15s ease;
   width: 100%;
   text-align: left;
+  color: #ffffff;
 }
 
 .vault-item:hover {
-  background: var(--canvas);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .vault-item.active {
-  background: var(--cyan-soft);
-  border-color: rgba(71, 118, 230, 0.25);
+  background: rgba(71, 118, 230, 0.18);
+  border-color: rgba(71, 118, 230, 0.35);
 }
 
 .vault-item-left {
@@ -184,16 +187,16 @@
 }
 
 .vault-item-name {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
+  color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vault-item-sub {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--muted);
 }
 
@@ -223,8 +226,8 @@
 }
 
 .vault-item-btn:hover {
-  background: var(--line);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
 .vault-item-btn.delete:hover {
@@ -239,7 +242,7 @@
 
 .vault-popover-divider {
   height: 1px;
-  background: var(--line);
+  background: rgba(255, 255, 255, 0.1);
   margin: 6px 0;
 }
 
@@ -254,21 +257,21 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--ink-soft);
+  color: var(--line);
   transition: all 0.15s ease;
   text-align: left;
 }
 
 .vault-action-btn:hover {
-  background: var(--canvas);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .vault-action-btn.primary {
@@ -276,36 +279,40 @@
 }
 
 .vault-action-btn.primary:hover {
-  background: var(--cyan-soft);
+  background: rgba(71, 118, 230, 0.15);
 }
 
-/* 簡易對話框 (Modal) 樣式 */
+/* 彈窗樣式 (Card Modals) */
 .vault-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(17, 27, 46, 0.45);
+  background: rgba(16, 25, 40, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
-  backdrop-filter: blur(2px);
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 20px;
 }
 
 .vault-modal-card {
-  background: var(--panel);
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 16px 36px rgba(17, 27, 46, 0.18);
-  width: 90%;
-  max-width: 420px;
-  padding: 20px;
+  box-shadow: 0 20px 45px rgba(16, 25, 40, 0.22);
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  animation: vaultPopoverFade 0.2s ease;
+  gap: 16px;
+  animation: vaultPopoverFade 0.18s ease;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .vault-modal-header {
@@ -315,8 +322,8 @@
 }
 
 .vault-modal-header h3 {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
   color: var(--ink);
 }
 
@@ -338,12 +345,13 @@
 .vault-modal-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  white-space: normal;
 }
 
 .vault-modal-body label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink-soft);
 }
 
@@ -361,32 +369,36 @@
 
 .vault-modal-input:focus {
   border-color: var(--cyan);
-  background: var(--panel);
+  background: #ffffff;
 }
 
 .vault-modal-note {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.4;
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .vault-modal-note.danger {
   color: var(--danger);
   background: var(--danger-soft);
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
   border: 1px solid rgba(217, 56, 41, 0.2);
+  white-space: normal;
+  word-break: break-word;
 }
 
 .vault-modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .vault-btn-secondary {
-  padding: 8px 14px;
+  padding: 8px 16px;
   background: var(--canvas);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -403,7 +415,7 @@
 }
 
 .vault-btn-primary {
-  padding: 8px 16px;
+  padding: 8px 18px;
   background: var(--cyan);
   border: 1px solid var(--cyan);
   border-radius: 8px;
@@ -415,27 +427,10 @@
 }
 
 .vault-btn-primary:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-.vault-btn-primary:disabled,
-.vault-btn-danger:disabled {
+.vault-btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.vault-btn-danger {
-  padding: 8px 16px;
-  background: var(--danger);
-  border: 1px solid var(--danger);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #ffffff;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.vault-btn-danger:hover {
-  opacity: 0.9;
 }
