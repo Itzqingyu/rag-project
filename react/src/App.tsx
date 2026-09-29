@@ -887,18 +887,20 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
           )}
           
           {/* 1. 將 ref 綁定在這裡，這樣 PDF 就會只抓取這塊區域的畫面 */}
-          <div ref={pdfExportRef} className="modal-body" style={{ lineHeight: '1.6', textAlign: 'left', padding: '10px' }}>
+          <div ref={pdfExportRef} className="handover-modal-body">
             
             {/* 加一個 PDF 專屬的標題，讓印出來的報表看起來更正式 */}
-            <h1 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '20px', fontSize: '24px' }}>
+            <h1 className="handover-report-title">
               活動交接摘要報告
             </h1>
 
-            {handoverSummary ? (
-              <ReactMarkdown>{handoverSummary}</ReactMarkdown>
-            ) : (
-              <p>載入中...</p>
-            )}
+            <div className="handover-report-markdown">
+              {handoverSummary ? (
+                <ReactMarkdown>{handoverSummary}</ReactMarkdown>
+              ) : (
+                <p className="handover-loading-text">載入中...</p>
+              )}
+            </div>
           </div>
           
           <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
