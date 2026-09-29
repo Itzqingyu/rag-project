@@ -25,6 +25,8 @@
   --danger-soft: #ffece8;
   --warning: #d97706;
   --warning-soft: #fff3db;
+  --success: #16a34a;
+  --success-soft: #f0fdf4;
   --radius: 12px;
   font-family: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   color: var(--ink);
@@ -879,6 +881,26 @@ a {
   font-size: 1.35rem;
   margin-top: 4px;
   color: var(--ink);
+}
+
+.modal-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.modal-banner.success {
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid #bbf7d0;
+}
+
+.modal-banner.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid #fecaca;
 }
 
 .modal-copy {

@@ -125,6 +125,15 @@ rag-project/
    - SQLite `chat_messages` 僅保存純粹的「使用者問題」與「AI 回答」，當輪檢索到的參考切片以 JSON 儲存於 `retrieved_chunks` 欄位供前端回溯。
    - 歷史對話傳入 LLM 時，不疊加過往龐大的檢索內容，徹底杜絕同一個 Session 中多次 RAG 或切換模式造成的記憶污染。
 
+### 活動交接摘要生成與存入紀錄庫 (Handover Summary & Archive)
+1. 使用者在活動後面板點擊「產生交接摘要」呼叫 `/handover/generate`，以 LLM 整合活動之日程與決策數據生成 Markdown 格式之交接總結報告。
+2. 前端彈窗提供交接摘要預覽，支援「匯出為 PDF」與「存入紀錄庫」。
+3. 點擊「存入紀錄庫」時呼叫 `/handover/save`：
+   - 後端自動依 `{活動名稱}_交接報告_{YYYYMMDD}.md` 規格命名。
+   - 執行主檔名查重嚴格防呆（若已存在同名檔案則回傳 `HTTP 409 Conflict`，要求使用者先至歷史紀錄手動刪除舊文件後再行存入）。
+   - 將 Markdown 內容實體寫入託管目錄 `python/data/markdown/`。
+   - 呼叫 `rag_engine.add_document` 自動進行文本切片、fastembed 向量化寫入 ChromaDB，並登錄 Metadata 至 SQLite `documents` 表。
+
 ## 5. 開發步驟
 
 ```bash

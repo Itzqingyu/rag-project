@@ -135,5 +135,17 @@ export const activityApi = {
       throw new Error('AI 生成失敗');
     }
     return response.json();
-  }
+  },
+  saveHandover: (payload: { activity_id?: number; activity_name: string; content: string }) =>
+    request<{
+      status: string;
+      message: string;
+      filename: string;
+      file_path: string;
+      doc_id?: number | null;
+      chunks_added: number;
+    }>('/handover/save', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

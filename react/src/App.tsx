@@ -326,6 +326,32 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
   
   // 儲存 AI 產生的真資料
   const [handoverSummary, setHandoverSummary] = useState<string>(''); 
+  const [handoverSaved, setHandoverSaved] = useState<boolean>(false);
+  const [isSavingHandover, setIsSavingHandover] = useState<boolean>(false);
+  const [handoverSaveMessage, setHandoverSaveMessage] = useState<string | null>(null);
+  const [handoverSaveError, setHandoverSaveError] = useState<string | null>(null);
+
+  // 存入紀錄庫處理函數
+  const handleSaveHandoverToKnowledgeBase = async () => {
+    if (!handoverSummary || isSavingHandover) return;
+    setIsSavingHandover(true);
+    setHandoverSaveMessage(null);
+    setHandoverSaveError(null);
+    try {
+      const activityName = currentActivity?.name || '活動';
+      const result = await activityApi.saveHandover({
+        activity_id: currentActivity?.id,
+        activity_name: activityName,
+        content: handoverSummary,
+      });
+      setHandoverSaved(true);
+      setHandoverSaveMessage(result.message || '已成功存入紀錄庫並完成向量化！');
+    } catch (err: any) {
+      setHandoverSaveError(err.message || '存入紀錄庫失敗');
+    } finally {
+      setIsSavingHandover(false);
+    }
+  };
 
   // 建立一個 Ref 用來綁定你要印出來的畫面
   const pdfExportRef = useRef<HTMLDivElement>(null);
@@ -339,7 +365,6 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
     const dateString = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
 
     // 2. 取得活動名稱，如果找不到就用預設值
-    // (假設你原本用來顯示標題的變數叫做 currentActivity.name)
     const activityName = currentActivity?.name || '活動';
 
     // 3. 組合出動態檔名
@@ -347,13 +372,12 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
 
     const opt: any = {
       margin:       15,
-      filename:     dynamicFilename, // 👈 改用動態產生的檔名
+      filename:     dynamicFilename,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2 },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // 根據你前面的設定，使用適合的呼叫方式
     // @ts-ignore
     html2pdf().set(opt).from(element).save();
   };
@@ -623,7 +647,18 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
                 {/* 04 活動後 */}
                 {currentView === 'after' && (
                   <>
-                    <AfterPanel currentView={currentView} activityId={currentActivity?.id} scheduleVersion={scheduleVersion} onOpenHandover={(aiText: string) => { setHandoverSummary(aiText); handoverModalRef.current?.showModal(); }} />
+                    <AfterPanel 
+                      currentView={currentView} 
+                      activityId={currentActivity?.id} 
+                      scheduleVersion={scheduleVersion} 
+                      onOpenHandover={(aiText: string) => { 
+                        setHandoverSummary(aiText); 
+                        setHandoverSaved(false);
+                        setHandoverSaveMessage(null);
+                        setHandoverSaveError(null);
+                        handoverModalRef.current?.showModal(); 
+                      }} 
+                    />
                     <SourceRecordPanel currentView={currentView} setCurrentView={setCurrentView} />
                   </>
                 )}
@@ -843,6 +878,13 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
             </div>
             <button className="close-button" value="cancel" aria-label="關閉">×</button>
           </div>
+
+          {handoverSaveMessage && (
+            <div className="modal-banner success">{handoverSaveMessage}</div>
+          )}
+          {handoverSaveError && (
+            <div className="modal-banner error">{handoverSaveError}</div>
+          )}
           
           {/* 1. 將 ref 綁定在這裡，這樣 PDF 就會只抓取這塊區域的畫面 */}
           <div ref={pdfExportRef} className="modal-body" style={{ lineHeight: '1.6', textAlign: 'left', padding: '10px' }}>
@@ -859,8 +901,15 @@ const archivedCount = activities.filter(act => act.status === '已完成').lengt
             )}
           </div>
           
-          <div className="modal-actions">
-            {/* 2. 加上 onClick 事件 */}
+          <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={handleSaveHandoverToKnowledgeBase}
+              disabled={isSavingHandover || handoverSaved || !handoverSummary}
+            >
+              {isSavingHandover ? '存入中...' : handoverSaved ? '已存入紀錄庫' : '存入紀錄庫'}
+            </button>
             <button 
               className="button primary" 
               type="button" 
