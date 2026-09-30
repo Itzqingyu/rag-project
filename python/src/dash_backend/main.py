@@ -145,7 +145,7 @@ class SessionUpdateRequest(BaseModel):
 
 class ChatMessageSendRequest(BaseModel):
     content: str
-    mode: str = Field(default="chat", description="'chat' (普通上下文對話) 或 'rag' (RAG 知識庫檢索對話)")
+    mode: str = Field(default="chat", description="'chat' (普通上下文對話) 或 'rag' (RAG 紀錄庫檢索對話)")
     top_k: int = Field(default=5, ge=1, le=20)
 
 # AI 結構化萃取與 Preview-Commit 流程模型
@@ -477,7 +477,7 @@ def send_chat_message(session_id: int, req: ChatMessageSendRequest):
     
     支援模式 (mode)：
     - 'chat': 普通對話模式，直接透過歷史上下文與使用者問題回答，不執行 RAG 預處理。
-    - 'rag': 知識庫檢索模式，動態檢索相關片段並結合上下文回答，杜絕記憶污染。
+    - 'rag': 紀錄庫檢索模式，動態檢索相關片段並結合上下文回答，杜絕記憶污染。
     """
     session = get_session(session_id)
     if not session:

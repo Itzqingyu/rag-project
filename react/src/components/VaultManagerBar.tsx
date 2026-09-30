@@ -255,7 +255,7 @@ export default function VaultManagerBar({ onVaultChanged }: VaultManagerBarProps
         className="vault-trigger-btn"
         onClick={() => setIsPopoverOpen((prev) => !prev)}
         aria-expanded={isPopoverOpen}
-        title="切換或管理知識庫 (Vault)"
+        title="切換或管理紀錄庫 (Vault)"
       >
         <div className="vault-trigger-left">
           <span className="vault-trigger-icon">
@@ -275,7 +275,7 @@ export default function VaultManagerBar({ onVaultChanged }: VaultManagerBarProps
       {isPopoverOpen && (
         <div className="vault-popover">
           <div className="vault-popover-head">
-            <span className="vault-popover-title">知識庫列表</span>
+            <span className="vault-popover-title">紀錄庫列表</span>
             <span className="vault-popover-count">{vaults.length} 個</span>
           </div>
 

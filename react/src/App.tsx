@@ -537,7 +537,7 @@ export default function App() {
               <article><span>全部活動</span><strong>{activities.length}</strong><small>SQLite 中的真實資料</small></article>
               <article><span>正在處理</span><strong>{activeCount}</strong><small>準備中或進行中</small></article>
               <article><span>已完成</span><strong>{completedCount}</strong><small>可進入活動後檢討</small></article>
-              <article className="accent-card"><span>AI 知識庫累積</span><strong>{archivedCount} 份已完成報告</strong><small>成功轉化為組織決策記憶</small></article>
+              <article className="accent-card"><span>AI 紀錄庫累積</span><strong>{archivedCount} 份已完成報告</strong><small>成功轉化為組織決策記憶</small></article>
             </div>
 
             <div className="surface">

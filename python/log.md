@@ -9,7 +9,7 @@
   - **對話會話與上下文記憶 (Session & Chat)**:
     - `/sessions`: GET (列出所有 Sessions), POST (建立新 Session)
     - `/sessions/{id}`: GET (取得 Session 詳情與歷史訊息), PATCH (更新 Session 標題), DELETE (串聯刪除 Session 及其訊息)
-    - `/sessions/{id}/messages`: POST (發送訊息，支援指定 `mode='chat'` 普通對話或 `mode='rag'` 知識庫檢索對話)
+    - `/sessions/{id}/messages`: POST (發送訊息，支援指定 `mode='chat'` 普通對話或 `mode='rag'` 紀錄庫檢索對話)
   - **AI 結構化提取與預覽寫入**: `/extract_summary` (發起 1-shot LLM 解析 SQLite 託管之完整 Markdown 文字並回傳預覽 JSON), `/commit_summary` (將前端校對後的結構化資料逐筆寫入 SQLite；目前可能部分成功)
   - **活動管理 (Activity)**: `/activities` (GET, POST), `/activities/{id}` (GET, PUT, DELETE)
   - **會議管理 (Meeting)**: `/meetings` (GET, POST), `/meetings/{id}` (GET, PUT, DELETE)
@@ -148,7 +148,7 @@
     3. 前端樣式 `MeetingExtractPanel.css`: 新增 `.source-doc-badge` 樣式，符合視覺設計規範。
     4. 新增 `tests/test_meeting_extract_commit.py` 單元測試，全面驗證 `source_document_id` 自動綁定、無來源相容性、RESTful API 支援以及 `ON DELETE SET NULL` 級聯防護。後端 57 個測試與前端 21 個測試 100% 通過。
 - **活動交接摘要存入紀錄庫 (/handover/save 端點與前後端整合)**:
-  - **功能背景**: 既有交接總整功能僅能在彈窗中預覽並匯出為 PDF，缺乏一鍵歸檔至系統歷史紀錄庫（RAG 知識庫）的功能。
+  - **功能背景**: 既有交接總整功能僅能在彈窗中預覽並匯出為 PDF，缺乏一鍵歸檔至系統歷史紀錄庫（RAG 紀錄庫）的功能。
   - **核心變更**:
     1. 後端 `main.py`: 新增 `HandoverSaveRequest` 模型與 `POST /handover/save` 端點。自動依 `{活動名稱}_交接報告_{YYYYMMDD}.md` 規格命名，前置防呆檢查目標檔案與 SQLite 是否已存在同名檔案，若衝突回傳 `HTTP 409 Conflict` 且提示手動刪除舊檔；若無衝突則實體寫入託管目錄 `DEFAULT_MARKDOWN_DIR`，並調用 `add_document` 完成 Markdown 文本切片、fastembed 向量化寫入 ChromaDB 與登錄 SQLite `documents` 表。
     2. 修復 `main.py` 中 `handover_agent` 之 import 路徑為 `from dash_backend.ai_services.handover_agent import generate_handover_summary`。

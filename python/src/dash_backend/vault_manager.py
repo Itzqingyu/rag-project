@@ -192,7 +192,7 @@ def ensure_default_vault() -> None:
             "name": "default",
             "created_at": now,
             "updated_at": now,
-            "description": "開箱預設知識庫"
+            "description": "開箱預設紀錄庫"
         }
         write_manifest(default_dir, manifest_data)
         from dash_backend import database

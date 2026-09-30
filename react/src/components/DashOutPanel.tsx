@@ -136,7 +136,7 @@ export default function DashOutPanel() {
         <div className="dash-out-card-head">
           <h2>
             <Database size={20} color="var(--cyan)" />
-            <span>當前使用中知識庫：{activeVaultName}</span>
+            <span>當前使用中紀錄庫：{activeVaultName}</span>
           </h2>
           <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
             最後統計時間：{stats?.last_updated ? new Date(stats.last_updated).toLocaleTimeString() : '--'}

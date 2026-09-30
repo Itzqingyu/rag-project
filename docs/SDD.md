@@ -27,7 +27,7 @@ DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以�
 ### 資料庫與多 Vault 儲存架構 (~/.dash/)
 - **全域設定**: 存於使用者家目錄 `~/.dash/config.json`，記錄當前使用中的 `active_vault`
 - **Vault 集中目錄**: 統一收攏於 `~/.dash/vaults/<vault_name>/`
-- **開箱即用**: 首次啟動自動建立純淨的 `~/.dash/vaults/default/` 作為預設知識庫
+- **開箱即用**: 首次啟動自動建立純淨的 `~/.dash/vaults/default/` 作為預設紀錄庫
 - **單一 Vault 內部結構**:
   - `dash_manifest.json`: Vault 專屬身分識別檔（身分證），記載 vault_id、名稱、版本與建檔時間
   - `dash_database.sqlite`: SQLite 核心資料庫（活動業務表、會議、決策、日程、突發事件、對話會話等）
@@ -132,7 +132,7 @@ rag-project/
 1. 使用者可透過 `/sessions` 端點建立或管理對話會話。
 2. 發送訊息至 `/sessions/{id}/messages`，可自由指定當輪模式：
    - **普通聊天模式 (`mode='chat'`)**：無需經過 RAG 預處理，LLM 基於歷史對話脈絡與使用者問題直接自然回答。
-   - **知識庫檢索模式 (`mode='rag'`)**：ChromaDB 檢索相關切片並由 Reranker 重排序，將文本片段注入當前 Prompt 提供總結回答。
+   - **紀錄庫檢索模式 (`mode='rag'`)**：ChromaDB 檢索相關切片並由 Reranker 重排序，將文本片段注入當前 Prompt 提供總結回答。
 3. **乾淨上下文隔離 (Clean Context Isolation)**：
    - SQLite `chat_messages` 僅保存純粹的「使用者問題」與「AI 回答」，當輪檢索到的參考切片以 JSON 儲存於 `retrieved_chunks` 欄位供前端回溯。
    - 歷史對話傳入 LLM 時，不疊加過往龐大的檢索內容，徹底杜絕同一個 Session 中多次 RAG 或切換模式造成的記憶污染。
