@@ -5,11 +5,37 @@ import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
+from dash_backend.vault_manager import (
+    ensure_default_vault,
+    get_active_vault_name,
+    get_vault_stats,
+    list_vaults,
+    init_vault,
+    switch_vault,
+    rename_vault,
+    delete_vault,
+    export_vault_to_zip,
+    import_vault_from_zip,
+    verify_vault_zip,
+)
+
+# 系統啟動前確保開箱預設 default Vault 存在
+ensure_default_vault()
+
+from dash_backend.document_processing.converter import convert_to_markdown, get_default_markdown_dir
+
+DEFAULT_MARKDOWN_DIR = None
+
+def get_markdown_target_dir() -> str:
+    if DEFAULT_MARKDOWN_DIR:
+        return DEFAULT_MARKDOWN_DIR
+    return get_default_markdown_dir()
+
 from dash_backend.database import (
     get_doc_by_id,
     get_doc_by_path,
@@ -119,7 +145,7 @@ class SessionUpdateRequest(BaseModel):
 
 class ChatMessageSendRequest(BaseModel):
     content: str
-    mode: str = Field(default="chat", description="'chat' (普通上下文對話) 或 'rag' (RAG 知識庫檢索對話)")
+    mode: str = Field(default="chat", description="'chat' (普通上下文對話) 或 'rag' (RAG 紀錄庫檢索對話)")
     top_k: int = Field(default=5, ge=1, le=20)
 
 # AI 結構化萃取與 Preview-Commit 流程模型
@@ -276,6 +302,20 @@ class HandoverSaveRequest(BaseModel):
     content: str
 
 
+class VaultSwitchRequest(BaseModel):
+    vault_name: str
+
+
+class VaultCreateRequest(BaseModel):
+    vault_name: str
+    description: Optional[str] = ""
+
+
+class VaultRenameRequest(BaseModel):
+    old_name: str
+    new_name: str
+
+
 # ==========================================
 # 系統與 RAG/轉檔 端點
 # ==========================================
@@ -301,11 +341,11 @@ def upload_document(file: UploadFile = File(...)):
     # 1. 前置主檔名衝突防呆檢查（在做任何暫存檔或轉檔前進行）
     base_name = os.path.basename(file.filename)
     file_stem, ext = os.path.splitext(base_name)
-    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
+    target_md_path = os.path.join(get_markdown_target_dir(), f"{file_stem}.md")
 
     existing_doc = get_doc_by_path(target_md_path)
     if existing_doc:
-        existing_raw = existing_doc.get("raw_file_path") or existing_doc.get("filename") or f"{file_stem}.md"
+        existing_raw = existing_doc.get("filename") or f"{file_stem}.md"
         raise HTTPException(
             status_code=409,
             detail=f"已存在相同主檔名的文件「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，請先手動刪除舊文件或重新命名檔案後再行上傳。"
@@ -321,10 +361,7 @@ def upload_document(file: UploadFile = File(...)):
         target_md_path = convert_to_markdown(raw_file_path)
         
         # 將轉換後的 Markdown 送入 RAG 引擎（無覆蓋參數）
-        chunks_added = add_document(
-            file_path=target_md_path, 
-            raw_file_path=file.filename
-        )
+        chunks_added = add_document(file_path=target_md_path)
         
         doc_record = get_doc_by_path(target_md_path)
         
@@ -440,7 +477,7 @@ def send_chat_message(session_id: int, req: ChatMessageSendRequest):
     
     支援模式 (mode)：
     - 'chat': 普通對話模式，直接透過歷史上下文與使用者問題回答，不執行 RAG 預處理。
-    - 'rag': 知識庫檢索模式，動態檢索相關片段並結合上下文回答，杜絕記憶污染。
+    - 'rag': 紀錄庫檢索模式，動態檢索相關片段並結合上下文回答，杜絕記憶污染。
     """
     session = get_session(session_id)
     if not session:
@@ -526,7 +563,16 @@ def extract_summary(req: ExtractSummaryRequest):
     if not record:
         raise HTTPException(status_code=404, detail="找不到指定的文件紀錄")
         
-    markdown_content = record.get("markdown_content", "")
+    md_file_path = os.path.join(get_markdown_target_dir(), record["filename"])
+    if not os.path.exists(md_file_path):
+        raise HTTPException(status_code=404, detail=f"找不到實體 Markdown 檔案: {record['filename']}")
+
+    try:
+        with open(md_file_path, "r", encoding="utf-8") as f:
+            markdown_content = f.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"讀取文件失敗: {e}")
+
     if not markdown_content.strip():
         raise HTTPException(status_code=400, detail="文件內文為空，無法進行 AI 萃取")
         
@@ -862,25 +908,22 @@ def api_save_handover(payload: HandoverSaveRequest):
     clean_name = re.sub(r'[\\/*?:"<>|]', "", raw_name).strip() or "活動"
     file_stem = f"{clean_name}_交接報告_{today_str}"
     filename = f"{file_stem}.md"
-    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, filename)
+    target_md_path = os.path.join(get_markdown_target_dir(), filename)
 
     existing_doc = get_doc_by_path(target_md_path)
     if existing_doc or os.path.exists(target_md_path):
-        existing_raw = (existing_doc.get("raw_file_path") or existing_doc.get("filename") or filename) if existing_doc else filename
+        existing_raw = existing_doc.get("filename") if existing_doc else filename
         raise HTTPException(
             status_code=409,
             detail=f"紀錄庫已存在相同主檔名的交接報告「{file_stem}」（現存檔案：{existing_raw}）。系統不允許同名覆蓋，若需採用新交接摘要，請先至歷史紀錄庫手動刪除舊文件後再行存入。"
         )
 
     try:
-        os.makedirs(DEFAULT_MARKDOWN_DIR, exist_ok=True)
+        os.makedirs(get_markdown_target_dir(), exist_ok=True)
         with open(target_md_path, "w", encoding="utf-8") as f:
             f.write(payload.content)
 
-        chunks_added = add_document(
-            file_path=target_md_path,
-            raw_file_path=filename
-        )
+        chunks_added = add_document(file_path=target_md_path)
 
         doc_record = get_doc_by_path(target_md_path)
 
@@ -903,6 +946,156 @@ def api_save_handover(payload: HandoverSaveRequest):
         raise HTTPException(status_code=500, detail=f"存入紀錄庫失敗: {str(exc)}")
 
 
+# ==========================================
+# 多 Vault 管理與 DASH OUT / DASH IN 端點
+# ==========================================
+
+@app.get("/vaults", tags=["Vault Management"])
+def api_list_vaults():
+    """列出 ~/.dash/vaults/ 底下所有合法 Vault 與狀態"""
+    return list_vaults()
+
+
+@app.get("/vaults/active", tags=["Vault Management"])
+def api_get_active_vault():
+    """取得當前使用中之 Vault 名稱與資料庫統計數據"""
+    active_name = get_active_vault_name()
+    return {
+        "active_vault": active_name,
+        "stats": get_vault_stats(active_name)
+    }
+
+
+@app.post("/vaults/switch", tags=["Vault Management"])
+def api_switch_vault(payload: VaultSwitchRequest):
+    """動態熱切換使用中的 Vault"""
+    try:
+        return switch_vault(payload.vault_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"切換 Vault 失敗: {str(exc)}")
+
+
+@app.post("/vaults/create", tags=["Vault Management"])
+def api_create_vault(payload: VaultCreateRequest):
+    """建立全新的空白 Vault 並自動切換至新 Vault"""
+    try:
+        init_result = init_vault(payload.vault_name, payload.description or "")
+        switch_result = switch_vault(init_result["name"])
+        return {
+            "status": "success",
+            "message": f"已成功建立並切換至全新 Vault「{init_result['name']}」",
+            "vault": init_result,
+            "stats": switch_result.get("stats", {})
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"建立 Vault 失敗: {str(exc)}")
+
+
+@app.post("/vaults/rename", tags=["Vault Management"])
+def api_rename_vault(payload: VaultRenameRequest):
+    """重新命名指定的 Vault"""
+    try:
+        return rename_vault(payload.old_name, payload.new_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"重新命名 Vault 失敗: {str(exc)}")
+
+
+@app.delete("/vaults/{vault_name}", tags=["Vault Management"])
+def api_delete_vault(vault_name: str):
+    """刪除指定的非使用中 Vault（包含所有實體檔案）"""
+    try:
+        return delete_vault(vault_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"刪除 Vault 失敗: {str(exc)}")
+
+
+@app.get("/vault/stats", tags=["Vault Management"])
+def api_get_vault_stats():
+    """取得當前使用中 Vault 之統計數據概況 (DASH OUT 面板使用)"""
+    return get_vault_stats()
+
+
+@app.get("/vault/export", tags=["Vault Management"])
+def api_export_vault():
+    """DASH OUT: 整包導出當前使用中 Vault 為標準 ZIP 檔案"""
+    try:
+        zip_path = export_vault_to_zip()
+        filename = os.path.basename(zip_path)
+        return FileResponse(
+            path=zip_path,
+            filename=filename,
+            media_type="application/zip"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"導出資料包失敗: {str(exc)}")
+
+
+@app.post("/vault/inspect-zip", tags=["Vault Management"])
+async def api_inspect_vault_zip(file: UploadFile = File(...)):
+    """檢驗上傳之 ZIP 是否合法，並回傳 manifest 資訊供前端彈窗確認新 Vault 名稱"""
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="請上傳副檔名為 .zip 的資料包檔案")
+
+    temp_dir = tempfile.mkdtemp()
+    temp_zip_path = os.path.join(temp_dir, file.filename)
+    try:
+        with open(temp_zip_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        manifest = verify_vault_zip(temp_zip_path)
+        return {
+            "status": "success",
+            "manifest": manifest,
+            "suggested_name": manifest.get("name", "imported_vault")
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"解析資料包失敗: {str(exc)}")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.post("/vault/import", tags=["Vault Management"])
+async def api_import_vault(
+    file: UploadFile = File(...),
+    target_name: Optional[str] = None
+):
+    """DASH IN: 驗證 ZIP 並解壓建立為全新獨立 Vault，完成後自動切換（絕不覆蓋）"""
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="請上傳副檔名為 .zip 的資料包檔案")
+
+    temp_dir = tempfile.mkdtemp()
+    temp_zip_path = os.path.join(temp_dir, file.filename)
+    try:
+        with open(temp_zip_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        result = import_vault_from_zip(temp_zip_path, target_name=target_name)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"匯入資料包失敗: {str(exc)}")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    ensure_default_vault()
+    uvicorn.run("dash_backend.main:app", host="127.0.0.1", port=8000, reload=True)

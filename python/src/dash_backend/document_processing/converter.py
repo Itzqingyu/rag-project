@@ -10,10 +10,17 @@ from typing import Optional
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 
-# 定義預設的 Markdown 儲存目錄 (python/data/markdown/)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DEFAULT_MARKDOWN_DIR = os.path.join(BASE_DIR, "data", "markdown")
-os.makedirs(DEFAULT_MARKDOWN_DIR, exist_ok=True)
+DEFAULT_MARKDOWN_DIR = None
+
+
+def get_default_markdown_dir() -> str:
+    """動態取得當前使用中 Vault 的 Markdown 託管目錄。若有被 patch/指派則優先採用。"""
+    if DEFAULT_MARKDOWN_DIR:
+        return DEFAULT_MARKDOWN_DIR
+    from dash_backend.vault_manager import get_markdown_dir
+    md_dir = get_markdown_dir()
+    os.makedirs(md_dir, exist_ok=True)
+    return md_dir
 
 
 def _convert_txt_to_markdown(raw_path: str) -> str:
@@ -92,7 +99,7 @@ def convert_to_markdown(file_path: str, output_dir: Optional[str] = None) -> str
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"找不到檔案: {file_path}")
         
-    target_dir = output_dir or DEFAULT_MARKDOWN_DIR
+    target_dir = output_dir or get_default_markdown_dir()
     os.makedirs(target_dir, exist_ok=True)
     
     base_name = os.path.basename(file_path)

@@ -24,13 +24,17 @@ DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以�
     - **向量化**: fastembed (輕量級、無須 PyTorch 的 ONNX 推理引擎)
     - **LLM API**: litellm (統一接口，支援 OpenAI/Claude)
 
-### 資料庫與檔案儲存
-- **純文字 / 託管文件**: 系統統一轉碼為 `.md` (Markdown 格式) 並儲存於 `python/data/markdown/` 目錄
-- **原始文件**: 上傳轉換完成後與系統獨立 (使用者刪除或修改原始 PDF/Word 不影響系統內 Markdown)
-- **切片文字**: Markdown 切片由 `rag_engine.py` 處理
-- **向量數據**: ChromaDB persistent mode 儲存於 `python/data/chroma_db/`
-- **對話歷史與元資料**: SQLite 儲存於 `python/data/rag_database.sqlite`
-- **檔案與活動管理**: SQLite (追蹤已導入的 Markdown 文件，以及 Activity、Meeting、Task、Decision、Schedule、Incident 等業務資料)
+### 資料庫與多 Vault 儲存架構 (~/.dash/)
+- **全域設定**: 存於使用者家目錄 `~/.dash/config.json`，記錄當前使用中的 `active_vault`
+- **Vault 集中目錄**: 統一收攏於 `~/.dash/vaults/<vault_name>/`
+- **開箱即用**: 首次啟動自動建立純淨的 `~/.dash/vaults/default/` 作為預設紀錄庫
+- **單一 Vault 內部結構**:
+  - `dash_manifest.json`: Vault 專屬身分識別檔（身分證），記載 vault_id、名稱、版本與建檔時間
+  - `dash_database.sqlite`: SQLite 核心資料庫（活動業務表、會議、決策、日程、突發事件、對話會話等）
+  - `chroma_db/`: ChromaDB 向量檢索索引切塊庫
+  - `markdown/`: 託管之標準 Markdown 文本文件庫
+- **DASH OUT (全量導出)**: 獨立工作面板，可一鍵將當前使用中 Vault 打包為內含 manifest 身分證的標準 `.zip` 檔案
+- **DASH IN (安全匯入)**: 側邊欄底部 Vault 控制列支援匯入 `.zip`，經身分證檢驗後解壓縮建立為全新獨立 Vault 並自動切換（絕不覆蓋舊資料）
 
 ### 模型
 - **Embedding**: fastembed（使用 ONNX Runtime 於 CPU 運行之 Embedding 模型）
@@ -41,21 +45,26 @@ DASH 是一套結合活動與決策管理、LLM + RAG 歷史檢索問答，以�
 rag-project/
 ├── react/                        # Electron + Vite + React 前端
 │   ├── src/
-│   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話)
+│   │   ├── App.tsx               # 頂層主畫面與導航路由 (活動工作台 vs AI 對話 vs DASH OUT)
 │   │   ├── api/                  # 後端 API 通訊服務層 (camelCase 命名)
 │   │   │   ├── apiTypes.ts       # 後端資料結構與 TypeScript 介面定義
 │   │   │   ├── apiClient.ts      # HTTP 請求封裝、錯誤攔截與後端斷線處理
 │   │   │   ├── chatService.ts    # 對話會話增刪查改與雙模式訊息發送
 │   │   │   ├── documentService.ts # 歷史紀錄文件清單、上傳轉檔向量化與刪除
-│   │   │   └── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
+│   │   │   ├── meetingExtractService.ts # AI 會議紀錄結構化抽取 (1-shot) 與 Preview-Commit 寫入
+│   │   │   └── vaultApi.ts       # 多 Vault 管理與 DASH OUT 導出、DASH IN 匯入 API
 │   │   ├── components/           # 組件與同名獨立樣式 (.tsx & .css)
+│   │   │   ├── VaultManagerBar.tsx # 側邊欄底部 Vault 控制列 (切換、重命名、刪除防呆、新建空白、DASH IN)
+│   │   │   ├── VaultManagerBar.css # 側邊欄底部 Vault 控制列專屬樣式
+│   │   │   ├── DashOutPanel.tsx  # DASH OUT 全量資料導出專用面板 (資料統計卡片與一鍵打包 ZIP)
+│   │   │   ├── DashOutPanel.css  # DASH OUT 面板專屬樣式
 │   │   │   ├── ChatPanel.tsx     # LLM 聊天大面板主組件 (雙欄佈局、模式切換、即時 API 串接與真實錯誤反饋)
-│   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流，提取會議、決策與待辦)
+│   │   │   ├── MeetingExtractPanel.tsx # AI 會議紀錄整理面板 (Preview-Commit 雙階段工作流)
 │   │   │   ├── SessionSidebar.tsx # 對話會話側邊欄 (新對話、切換、三點選單觸發重命名與刪除)
-│   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景、即時鍵盤快捷支援)
+│   │   │   ├── RenameModal.tsx   # 編輯會話名稱獨立彈窗 (霧化毛玻璃背景)
 │   │   │   ├── ConfirmModal.tsx  # 防手殘刪除確認獨立彈窗 (霧化毛玻璃背景)
 │   │   │   ├── DocumentDrawer.tsx # 歷史紀錄文檔抽屜 (文件清單、真實上傳與刪除)
-│   │   │   ├── BreadcrumbNav.tsx # 活動工作台頂部多層級麵包屑導航 (支援一鍵返回主活動工作台及分階跳轉)
+│   │   │   ├── BreadcrumbNav.tsx # 活動工作台頂部多層級麵包屑導航
 │   │   │   ├── MeetingPanel.tsx  # 會議管理面板
 │   │   │   └── ...               # 其餘活動管理面板 (Overview, Tasks, Decisions 等各自獨立 CSS)
 │   │   └── index.css             # 全域 Design Tokens (:root)、Reset 與 App Shell 樣式
@@ -65,6 +74,7 @@ rag-project/
 │   │   └── dash_backend/
 │   │       ├── main.py           # FastAPI 伺服器入口 (REST API, 包含 Preview/Commit 預覽寫入端點)
 │   │       ├── database.py       # 統一資料庫層 (SQLite 連線池、Schema、Sessions/Messages 與 ChromaDB 向量庫)
+│   │       ├── vault_manager.py  # 全量交接管理器 (ZIP 打包、dash_manifest.json 簽名校驗、自動備份與還原)
 │   │       ├── prompts/          # System Prompt Markdown 檔案目錄
 │   │       │   ├── meeting_extraction.md # 會議紀錄 1-shot 結構化抽取 Prompt
 │   │       │   ├── rag_qa.md             # RAG 通用問答 Prompt
@@ -86,11 +96,13 @@ rag-project/
 │   │   ├── test_converter.py     # 多格式文件轉換與複製單元測試
 │   │   ├── test_chat_session.py  # 對話會話、記憶防污染與模式切換單元測試
 │   │   ├── test_upload_duplicate.py # 同主檔名上傳防呆與覆蓋行為單元測試
-│   │   └── test_meeting_extract_commit.py # AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試
+│   │   ├── test_meeting_extract_commit.py # AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試
+│   │   └── test_vault.py         # DASH IN & OUT 全量交接、ZIP 簽名防呆與快照備份單元測試
 │   ├── data/                     # 本地 SQLite, Chroma 向量庫與託管 Markdown 目錄
 │   │   ├── dash_database.sqlite  # SQLite 資料庫 (含 documents, sessions, chat_messages 及活動業務表)
 │   │   ├── chroma_db/            # ChromaDB 向量資料庫
 │   │   └── markdown/             # 託管之 Markdown 格式文本庫
+│   ├── data_backups/             # 本地安全快照備份目錄 (自動留存全量 ZIP 備份檔)
 │   └── pyproject.toml            # 依賴套件配置
 ```
 
@@ -103,12 +115,12 @@ rag-project/
    - 後端 (`/upload`) 在建立暫存檔與轉碼前查詢資料庫，若主檔名已存在直接回傳 `HTTP 409 Conflict`，嚴格禁止同名覆蓋以保護既有資料完整性。
    - 系統全面採取「只增不覆蓋」原則；使用者欲更新檔案內容必須先顯式刪除舊文件後再行上傳。
 3. Python `converter.py`: 讀取原始檔案 → 轉換/複製為標準 Markdown 格式並儲存於 `python/data/markdown/`
-4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 → 向量化 → ChromaDB 儲存（若遇已存在紀錄拋出 `FileExistsError`）
-5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (檔名、託管路徑、處理時間、狀態)
+4. Python `rag_engine.py`: 讀取轉碼後 Markdown → 切片 (source metadata 標準化為 `markdown/{filename}`) → 向量化 → ChromaDB 儲存（若遇已存在紀錄拋出 `FileExistsError`）
+5. Python `database.py`: 記錄檔案 Metadata 到 SQLite (`file_path` 統一以相對於 `data/` 之 `markdown/{filename}` 相對路徑持久化，徹底避免跨機器或跨目錄路徑失效問題；移除無實質用途之 `raw_file_path` 欄位)
 
 ### AI 結構化提取與預覽寫入 (Preview-Commit 流程)
 1. 使用者選擇已導入之 Markdown 文件，發起 `/extract_summary` 請求
-2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，將 SQLite 託管之完整 Markdown 文字 1-shot 餵給 LLM 進行結構化解析，同時回傳對應來源文件的 `doc_id`
+2. `llm_service.py` 載入 `prompts/meeting_extraction.md`，直接自 `python/data/markdown/{filename}` 讀取實體 Markdown 全文，1-shot 餵給 LLM 進行結構化解析，同時回傳對應來源文件的 `doc_id`
 3. LLM 回傳 JSON (包含 `meeting`, `decisions`, `tasks`)
 4. 前端展示預覽結果供使用者校對修改，並於預覽標題處標示來源文件，於頂部提供「關聯目標活動 (必填)」卡片：
    - 支援「選擇現有活動」下拉關聯既有活動；若無活動則給予提示並引導建立。
@@ -120,7 +132,7 @@ rag-project/
 1. 使用者可透過 `/sessions` 端點建立或管理對話會話。
 2. 發送訊息至 `/sessions/{id}/messages`，可自由指定當輪模式：
    - **普通聊天模式 (`mode='chat'`)**：無需經過 RAG 預處理，LLM 基於歷史對話脈絡與使用者問題直接自然回答。
-   - **知識庫檢索模式 (`mode='rag'`)**：ChromaDB 檢索相關切片並由 Reranker 重排序，將文本片段注入當前 Prompt 提供總結回答。
+   - **紀錄庫檢索模式 (`mode='rag'`)**：ChromaDB 檢索相關切片並由 Reranker 重排序，將文本片段注入當前 Prompt 提供總結回答。
 3. **乾淨上下文隔離 (Clean Context Isolation)**：
    - SQLite `chat_messages` 僅保存純粹的「使用者問題」與「AI 回答」，當輪檢索到的參考切片以 JSON 儲存於 `retrieved_chunks` 欄位供前端回溯。
    - 歷史對話傳入 LLM 時，不疊加過往龐大的檢索內容，徹底杜絕同一個 Session 中多次 RAG 或切換模式造成的記憶污染。
@@ -133,6 +145,12 @@ rag-project/
    - 執行主檔名查重嚴格防呆（若已存在同名檔案則回傳 `HTTP 409 Conflict`，要求使用者先至歷史紀錄手動刪除舊文件後再行存入）。
    - 將 Markdown 內容實體寫入託管目錄 `python/data/markdown/`。
    - 呼叫 `rag_engine.add_document` 自動進行文本切片、fastembed 向量化寫入 ChromaDB，並登錄 Metadata 至 SQLite `documents` 表。
+
+### DASH IN & OUT 全量交接與資料庫管理 (Vault Management)
+1. **全量導出 (Export)**：呼叫 `/vault/export`，後端將 `dash_database.sqlite`、`chroma_db/` 與 `markdown/` 連同包含應用程式版本與統計數據的 `dash_manifest.json` 打包成標準 ZIP 檔案，供無損遷移或交接給下一屆負責人。
+2. **防呆檢驗與導入 (Import)**：使用者透過「DASH IN & OUT」面板上傳 ZIP，後端 `/vault/import` 嚴格校驗是否內含 `dash_manifest.json` 與必要資料結構，若非本系統產物或結構損壞則回傳 400 拒絕導入。
+3. **安全快照備份 (Auto-backup)**：在全量覆蓋替換本地資料前，後端自動將當前 `data/` 壓縮留存於 `python/data_backups/backup_{YYYYMMDD_HHMMSS}.zip`，確保使用者資料零遺失風險。
+4. **歷史備份查看與還原 (Restore)**：面板提供快照歷史清單，支援一鍵還原回指定的歷史快照。
 
 ## 5. 開發步驟
 

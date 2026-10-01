@@ -322,15 +322,15 @@ export default function AfterPanel({ currentView, activityId, scheduleVersion, o
           </div>
         </div>
         
-        {/* 👇 3. 綁定我們前一步準備好的 API 呼叫函式 (handleGenerateClick) */}
+        {/* 綁定 API 呼叫函式 (handleGenerateClick) */}
         <button 
           className="button primary" 
           type="button" 
           style={{ flexShrink: 0 }} 
-          onClick={handleGenerateClick} // 👈 改為觸發後端 API
-          disabled={isGenerating}       // 👈 生成中鎖住按鈕
+          onClick={handleGenerateClick}
+          disabled={isGenerating}
         >
-          {isGenerating ? '✨ AI 生成中...' : '✨ 預覽摘要'}
+          {isGenerating ? 'AI 生成中...' : '預覽摘要'}
         </button>
       </article>
 

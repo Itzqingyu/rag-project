@@ -9,7 +9,7 @@
   - **對話會話與上下文記憶 (Session & Chat)**:
     - `/sessions`: GET (列出所有 Sessions), POST (建立新 Session)
     - `/sessions/{id}`: GET (取得 Session 詳情與歷史訊息), PATCH (更新 Session 標題), DELETE (串聯刪除 Session 及其訊息)
-    - `/sessions/{id}/messages`: POST (發送訊息，支援指定 `mode='chat'` 普通對話或 `mode='rag'` 知識庫檢索對話)
+    - `/sessions/{id}/messages`: POST (發送訊息，支援指定 `mode='chat'` 普通對話或 `mode='rag'` 紀錄庫檢索對話)
   - **AI 結構化提取與預覽寫入**: `/extract_summary` (發起 1-shot LLM 解析 SQLite 託管之完整 Markdown 文字並回傳預覽 JSON), `/commit_summary` (將前端校對後的結構化資料逐筆寫入 SQLite；目前可能部分成功)
   - **活動管理 (Activity)**: `/activities` (GET, POST), `/activities/{id}` (GET, PUT, DELETE)
   - **會議管理 (Meeting)**: `/meetings` (GET, POST), `/meetings/{id}` (GET, PUT, DELETE)
@@ -18,12 +18,25 @@
   - **流程日程 (Schedule)**: `/schedules` (GET, POST), `/schedules/{id}` (GET, PUT, DELETE)
   - **突發事件 (Incident)**: `/incidents` (GET, POST), `/incidents/{id}` (GET, PUT, DELETE)
   - **AI 交接摘要與紀錄庫存入 (Handover)**: `/handover/generate` (以 LLM 總整日程與決策資料生成 Markdown 交接摘要), `/handover/save` (依活動名稱與日期自動命名、查重防呆 409、實體寫入 Markdown 託管庫並進行向量化與 SQLite 登錄)
+  - **多 Vault 管理與交接 (Multi-Vault & DASH OUT / DASH IN)**:
+    - `/vaults`: GET (列出所有合法的 Vault 清單、名稱、狀態與路徑)
+    - `/vaults/active`: GET (取得目前使用中 Vault 名稱與統計數據)
+    - `/vaults/switch`: POST (熱切換使用中的 Vault，動態重置資料庫連線與向量庫實例)
+    - `/vaults/create`: POST (新建空白 Vault 與專屬身分證 dash_manifest.json，並自動切換)
+    - `/vaults/rename`: POST (重新命名 Vault 與身分證資料)
+    - `/vaults/{name}`: DELETE (刪除指定的非使用中 Vault，具備防呆機制禁止刪除當前使用中 Vault)
+    - `/vault/stats`: GET (取得當前 Vault 的統計概況，供 DASH OUT 面板使用)
+    - `/vault/export`: GET (DASH OUT: 整包打包下載當前使用中 Vault 為標準 ZIP)
+    - `/vault/inspect-zip`: POST (檢驗上傳 ZIP 檔案身分證並回傳預設名稱供前端確認)
+    - `/vault/import`: POST (DASH IN: 驗證 ZIP 身分證並解壓建立為全新獨立 Vault，完成後自動切換，絕不覆蓋舊資料)
 
-- `tests/test_main.py`: 整合了互動式 CLI 測試選單；Activity Management 先選定 Activity，再操作其 Meeting／Task／Decision／Schedule／Incident，固定狀態與可選關聯以編號清單輸入。CLI 的 AI 文件解析寫入會把目前 `doc_id` 記錄至 Meeting 的 `source_document_id`。同時支援 RAG 文件管理、對話會話 (Chat Session) 多輪對話與模式切換、LLM 回答測試。
-- `tests/test_converter.py`: 文件轉換器單元測試，驗證 MD 複製、TXT 轉碼、PDF 解析與 DOCX 提取功能。
-- `tests/test_chat_session.py`: 對話會話與上下文記憶單元測試，驗證 Session CRUD、CASCADE 串聯刪除、Clean Context Isolation 防記憶污染機制、以及普通聊天與 RAG 模式切換。
-- `tests/test_upload_duplicate.py`: 同主檔名上傳防呆與覆蓋行為單元測試，驗證 409 Conflict 阻擋、資料庫與實體檔案完整性保護、底層 FileExistsError 例外機制、以及 /handover/save 儲存、向量化與查重防呆。
-- `tests/test_meeting_extract_commit.py`: AI 會議摘要寫入與來源文檔 source_document_id 自動關聯單元測試，驗證 /commit_summary 與 /meetings 支援 source_document_id 自動注入、資料庫持久化、以及關聯文檔刪除時 ON DELETE SET NULL 外鍵約束保護機制。
+- `vault_manager.py`: 負責全面收攏於 `~/.dash/` 規範下所有 Vault 的生命週期管理。
+  - 開箱即用建立純淨 `~/.dash/vaults/default/` 與合法身分證 `dash_manifest.json`。
+  - 全域設定檔管理 `~/.dash/config.json` 追蹤 `active_vault`。
+  - 動態路徑解析器 `get_active_vault_dir`, `get_db_path`, `get_chroma_dir`, `get_markdown_dir`。
+  - DASH OUT (打包導出 ZIP) 與 DASH IN (匯入 ZIP 建立全新獨立 Vault，含重名序號防呆)。
+  - 徹底移除舊有的覆蓋導入、快照備份與快照還原邏輯。
+- `tests/test_vault.py`: 多 Vault 系統單元測試，驗證開箱 default 建立、新建空白 Vault、切換 Vault、重新命名、刪除防呆、DASH OUT ZIP 打包、DASH IN 匯入為新庫、非法 ZIP 檢驗阻擋以及完整 FastAPI 端點。
 
 ### 業務與事項管理微服務套件 (`activity_services/`)
 - `activity_services/activity.py`: 負責活動 (Activity) 後端業務邏輯與 SQLite CRUD 操作。
@@ -135,7 +148,7 @@
     3. 前端樣式 `MeetingExtractPanel.css`: 新增 `.source-doc-badge` 樣式，符合視覺設計規範。
     4. 新增 `tests/test_meeting_extract_commit.py` 單元測試，全面驗證 `source_document_id` 自動綁定、無來源相容性、RESTful API 支援以及 `ON DELETE SET NULL` 級聯防護。後端 57 個測試與前端 21 個測試 100% 通過。
 - **活動交接摘要存入紀錄庫 (/handover/save 端點與前後端整合)**:
-  - **功能背景**: 既有交接總整功能僅能在彈窗中預覽並匯出為 PDF，缺乏一鍵歸檔至系統歷史紀錄庫（RAG 知識庫）的功能。
+  - **功能背景**: 既有交接總整功能僅能在彈窗中預覽並匯出為 PDF，缺乏一鍵歸檔至系統歷史紀錄庫（RAG 紀錄庫）的功能。
   - **核心變更**:
     1. 後端 `main.py`: 新增 `HandoverSaveRequest` 模型與 `POST /handover/save` 端點。自動依 `{活動名稱}_交接報告_{YYYYMMDD}.md` 規格命名，前置防呆檢查目標檔案與 SQLite 是否已存在同名檔案，若衝突回傳 `HTTP 409 Conflict` 且提示手動刪除舊檔；若無衝突則實體寫入託管目錄 `DEFAULT_MARKDOWN_DIR`，並調用 `add_document` 完成 Markdown 文本切片、fastembed 向量化寫入 ChromaDB 與登錄 SQLite `documents` 表。
     2. 修復 `main.py` 中 `handover_agent` 之 import 路徑為 `from dash_backend.ai_services.handover_agent import generate_handover_summary`。
@@ -143,6 +156,73 @@
     4. 前端 `App.tsx`: 在交接摘要彈窗（`handoverModalRef`）操作列新增「存入紀錄庫」按鈕，支援 loading 禁用狀態，存入成功後切換為「已存入紀錄庫」並於 Modal 頂部顯示綠色成功橫幅；若遇 409 衝突或網路錯誤則顯示紅色警告橫幅。重新產生交接摘要時自動重設存入狀態。
     5. 前端 `index.css`: 新增 `--success`、`--success-soft` 顏色變數與 `.modal-banner` 樣式。
     6. 單元測試: 在 `python/tests/test_upload_duplicate.py` 新增 `test_handover_save_success_and_duplicate` 與 `test_handover_save_empty_content`，全套 5 個單元測試 100% 通過。
+- **DASH IN & OUT 本地全量交接系統 (/vault 模組與端點實作)**:
+  - **功能背景**: 本地 App 在無雲端環境下，各設備累積之活動、會議、待辦與向量資料庫彼此隔離。為了實現跨設備、跨屆幹部間的無損交接與防呆備份，建立全量打包與安全導入工作台。
+  - **核心變更**:
+    1. 後端 `vault_manager.py`: 封裝全量資料庫打包與還原邏輯。整包匯出時自動將 `dash_database.sqlite`、`chroma_db/` 與 `markdown/` 連同 `dash_manifest.json`（記錄 app、version、exported_at 與統計數據）打包為標準 ZIP 檔案。
+    2. 簽名驗證與防呆: 導入 ZIP 時嚴格檢驗 `dash_manifest.json` 與核心資料庫結構，拒絕非本系統產物或結構毀損之檔案，阻擋率 100%。
+    3. 自動安全快照 (Zero Data Loss): 在執行全量覆蓋替換前，系統自動將當前 `data/` 目錄封存至 `data_backups/backup_{YYYYMMDD_HHMMSS}.zip`，提供歷史快照列表與一鍵無損還原。
+    4. 後端 `main.py`: 新增 `/vault/stats`, `/vault/export`, `/vault/import`, `/vault/backups`, `/vault/restore` 完整 RESTful 端點。
+    5. 前端 `vaultService.ts`: 封裝 API 客戶端捷徑與檔案下載流程。
+    6. 前端組件 `DashInOutPanel.tsx` 與 `DashInOutPanel.css`: 實作「本地資料庫概況」、「整包導出」、「安全導入」與「快照備份歷史」四大卡片，整合覆蓋風險確認彈窗 `ConfirmModal`。
+    7. 前端導航與路由: 側邊欄於「DASH Agent」下方新增一級導航按鈕「DASH IN & OUT」（圖示：`ArrowLeftRight`），切換至專屬交接工作台。
+    8. 單元測試: 新增 `python/tests/test_vault.py`（5 個測試全數通過），擴充 `react/tests/services.test.ts`（2 個測試全數通過），前後端全套 87 個單元測試 100% 通過。
+- **文件路徑相對化標準化與冗餘欄位清理 (Relative Path Normalization & Raw File Path Removal)**:
+  - **變更背景**:
+    1. 過去 SQLite `documents.file_path` 與 ChromaDB `source` metadata 記錄本機絕對路徑（如 `Z:\...\python\data\markdown\xxx.md`），導致跨電腦或不同工作路徑遷移資料庫 (DASH IN & OUT) 後，路徑失真無法對齊實體檔案與向量檢索。
+    2. `raw_file_path` 欄位原本暫存上傳時的原始檔名，但實務上上傳後的原始暫存檔已立即刪除，防呆重複檔名校驗亦完全依賴主檔名 (`file_stem`)，使得 `raw_file_path` 無實質功能用途。
+  - **核心變更**:
+    1. `database.py`:
+       - 自 `documents` 資料表建表語句中全面移除 `raw_file_path` 欄位與 `ALTER TABLE` 邏輯。
+       - 新增 `to_rel_doc_path(path: str) -> str` 函數，統一將路徑轉換為 `markdown/{filename}` 相對路徑。
+       - `add_or_update_doc_record`: 移除 `raw_file_path` 參數，入庫時一律以標準化相對路徑儲存 `file_path`。
+       - `get_doc_by_path` 與 `delete_doc_record_by_path`: 擴充比對邏輯，支援相對路徑、舊版絕對路徑與單純檔名等多維度匹配。
+    2. `ai_services/rag_engine.py`:
+       - `split_markdown`: 切片 metadata 中的 `source` 統一存放 `markdown/{filename}` 相對路徑。
+       - `add_document`: 移除 `raw_file_path` 參數。
+       - `delete_document`: 同步清理相對路徑與相容舊版路徑之向量，並安全物理刪除 `data/markdown/` 下實體檔案。
+    3. `main.py`:
+       - `/upload` 與 `/handover/save`: 移除 `raw_file_path` 傳參。同主檔名重複衝突提示中的現存檔案資訊統一取用 `existing_doc.get("filename")`，確保前端能精準展示已存在的實體 Markdown 檔名。
+    4. 測試套件維護:
+       - 更新 `test_upload_duplicate.py`、`test_meeting_extract_commit.py`、`test_meeting_task.py`、`test_activity_cli.py` 等測試，驗證 64 個後端單元測試與 23 個前端單元測試 100% 通過。
+- **清除 SQLite documents.markdown_content 雙重儲存冗餘 (Single Source of Truth)**:
+  - **變更背景**: 實體 Markdown 檔案已集中託管於 `python/data/markdown/` 目錄中，在 SQLite 中額外保留 `markdown_content` 造成龐大文字資料重疊儲存，破壞單一真實來源原則。
+  - **核心變更**:
+    1. `database.py`: 從 `documents` 表結構中移除 `markdown_content` 欄位與 `ALTER TABLE`，`add_or_update_doc_record` 移除對應參數與寫入。
+    2. `rag_engine.py`: `add_document` 不再將全文寫入 SQLite，維持 SQLite 純粹紀錄元資料。
+    3. `main.py` 與 `test_main.py`: `/extract_summary` 與 CLI 解析選單直接自 `DEFAULT_MARKDOWN_DIR` 實體檔案讀取 Markdown 內容進行 1-shot LLM 抽取。
+    4. `test_main.py`: 移除已廢棄的 `force` 覆蓋參數，完全遵照「只增不覆蓋」防呆原則。
+- **全面收攏至 ~/.dash/ 的多 Vault 架構與 DASH OUT / DASH IN (Multi-Vault Architecture)**:
+  - **變更背景**:
+    1. 過去資料硬編碼存放於 `python/data`，與程式源碼綁定，既無法支援多組織/多年度資料庫獨立切換，也不符合桌面應用程式「程式本體唯讀、使用者資料分離」的標準架構。
+    2. 原有導入機制的「覆蓋導入」與「快照備份」邏輯較繁雜，現簡化為「匯入一律建立全新獨立 Vault」，更為乾淨安全。
+  - **核心變更**:
+    1. `vault_manager.py`:
+       - 統一規範儲存目錄為 `~/.dash/`，所有 Vault 存放於 `~/.dash/vaults/<vault_name>/`。
+       - 開箱即用機制：首次啟動自動建立純淨的 `~/.dash/vaults/default/` 與合法身分證 `dash_manifest.json`。
+       - 全域設定檔 `~/.dash/config.json` 動態追蹤 `active_vault`。
+       - 支援完整的 Vault 生命週期操作：`init_vault` (新建空白), `switch_vault` (熱切換), `rename_vault` (更名同步 manifest 與 config), `delete_vault` (刪除防呆，禁止刪除使用中 Vault)。
+       - DASH OUT: `export_vault_to_zip` 將當前使用中 Vault 完整打包為包含 manifest 的標準 ZIP。
+       - DASH IN: `import_vault_from_zip` 嚴格校驗身分證，解壓建立為全新獨立 Vault 並自動切換，支援同名序號後綴防呆。
+       - 徹底移除舊有的覆蓋導入、快照備份與還原邏輯。
+    2. `database.py`:
+       - 動態解析 SQLite 資料庫路徑 `get_db_path()` 與 Chroma 向量庫目錄 `get_chroma_dir()`。
+       - 新增 `reset_db_state()`，在切換 Vault 時重置 `_vectorstore = None` 記憶體單例快取，確保各庫乾淨隔絕。
+    3. `document_processing/converter.py` & `ai_services/rag_engine.py`:
+       - Markdown 託管目錄改為動態取用 `get_default_markdown_dir()`，依據當前啟用的 Vault 自動切換路徑。
+    4. `main.py`:
+       - 提供完整的 Vault RESTful API 端點：`/vaults`, `/vaults/active`, `/vaults/switch`, `/vaults/create`, `/vaults/rename`, `/vaults/{name}`, `/vault/stats`, `/vault/export`, `/vault/inspect-zip`, `/vault/import`。
+       - 啟動進入點加入 `ensure_default_vault()`，並支援 uvicorn reload。
+    5. 前端 (`react/src/`):
+       - 新增 `vaultApi.ts` 封裝所有 Vault 相關 API。
+       - 新增側邊欄底部 `VaultManagerBar.tsx` 與 `VaultManagerBar.css` 控制元件，支援即時查看當前 Vault、熱切換、更名、刪除防呆確認、新建空白 Vault 與 DASH IN (ZIP 匯入)。
+       - 原有工作台正名為 `DashOutPanel.tsx` 與 `DashOutPanel.css`，專注於當前 Vault 統計與一鍵打包導出，移除舊有覆蓋與備份 UI。
+       - 更新 `App.tsx` 整合 `VaultManagerBar` 與切換重載機制，側邊欄導航正名為「DASH OUT」。
+    6. 單元測試:
+       - 重寫 `python/tests/test_vault.py`，全套 8 個測試覆蓋多 Vault 生命週期與 FastAPI 端點。
+       - 新增 `react/tests/vault.test.ts` 覆蓋前端 API 客戶端。
+       - 後端 50 個單元測試與前端 29 個單元測試全數綠燈通過。
+
 
 
 

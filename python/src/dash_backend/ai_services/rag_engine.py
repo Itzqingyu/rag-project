@@ -12,7 +12,9 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 import dash_backend.database as db
-from dash_backend.document_processing.converter import convert_to_markdown, DEFAULT_MARKDOWN_DIR
+from dash_backend.document_processing.converter import convert_to_markdown, get_default_markdown_dir
+
+DEFAULT_MARKDOWN_DIR = None
 
 # ==========================================
 # 1. Embedding 與 Reranker 模型載入 (Lazy Singletons)
@@ -43,7 +45,9 @@ def get_reranker() -> TextCrossEncoder:
 # ==========================================
 
 def split_markdown(file_path: str) -> List[Document]:
-    """讀取 Markdown 檔案並使用 RecursiveCharacterTextSplitter 進行固定長度切塊 (500 字，50 字重疊)。"""
+    """讀取 Markdown 檔案並使用 RecursiveCharacterTextSplitter 進行固定長度切塊 (500 字，50 字重疊)。
+    切塊 metadata 中的 source 統一存放為相對於 data/ 的相對路徑 (格式固定為 markdown/{filename})。
+    """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -57,9 +61,12 @@ def split_markdown(file_path: str) -> List[Document]:
         separators=["\n\n", "\n", " ", ""]
     )
     
+    filename = os.path.basename(file_path)
+    rel_source_path = f"markdown/{filename}"
+    
     docs = text_splitter.create_documents(
         texts=[content],
-        metadatas=[{"source": file_path}]
+        metadatas=[{"source": rel_source_path}]
     )
     
     return docs
@@ -85,24 +92,23 @@ def rerank_documents(query: str, documents: List[Document], top_k: int = 5) -> L
 # 3. RAG 檢索與文件管理 (Retriever API)
 # ==========================================
 
-def add_document(file_path: str, raw_file_path: Optional[str] = None, *, db_path: Optional[str] = None) -> int:
+def add_document(file_path: str, *, db_path: Optional[str] = None) -> int:
     """解析 Markdown 檔案、文本切塊、寫入 Chroma 向量庫並將 Metadata 存入 SQLite。
     系統不支援自動覆蓋；若檔案已存在於資料庫中，將拋出 FileExistsError。
     
     :param file_path: 實體檔案路徑 (支援 .md, .txt, .pdf, .docx)
-    :param raw_file_path: 原始檔案實體路徑或原始檔名
     :return: 成功寫入的切塊數量
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"找不到檔案: {file_path}")
 
     source_path = os.path.abspath(file_path)
-    abs_default_dir = os.path.abspath(DEFAULT_MARKDOWN_DIR)
 
     # 1. 判斷預期的託管 Markdown 檔案路徑
     raw_name = os.path.basename(file_path)
     file_stem, ext = os.path.splitext(raw_name)
-    target_md_path = os.path.join(DEFAULT_MARKDOWN_DIR, f"{file_stem}.md")
+    md_dir = DEFAULT_MARKDOWN_DIR or get_default_markdown_dir()
+    target_md_path = os.path.join(md_dir, f"{file_stem}.md")
 
     # 2. 檢查 SQLite 紀錄是否存在，若已存在則直接拋出 FileExistsError（不支援覆蓋）
     existing_record = db.get_doc_by_path(target_md_path, db_path=db_path)
@@ -113,10 +119,6 @@ def add_document(file_path: str, raw_file_path: Optional[str] = None, *, db_path
     if source_path != os.path.abspath(target_md_path) or ext.lower() != ".md":
         target_md_path = convert_to_markdown(source_path)
 
-    # 4. 讀取託管的 Markdown 純文字內容
-    with open(target_md_path, "r", encoding="utf-8") as f:
-        markdown_content = f.read()
-
     docs = split_markdown(target_md_path)
     if not docs:
         return 0
@@ -124,12 +126,9 @@ def add_document(file_path: str, raw_file_path: Optional[str] = None, *, db_path
     vectorstore = db.get_vectorstore()
     vectorstore.add_documents(docs)
     
-    actual_raw_path = raw_file_path if raw_file_path else file_path
     db.add_or_update_doc_record(
         file_path=target_md_path, 
         chunk_count=len(docs),
-        raw_file_path=actual_raw_path,
-        markdown_content=markdown_content,
         db_path=db_path
     )
     
@@ -148,19 +147,26 @@ def delete_document(identifier: str, *, db_path: Optional[str] = None) -> bool:
         return False
         
     file_path = record["file_path"]
+    filename = record["filename"]
+    rel_path = f"markdown/{filename}"
+    md_dir = DEFAULT_MARKDOWN_DIR or get_default_markdown_dir()
+    abs_md_path = os.path.join(md_dir, filename)
     
     vectorstore = db.get_vectorstore()
-    try:
-        vectorstore._collection.delete(where={"source": file_path})
-    except Exception as e:
-        print(f"[Warning] 從 ChromaDB 刪除向量失敗: {e}")
+    # 支援相對路徑與相容舊版絕對路徑的向量清理
+    for src in [rel_path, file_path, abs_md_path]:
+        try:
+            vectorstore._collection.delete(where={"source": src})
+        except Exception:
+            pass
         
     db.delete_doc_record_by_path(file_path, db_path=db_path)
     
     # 連帶清理託管於硬碟的實體 .md 檔案
-    if os.path.exists(file_path):
+    target_to_remove = abs_md_path if os.path.exists(abs_md_path) else (file_path if os.path.exists(file_path) else None)
+    if target_to_remove and os.path.exists(target_to_remove):
         try:
-            os.remove(file_path)
+            os.remove(target_to_remove)
         except Exception as e:
             print(f"[Warning] 刪除硬碟實體檔案失敗: {e}")
             

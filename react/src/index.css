@@ -846,7 +846,7 @@ a {
    對話框與輔助抽屜 (Dialog Modals & Sidebars)
    ========================================== */
 .modal {
-  /* 👇 這些是你原本設定好的樣式，直接保留 👇 */
+  /* 這些是原本設定好的樣式，直接保留 */
   width: min(600px, calc(100vw - 30px));
   padding: 0;
   border: 1px solid var(--line);
@@ -854,7 +854,7 @@ a {
   color: var(--ink);
   box-shadow: 0 24px 70px rgba(5, 12, 24, 0.28);
 
-  /* 👇 加上這幾行來強制把視窗拉到畫面正中間 👇 */
+  /* 加上這幾行來強制把視窗拉到畫面正中間 */
   position: fixed;
   top: 50%;
   left: 50%;
@@ -1148,9 +1148,23 @@ a {
 
 /* 2. 原生 6 欄空白 td 修復：確保高度和完整底線，但不縮扁 */
 .activity-row.empty-row td {
-  height: 64px; /* 高度撐開 (請根據你真實資料的高度微調這個數字) */
-  border-bottom: 1px solid #ddd; /* 👉 每個 td 都應用底線，這能解決邊框斷掉的問題 */
+  height: 64px; /* 高度撐開 (請根據真實資料的高度微調這個數字) */
+  border-bottom: 1px solid #ddd; /* 每個 td 都應用底線，這能解決邊框斷掉的問題 */
   background-color: transparent; /* 背景透明 */
-  width: auto !important; /* 👉 關鍵修改：不要給 td 寬度! (移除 `width: 100%`)，讓 table 佈局自動拉伸它們。使用 !important 確保優先順序，移除 `width: 100%` 的影響。 */
+  width: auto !important; /* 關鍵修改：不要給 td 寬度! (移除 `width: 100%`)，讓 table 佈局自動拉伸它們。使用 !important 確保優先順序，移除 `width: 100%` 的影響。 */
   box-sizing: border-box; /* 確保邊框包含在高度內 */
 }
+
+/* 旋轉動畫通用類別 */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
